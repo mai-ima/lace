@@ -29,6 +29,34 @@
     return p;
   }
 
+  /**
+   * 周回路が自分の道と交わる所（鈴鹿の 8 の字）は、あとから通る側を高架にする。
+   * 標高データは地面の高さなので、そのままだと同じ高さで交わって車どうしが重なってしまう。
+   */
+  function overpass(p, hw) {
+    var n = p.length / 3, cum = new Float64Array(n), i, j;
+    for (i = 1; i < n; i++) cum[i] = cum[i - 1] + Math.hypot(p[i * 3] - p[i * 3 - 3], p[i * 3 + 1] - p[i * 3 - 2]);
+    var total = cum[n - 1], out = new Float32Array(p), spots = [];
+    for (i = 0; i < n; i += 2) for (j = i + 1; j < n; j += 2) {
+      var dc = Math.min(cum[j] - cum[i], total - (cum[j] - cum[i]));
+      if (dc < 300) continue;
+      if (Math.hypot(p[i * 3] - p[j * 3], p[i * 3 + 1] - p[j * 3 + 1]) < hw * 1.8 && Math.abs(p[i * 3 + 2] - p[j * 3 + 2]) < 4) { spots.push(cum[j]); break; }
+    }
+    if (!spots.length) return p;
+    // 近い点どうしは 1 か所にまとめる
+    var centers = [];
+    spots.sort(function (a, b) { return a - b; });
+    spots.forEach(function (c) { if (!centers.length || c - centers[centers.length - 1].hi > 80) centers.push({ lo: c, hi: c }); else centers[centers.length - 1].hi = c; });
+    centers.forEach(function (c) {
+      var mid = (c.lo + c.hi) / 2, half = Math.max(110, (c.hi - c.lo) / 2 + 90);
+      for (var k = 0; k < n; k++) {
+        var d = Math.abs(cum[k] - mid);
+        if (d < half) { var f = 0.5 + 0.5 * Math.cos(Math.PI * d / half); out[k * 3 + 2] += 8 * f * f * (3 - 2 * f); }
+      }
+    });
+    return out;
+  }
+
   function hash(i, k) { var h = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return h - Math.floor(h); }
 
   /** サーキット・峠の沿道 */
@@ -78,7 +106,7 @@
       night: !!o.night, geom: null, region: o.region,
       build: function (b) {
         var hw = o.hw || (D[key].loop ? 8.5 : 5.2);
-        var ps = R.Map.polySpec(poly(key), { hw: hw, lanes: D[key].loop ? 3 : 2, loop: !!D[key].loop });
+        var ps = R.Map.polySpec(D[key].loop ? overpass(poly(key), hw) : poly(key), { hw: hw, lanes: D[key].loop ? 3 : 2, loop: !!D[key].loop });
         this.geom = ps.geom; b.geom = ps.geom;
         ps.build(b);
       },

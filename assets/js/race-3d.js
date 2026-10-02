@@ -796,6 +796,8 @@
       }
       var cam = new T.PerspectiveCamera(62, canvas.width / canvas.height, 0.3, world ? 6000 : 2500);
       var me = carModel(v.car.body, v.car.color); scene.add(me);
+      var mbb = new T.Box3().setFromObject(me), msz = mbb.getSize(new T.Vector3());
+      me.userData.dim = { L: Math.max(msz.z, msz.x), H: msz.y };
       var head = null;
       if (v.night || v.spec.lava) {
         head = new T.SpotLight(0xfff2cc, 2.2, 90, 0.45, 0.5, 1.2); scene.add(head); scene.add(head.target);
@@ -856,7 +858,10 @@
       if (P.bump > 0) st.me.position.y += Math.sin(v.t * 60) * 0.05;
       // カメラ（自車の後ろ上から、少し遅れてついていく）
       var f = { x: Math.sin(p.h), z: Math.cos(p.h) };
-      var want = new T.Vector3(st.me.position.x - f.x * 6.8, st.me.position.y + 2.3, st.me.position.z - f.z * 6.8);
+      var dim = st.me.userData.dim || { L: 4.6, H: 1.4 };
+      // 大きな車（消防車・キャンピングカーなど）でも前が見えるよう、車体に合わせて後ろ・上へ引く
+      var camBack = 6.8 + Math.max(0, dim.L - 4.6) * 1.1 + Math.max(0, dim.H - 1.6) * 1.8, camUp = 2.3 + Math.max(0, dim.H - 1.6) * 1.6;
+      var want = new T.Vector3(st.me.position.x - f.x * camBack, st.me.position.y + camUp, st.me.position.z - f.z * camBack);
       if (!st.camPos) st.camPos = want.clone(); else st.camPos.lerp(want, 0.25);
       st.cam.position.copy(st.camPos);
       var ahead = at(st.cl, v.pz / R.SEG + 12 / 1.3);

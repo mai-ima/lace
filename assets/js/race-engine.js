@@ -129,21 +129,68 @@
     }
     var total = 0, abs = 0;
     segs.forEach(function (s) { total += s.curve; abs += Math.abs(s.curve); });
-    var turn = loop ? (3.2 * Math.PI) / (abs || 1) : 0.0055;
-    var bias = loop ? (2 * Math.PI * (total < 0 ? -1 : 1) * (mirror && total === 0 ? -1 : 1) - total * turn) / n : 0;
-    var h = 0, x = 0, z = 0;
-    for (var i = 0; i <= n; i++) {
-      hx[i] = h; px[i] = x; pz[i] = z;
-      var s = segs[i % n];
-      py[i] = (i < n ? s.p1.world.y : segs[n - 1].p2.world.y) / 200 * M_SEG * Y_SCALE;
-      if (i < n) { h -= s.curve * turn + bias; x += Math.sin(h) * M_SEG; z += Math.cos(h) * M_SEG; }
+    for (var i0 = 0; i0 <= n; i0++) py[i0] = (i0 < n ? segs[i0].p1.world.y : segs[n - 1].p2.world.y) / 200 * M_SEG * Y_SCALE;
+    function integrate(turn, bias, ca, cb) {
+      var h = 0, x = 0, z = 0;
+      for (var i = 0; i <= n; i++) {
+        var ph = 2 * Math.PI * i / n, hh = h + (loop ? ca * Math.cos(ph) + cb * Math.sin(ph) - ca : 0);
+        hx[i] = hh; px[i] = x; pz[i] = z;
+        if (i < n) { h -= segs[i].curve * turn + bias; x += Math.sin(hh) * M_SEG; z += Math.cos(hh) * M_SEG; }
+      }
     }
-    if (loop) {
-      var ex = px[n], ez = pz[n];
-      for (i = 0; i <= n; i++) { px[i] -= ex * i / n; pz[i] -= ez * i / n; }
-      py[n] = py[0];
+    if (!loop) { integrate(0.0055, 0, 0, 0); return { n: n, loop: false, h: hx, x: px, z: pz, y: py }; }
+
+    // 一周のコース: 一周でちょうど元の場所・向きに戻り、道が自分と平らに交わらない形を探す。
+    // 向きの合計を 360 度にそろえ、残る位置のずれは向きをゆるやかに曲げて（1 周期の波）消す。
+    var hw = spec.geom && spec.geom.hw ? spec.geom.hw : (spec.touge || spec.narrow ? 1350 : 2000) / 154;
+    var sign = (total < 0 ? -1 : 1) * (mirror && total === 0 ? -1 : 1);
+    function closeLoop(turn) {
+      var bias = (2 * Math.PI * sign - total * turn) / n, a = 0, b2 = 0, err = 0;
+      for (var it = 0; it < 12; it++) {
+        integrate(turn, bias, a, b2);
+        var ex = px[n], ez = pz[n];
+        err = Math.hypot(ex, ez);
+        if (err < 0.05) break;
+        var e = 0.01;
+        integrate(turn, bias, a + e, b2); var ax1 = px[n], az1 = pz[n];
+        integrate(turn, bias, a, b2 + e); var bx1 = px[n], bz1 = pz[n];
+        var j11 = (ax1 - ex) / e, j21 = (az1 - ez) / e, j12 = (bx1 - ex) / e, j22 = (bz1 - ez) / e, det = j11 * j22 - j12 * j21;
+        if (Math.abs(det) < 1e-9) break;
+        a -= (j22 * ex - j12 * ez) / det; b2 -= (-j21 * ex + j11 * ez) / det;
+        a = Math.max(-1.6, Math.min(1.6, a)); b2 = Math.max(-1.6, Math.min(1.6, b2));
+      }
+      integrate(turn, bias, a, b2);
+      return { err: err, a: a, b: b2 };
     }
-    return { n: n, loop: loop, h: hx, x: px, z: pz, y: py };
+    function clearance() {   // 離れた区間どうしのいちばん近い距離（m）。高さが 6m 以上違う所は立体交差とみなす
+      var m = 1e9, st = 4;
+      for (var i = 0; i < n; i += st) for (var j = i + 1; j < n; j += st) {
+        var di = Math.min(j - i, n - (j - i));
+        if (di < 90) continue;
+        if (Math.abs(py[i] - py[j]) > 6) continue;
+        var dx = px[i] - px[j], dz = pz[i] - pz[j];
+        if (Math.abs(dx) > m || Math.abs(dz) > m) continue;
+        var d = Math.hypot(dx, dz); if (d < m) m = d;
+      }
+      return m;
+    }
+    var lc = spec.loopK || (spec.loopK = {}), ck = lc[mirror ? 'm' : 'n'];
+    var base = (3.2 * Math.PI) / (abs || 1);
+    if (ck === undefined) {
+      var want = 2 * hw * 1.2, best = null, tries = [1, 0.85, 1.15, 0.7, 1.35, 0.55, 1.6, 0.45, 1.9, 0.35, 2.3];
+      for (var ti = 0; ti < tries.length; ti++) {
+        var cl = closeLoop(base * tries[ti]);
+        if (cl.err > 1) continue;
+        var cr = clearance();
+        if (!best || cr > best.cr) best = { k: tries[ti], cr: cr };
+        if (cr >= want) break;
+      }
+      ck = best ? best.k : 1;
+      lc[mirror ? 'm' : 'n'] = ck;
+    }
+    closeLoop(base * ck);
+    py[n] = py[0];
+    return { n: n, loop: true, h: hx, x: px, z: pz, y: py };
   };
 
   function buildTrack(id, mirror, weather) {
@@ -304,7 +351,7 @@
   /* ---------- 車（後ろから見た姿） ---------- */
 
   var BODIES = {
-    kei: { h: 0.8, body: 0.52, cab: [0.4, 0.34], top: 0.96, round: 1 },
+    kei: { h: 0.7, body: 0.52, cab: [0.4, 0.34], top: 0.96, round: 1 },
     hatch: { h: 0.64, body: 0.58, cab: [0.4, 0.3], top: 0.97 },
     sedan: { h: 0.56, body: 0.64, cab: [0.34, 0.26], top: 0.98 },
     rally: { h: 0.66, body: 0.6, cab: [0.38, 0.3], top: 0.94, rack: 1, flaps: 1, wing: 0.06 },
@@ -321,29 +368,29 @@
     rr: { h: 0.46, body: 0.6, cab: [0.3, 0.16], top: 0.98, strip: 1, wing: 0.08, wide: 1.04 },
     wedge: { h: 0.38, body: 0.62, cab: [0.26, 0.14], top: 0.98, strip: 1, wing: 0.1, wide: 1.08 },
     classic: { h: 0.5, body: 0.6, cab: [0.3, 0.2], top: 0.96, lamps: 'round2', chrome: 1 },
-    suv: { h: 0.82, body: 0.56, cab: [0.44, 0.4], top: 0.96, spare: 1 },
-    minivan: { h: 0.9, body: 0.5, cab: [0.46, 0.42], top: 0.97 },
+    suv: { h: 0.72, body: 0.56, cab: [0.44, 0.4], top: 0.96, spare: 1 },
+    minivan: { h: 0.78, body: 0.5, cab: [0.46, 0.42], top: 0.97 },
     ev: { h: 0.6, body: 0.6, cab: [0.38, 0.3], top: 0.96, strip: 1 },
     pickup: { h: 0.7, body: 0.62, cab: [0.36, 0.3], top: 0.97, bed: 1 },
-    keitra: { h: 0.78, body: 0.5, cab: [0.36, 0.32], top: 0.94, bed: 1, round: 1 },
+    keitra: { h: 0.7, body: 0.5, cab: [0.36, 0.32], top: 0.94, bed: 1, round: 1 },
     kart: { h: 0.5, kart: 1 },
     buggy: { h: 0.62, buggy: 1 },
-    tractor: { h: 0.95, tractor: 1 },
-    monster: { h: 1.25, monster: 1, wm: 1.3 },
-    trike: { h: 0.8, body: 0.55, cab: [0.3, 0.26], top: 0.95, round: 1 },
+    tractor: { h: 0.8, tractor: 1 },
+    monster: { h: 1.0, monster: 1, wm: 1.15 },
+    trike: { h: 0.7, body: 0.55, cab: [0.3, 0.26], top: 0.95, round: 1 },
     limo: { h: 0.52, body: 0.64, cab: [0.34, 0.26], top: 0.97, chrome: 1 },
-    train: { h: 1.35, box: 1, wm: 1.35, windows: 1, train: 1 },
-    ambulance: { h: 1.0, box: 1, wm: 1.1, cross: 1, bar: 1 },
-    fire: { h: 1.1, box: 1, wm: 1.25, ladder: 1, bar: 1 },
-    camper: { h: 1.1, box: 1, wm: 1.2, windows: 1, spare: 1 },
+    train: { h: 1.0, box: 1, wm: 1.12, windows: 1, train: 1 },
+    ambulance: { h: 0.8, box: 1, wm: 1.0, cross: 1, bar: 1 },
+    fire: { h: 0.85, box: 1, wm: 1.05, ladder: 1, bar: 1 },
+    camper: { h: 0.85, box: 1, wm: 1.05, windows: 1, spare: 1 },
     taxi: { h: 0.58, body: 0.62, cab: [0.34, 0.26], top: 0.94, taxi: 1 },
     police: { h: 0.58, body: 0.62, cab: [0.34, 0.26], top: 0.94, bar: 1 },
     super: { h: 0.42, body: 0.62, cab: [0.3, 0.18], top: 0.98, wing: 0.16, wide: 1.06, strip: 1 },
     formula: { h: 0.46, open: 1, wide: 1.02 },
     proto: { h: 0.46, body: 0.62, cab: [0.26, 0.16], top: 0.98, wing: 0.2, fin: 1, strip: 1, wide: 1.05 },
-    van: { h: 1.0, box: 1, wm: 1.1 },
-    truck: { h: 1.15, box: 1, wm: 1.25, ribs: 1 },
-    bus: { h: 1.2, box: 1, wm: 1.3, windows: 1 }
+    van: { h: 0.8, box: 1, wm: 1.0 },
+    truck: { h: 0.9, box: 1, wm: 1.05, ribs: 1 },
+    bus: { h: 0.95, box: 1, wm: 1.1, windows: 1 }
   };
   R.BODIES = BODIES;
   function bodyWm(body) { var B = BODIES[body] || BODIES.sedan; return (B.wm || 1) * (B.wide || 1); }
