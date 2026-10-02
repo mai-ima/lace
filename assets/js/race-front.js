@@ -898,7 +898,8 @@
     }
 
     /* 会話シーン。背景・立ち絵（表情つき）・演出（揺れ・フラッシュ・集中線・擬音）・章タイトル・ナレーション・VS 画面 */
-    function scene(lines, done, filter) {
+    function scene(lines0, done, filter) {
+      var lines = lines0.slice();   // 選択肢で行を差し込むので、元の台本は変えない
       if (R.Music) R.Music.play(lines.some(function (ln) { return ln && ln.bgm === 'tension'; }) ? 'tension' : 'story');
       over.classList.remove('hidden');
       over.innerHTML = '';
@@ -910,8 +911,8 @@
       var sfxEl = el('div', 'rx-scn-sfx'), flashEl = el('div', 'rx-scn-flash');
       var box = el('div', 'rx-scn-box'), name = el('div', 'rx-name'), text = el('div', 'rx-text'), more = el('div', 'rx-more', '▼ Enter / クリック　s スキップ');
       box.appendChild(name); box.appendChild(text); box.appendChild(more);
-      var card = el('div', 'rx-scn-card'), narr = el('div', 'rx-scn-narr'), vs = el('div', 'rx-scn-vs');
-      [bg, speed, faceL, faceR, el('div', 'rx-scn-bar top'), el('div', 'rx-scn-bar bottom'), sfxEl, box, narr, card, vs, flashEl].forEach(function (x) { root.appendChild(x); });
+      var card = el('div', 'rx-scn-card'), narr = el('div', 'rx-scn-narr'), vs = el('div', 'rx-scn-vs'), choiceEl = el('div', 'rx-scn-choice');
+      [bg, speed, faceL, faceR, el('div', 'rx-scn-bar top'), el('div', 'rx-scn-bar bottom'), sfxEl, box, narr, card, vs, choiceEl, flashEl].forEach(function (x) { root.appendChild(x); });
       over.appendChild(root);
       if (filter) root.style.filter = filter;
 
@@ -939,7 +940,7 @@
         return o;
       }
       function pulse(cls, ms) { root.classList.remove(cls); void root.offsetWidth; root.classList.add(cls); setTimeout(function () { root.classList.remove(cls); }, ms); }
-      function hideAll() { card.className = 'rx-scn-card'; narr.className = 'rx-scn-narr'; vs.className = 'rx-scn-vs'; box.classList.remove('hide'); }
+      function hideAll() { card.className = 'rx-scn-card'; narr.className = 'rx-scn-narr'; vs.className = 'rx-scn-vs'; choiceEl.className = 'rx-scn-choice'; box.classList.remove('hide'); }
       function typeInto(elm, str, cb) {
         full = str; shown = 0; elm.textContent = '';
         clearInterval(timer);
@@ -975,6 +976,36 @@
           return;
         }
         if (ln.bgm && R.Music) { R.Music.play(ln.bgm); i++; showLine(); return; }
+        if (ln.choice) {
+          // 選択肢: 選んだものの台詞を、この行のあとに差し込む
+          mode = 'choice'; box.classList.add('hide');
+          choiceEl.innerHTML = '';
+          if (ln.ask) choiceEl.appendChild(el('div', 'rx-choice-q', ln.ask));
+          var csel = 0, btns = [];
+          var pick1 = function (k) {
+            var opt = ln.choice[k];
+            app.keyHook = sceneKeys;
+            lines.splice.apply(lines, [i + 1, 0].concat(opt.lines || []));
+            sfx('click'); choiceEl.className = 'rx-scn-choice'; mode = 'line';
+            i++; showLine();
+          };
+          ln.choice.forEach(function (opt, k) {
+            var bt = el('button', 'rx-choice-btn', (k + 1) + '. ' + opt.t);
+            bt.addEventListener('click', function (e) { e.stopPropagation(); pick1(k); });
+            choiceEl.appendChild(bt); btns.push(bt);
+          });
+          var hi = function () { btns.forEach(function (bt, k) { bt.classList.toggle('on', k === csel); }); };
+          hi();
+          choiceEl.className = 'rx-scn-choice show';
+          app.keyHook = function (k) {
+            if (k === 'ArrowUp' || k === 'ArrowLeft') { csel = (csel + btns.length - 1) % btns.length; hi(); }
+            else if (k === 'ArrowDown' || k === 'ArrowRight') { csel = (csel + 1) % btns.length; hi(); }
+            else if (k === 'Enter' || k === ' ') { pick1(csel); }
+            else if (/^[1-9]$/.test(k) && +k <= btns.length) { pick1(+k - 1); }
+            return true;
+          };
+          return;
+        }
         if (ln.vs) {
           if (R.Music) R.Music.play('tension');
           mode = 'vs'; box.classList.add('hide');
@@ -1017,12 +1048,14 @@
         }
         i++; showLine();
       }
-      root.addEventListener('click', adv);
-      app.keyHook = function (k) {
+      root.addEventListener('click', function () { if (mode !== 'choice') adv(); });
+      var sceneKeys = function (k) {
+        if (mode === 'choice') return true;
         if (k === 'Enter' || k === ' ') adv();
         else if (k === 's' || k === 'S' || k === 'Escape') { i = lines.length; showLine(); }
         return true;
       };
+      app.keyHook = sceneKeys;
       showLine();
     }
 

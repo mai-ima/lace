@@ -957,6 +957,12 @@ body.upside .tui { transform: rotate(180deg); }
   border-left: 5px solid var(--c, #7fd6ff); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
 .rx-scn-box.hide { display: none; }
 .rx-scn-box .rx-text { font-size: 1.08em; min-height: 3.3em; }
+.rx-scn-choice { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); width: min(760px, 90%); z-index: 7; display: none; flex-direction: column; gap: 8px; }
+.rx-scn-choice.show { display: flex; }
+.rx-choice-q { text-align: center; color: #ffd93d; font-weight: 700; text-shadow: 0 2px 8px #000; margin-bottom: 2px; }
+.rx-choice-btn { font: inherit; text-align: left; padding: .75em 1.1em; color: #e8f1ff; cursor: pointer; border-radius: 8px;
+  background: linear-gradient(180deg, rgba(10,14,24,.95), rgba(6,9,16,.97)); border: 1px solid rgba(255,255,255,.22); border-left: 5px solid #5ccfa0; }
+.rx-choice-btn:hover, .rx-choice-btn.on { border-color: #5ccfa0; background: linear-gradient(180deg, rgba(20,60,50,.95), rgba(10,35,30,.97)); color: #fff; }
 .rx-scn-sfx { position: absolute; top: 16%; left: 50%; transform: translate(-50%, 0) rotate(-8deg) scale(0); z-index: 5; pointer-events: none;
   font-size: clamp(2.2em, 8vw, 5em); font-weight: 900; font-style: italic; color: #fff;
   -webkit-text-stroke: 3px #e53935; text-shadow: 6px 6px 0 #000; letter-spacing: .05em; opacity: 0; }
