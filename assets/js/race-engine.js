@@ -231,6 +231,8 @@
     }
   }
 
+  // 実在の峠・サーキットは曲がりが急で、自動運転ではライバルより遅くなりすぎる。ライバルの上限速度をコースごとにそろえる（測定値）
+  var AI_TRACK_SCALE = {"r_suzuka": 0.87, "r_fuji": 0.84, "r_motegi": 0.84, "r_sugo": 0.84, "r_okayama": 0.81, "r_tsukuba": 0.72, "r_autopolis": 0.84, "r_haruna": 0.77, "r_usui": 0.58, "r_iroha": 0.62, "r_turnpike": 0.88, "r_tsubaki": 0.59, "r_akagi": 0.62, "r_myogi": 0.6, "hm_city": 0.88, "hm_bypass": 0.88, "hm_oku": 0.88, "hm_tenryu": 0.88, "hm_mikata": 0.88, "hm_tomei": 0.88};
   function buildTrack(id, mirror, weather) {
     var spec = typeof id === 'string' ? R.TRACKS[id] : id;
     id = spec.id || (typeof id === 'string' ? id : 'custom');
@@ -1331,7 +1333,7 @@
       var c = {
         name: d.name, color: d.color, body: d.body || 'sedan', ai: d.ai || 'balanced', ability: d.ability || null,
         boss: !!d.boss, isTarget: !!d.target, skill: d.skill || 0.7,
-        max: MAX * (d.pace || 1) * lvl * (d.ai === 'speedster' ? 1.03 : 1),
+        max: MAX * (d.pace || 1) * lvl * (d.ai === 'speedster' ? 1.03 : 1) * (AI_TRACK_SCALE[cfg.track] || 1),
         speed: 0, boostT: 0, burst: 1.14, finished: false, finishTime: null, out: false,
         wm: bodyWm(d.body), oilT: 4 + Math.random() * 4, blockT: 0, hp: 1, hitCool: 0, lane: 0, laneT: 0
       };
@@ -2034,7 +2036,7 @@
         if (c.caught) { c.speed = Math.max(0, c.speed - MAX * 0.8 * dt); c.total += c.speed * dt; return; }
         var cs = findSeg(c.total + SEG * 6), curv = Math.abs(cv(cs));
         var cp = c.ai === 'technician' ? 0.5 : c.ai === 'speedster' ? 1.6 : 1;
-        var target = c.max * RV * (1 - curv * 0.022 * (1.2 - c.skill) * cp) * ({ rain: 0.97, snow: 0.94 }[weather] || 1);
+        var target = c.max * RV * (1 - curv * (spec.custom ? 0.05 : 0.022) * (1.2 - c.skill) * cp) * ({ rain: 0.97, snow: 0.94 }[weather] || 1);
         var gap = pz() - c.total;
         if (!P.finished) {
           if (c.isTarget) {

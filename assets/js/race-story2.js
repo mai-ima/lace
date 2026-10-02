@@ -65,9 +65,9 @@
   B.kurosawa = { name: 'KUROSAWA', color: '#eceff1', body: 'r32', ai: 'blocker', skill: 0.97, boss: true, ability: 'block' };
   [
     { id: 'z31', name: { ja: '修の Z（Z31）', en: "Shu's Z (Z31)" }, cls: 'B', price: 0, body: 'gt', paint: 5, unlock: true, era: 1989,
-      stats: { spd: 7, acc: 6, grp: 6, arm: 6, nit: 6 }, desc: { ja: '兄の形見。3 リッターのターボ。黒いボディに白いピンストライプ。', en: "Her late brother's turbo Z." } },
+      stats: { spd: 8, acc: 7, grp: 8, arm: 7, nit: 7 }, desc: { ja: '兄の形見。3 リッターのターボ。黒いボディに白いピンストライプ。', en: "Her late brother's turbo Z." } },
     { id: 'z31t', name: { ja: 'Z（八重樫チューン）', en: 'Z (Yaegashi tune)' }, cls: 'A', price: 0, body: 'gt', paint: 5, unlock: true, era: 1989,
-      stats: { spd: 9, acc: 8, grp: 7, arm: 6, nit: 8 }, desc: { ja: '八重樫が組んだ最高速仕様。湾岸で 300km/h を目指す。', en: 'Tuned by Yaegashi for 300 km/h on the Wangan.' } }
+      stats: { spd: 9, acc: 9, grp: 9, arm: 7, nit: 9 }, desc: { ja: '八重樫が組んだ最高速仕様。湾岸で 300km/h を目指す。', en: 'Tuned by Yaegashi for 300 km/h on the Wangan.' } }
   ].forEach(function (c) { if (!R.CARS.some(function (x) { return x.id === c.id; })) R.CARS.push(c); });
 
   function S(o) { return o; }
