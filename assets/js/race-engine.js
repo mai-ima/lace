@@ -127,71 +127,105 @@
       else { hx[n] = wl.h; px[n] = wl.x + Math.sin(wl.h) * M_SEG; pz[n] = wl.z + Math.cos(wl.h) * M_SEG; py[n] = wl.y; }
       return { n: n, loop: !!spec.loop, h: hx, x: px, z: pz, y: py, real: true };
     }
-    var total = 0, abs = 0;
-    segs.forEach(function (s) { total += s.curve; abs += Math.abs(s.curve); });
+    // カーブの値をそのまま向きの変化にして積み上げる（実在コースの CURVE_K と同じ換算）。
+    // 一周コースは fitLoop が先にカーブを補正して閉じているので、ここでは何も足さない。
     for (var i0 = 0; i0 <= n; i0++) py[i0] = (i0 < n ? segs[i0].p1.world.y : segs[n - 1].p2.world.y) / 200 * M_SEG * Y_SCALE;
-    function integrate(turn, bias, ca, cb) {
-      var h = 0, x = 0, z = 0;
-      for (var i = 0; i <= n; i++) {
-        var ph = 2 * Math.PI * i / n, hh = h + (loop ? ca * Math.cos(ph) + cb * Math.sin(ph) - ca : 0);
-        hx[i] = hh; px[i] = x; pz[i] = z;
-        if (i < n) { h -= segs[i].curve * turn + bias; x += Math.sin(hh) * M_SEG; z += Math.cos(hh) * M_SEG; }
-      }
+    var h = 0, x = 0, z = 0;
+    for (var i = 0; i <= n; i++) {
+      hx[i] = h; px[i] = x; pz[i] = z;
+      if (i < n) { h -= segs[i].curve * CURVE_TURN; x += Math.sin(h) * M_SEG; z += Math.cos(h) * M_SEG; }
     }
-    if (!loop) { integrate(0.0055, 0, 0, 0); return { n: n, loop: false, h: hx, x: px, z: pz, y: py }; }
+    if (loop) py[n] = py[0];
+    return { n: n, loop: loop, h: hx, x: px, z: pz, y: py };
+  };
 
-    // 一周のコース: 一周でちょうど元の場所・向きに戻り、道が自分と平らに交わらない形を探す。
-    // 向きの合計を 360 度にそろえ、残る位置のずれは向きをゆるやかに曲げて（1 周期の波）消す。
-    var hw = spec.geom && spec.geom.hw ? spec.geom.hw : (spec.touge || spec.narrow ? 1350 : 2000) / 154;
-    var sign = (total < 0 ? -1 : 1) * (mirror && total === 0 ? -1 : 1);
-    function closeLoop(turn) {
-      var bias = (2 * Math.PI * sign - total * turn) / n, a = 0, b2 = 0, err = 0;
-      for (var it = 0; it < 12; it++) {
-        integrate(turn, bias, a, b2);
-        var ex = px[n], ez = pz[n];
-        err = Math.hypot(ex, ez);
-        if (err < 0.05) break;
-        var e = 0.01;
-        integrate(turn, bias, a + e, b2); var ax1 = px[n], az1 = pz[n];
-        integrate(turn, bias, a, b2 + e); var bx1 = px[n], bz1 = pz[n];
-        var j11 = (ax1 - ex) / e, j21 = (az1 - ez) / e, j12 = (bx1 - ex) / e, j22 = (bz1 - ez) / e, det = j11 * j22 - j12 * j21;
-        if (Math.abs(det) < 1e-9) break;
-        a -= (j22 * ex - j12 * ez) / det; b2 -= (-j21 * ex + j11 * ez) / det;
-        a = Math.max(-1.6, Math.min(1.6, a)); b2 = Math.max(-1.6, Math.min(1.6, b2));
+  /**
+   * 一周コースのカーブを、「一周でぴったり元の場所・向きに戻る」ように少しだけ補正する。
+   * 道のカーブ（見た目・物理）と、ミニマップ・3D の形が同じ計算から出るので、形も角度も一致する。
+   * 補正は、まっすぐな所ほど多く、きついカーブの所はほとんど触らない。
+   * 位置・向きの 3 つの条件を、ゆるやかな波（0〜H 次）の最小の変更で満たす。
+   */
+  var CURVE_TURN = 1 / 232;   // カーブ 1 あたりの向きの変化（ラジアン/区間）
+  function fitLoop(segs, spec) {
+    var n = segs.length, K = CURVE_TURN, MS = 1.3, c0 = new Float64Array(n), tot = 0, i;
+    for (i = 0; i < n; i++) { c0[i] = segs[i].curve; tot += c0[i]; }
+    if (!spec.fitCache || spec.fitCache.n !== n) {
+      var hw = spec.geom && spec.geom.hw ? spec.geom.hw : (spec.touge || spec.narrow ? 1350 : 2000) / 154;
+      var s0 = tot < 0 ? -1 : 1, best = null;
+      var tries = [[1.5, 4, s0], [1.5, 6, s0], [0.7, 4, s0], [3, 4, s0], [1.5, 4, -s0], [0.7, 6, -s0], [0, 4, s0], [0, 6, -s0], [3, 6, s0], [0.3, 8, s0]];
+      for (var ti = 0; ti < tries.length; ti++) {
+        var r = solve(tries[ti][0], tries[ti][1], tries[ti][2]);
+        if (!r || r.err > 0.5) continue;
+        r.clear = clearance(r.x, r.z, hw);
+        if (!best || r.clear > best.clear) best = r;
+        if (r.clear >= hw * 6) break;
       }
-      integrate(turn, bias, a, b2);
-      return { err: err, a: a, b: b2 };
+      spec.fitCache = { n: n, th: best ? best.th : null, wexp: best ? best.wexp : 1.5, H: best ? best.H : 4 };
     }
-    function clearance() {   // 離れた区間どうしのいちばん近い距離（m）。高さが 6m 以上違う所は立体交差とみなす
+    var fc = spec.fitCache;
+    if (!fc.th) return;
+    var w = weights(fc.wexp);
+    for (i = 0; i < n; i++) segs[i].curve = corrected(fc.th, fc.H, w, i);
+
+    function weights(wexp) { var a = new Float64Array(n); for (var k = 0; k < n; k++) a[k] = 1 / (1 + Math.abs(c0[k]) * wexp); return a; }
+    function corrected(th, H, w, k) {
+      var ph = 2 * Math.PI * k / n, v = th[0];
+      for (var h = 1; h <= H; h++) v += th[2 * h - 1] * Math.cos(h * ph) + th[2 * h] * Math.sin(h * ph);
+      return c0[k] + w[k] * v;
+    }
+    function integ(th, H, w) {
+      var x = new Float64Array(n + 1), z = new Float64Array(n + 1), hd = 0;
+      for (var k = 0; k < n; k++) { hd -= corrected(th, H, w, k) * K; x[k + 1] = x[k] + Math.sin(hd) * MS; z[k + 1] = z[k] + Math.cos(hd) * MS; }
+      return { x: x, z: z, h: hd };
+    }
+    function solve(wexp, H, sgn) {
+      var w = weights(wexp), m = 2 * H + 1, th = new Float64Array(m), sw = 0, k;
+      for (k = 0; k < n; k++) sw += w[k];
+      th[0] = (2 * Math.PI * sgn / K - tot) / sw;
+      var hTarget = -2 * Math.PI * sgn, err = 1e9, res;
+      for (var it = 0; it < 60; it++) {
+        res = integ(th, H, w);
+        var e = [res.x[n], res.z[n], (res.h - hTarget) * 60];
+        err = Math.hypot(e[0], e[1]);
+        if (err < 0.05 && Math.abs(res.h - hTarget) < 0.002) break;
+        var J = [[], [], []];
+        for (k = 0; k < m; k++) {
+          var t2 = Float64Array.from(th); t2[k] += 0.01; var r2 = integ(t2, H, w);
+          J[0].push((r2.x[n] - res.x[n]) / 0.01); J[1].push((r2.z[n] - res.z[n]) / 0.01); J[2].push(((r2.h - hTarget) * 60 - e[2]) / 0.01);
+        }
+        // 最小ノルム解 dθ = -Jᵀ (J Jᵀ)⁻¹ e
+        var A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], a, b2, c;
+        for (a = 0; a < 3; a++) for (b2 = 0; b2 < 3; b2++) { var sum = 0; for (c = 0; c < m; c++) sum += J[a][c] * J[b2][c]; A[a][b2] = sum + (a === b2 ? 1e-6 : 0); }
+        var y = solve3(A, e);
+        if (!y) break;
+        var d = new Float64Array(m), dn = 0;
+        for (c = 0; c < m; c++) { d[c] = -(J[0][c] * y[0] + J[1][c] * y[1] + J[2][c] * y[2]); dn = Math.max(dn, Math.abs(d[c])); }
+        var damp = dn > 1.5 ? 1.5 / dn : 1;
+        for (c = 0; c < m; c++) th[c] += damp * d[c];
+      }
+      res = integ(th, H, w);
+      return { th: th, wexp: wexp, H: H, x: res.x, z: res.z, err: Math.hypot(res.x[n], res.z[n]) + Math.abs(res.h - hTarget) * 30 };
+    }
+    function solve3(A, e) {
+      var M = [A[0].concat(e[0]), A[1].concat(e[1]), A[2].concat(e[2])], r, c, k;
+      for (c = 0; c < 3; c++) {
+        var piv = c; for (r = c + 1; r < 3; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+        if (Math.abs(M[piv][c]) < 1e-12) return null;
+        var t = M[c]; M[c] = M[piv]; M[piv] = t;
+        for (r = 0; r < 3; r++) if (r !== c) { var f = M[r][c] / M[c][c]; for (k = c; k < 4; k++) M[r][k] -= f * M[c][k]; }
+      }
+      return [M[0][3] / M[0][0], M[1][3] / M[1][1], M[2][3] / M[2][2]];
+    }
+    function clearance(x, z, hw) {   // 離れた区間どうしの最短距離（m）
       var m = 1e9, st = 4;
-      for (var i = 0; i < n; i += st) for (var j = i + 1; j < n; j += st) {
-        var di = Math.min(j - i, n - (j - i));
-        if (di < 90) continue;
-        if (Math.abs(py[i] - py[j]) > 6) continue;
-        var dx = px[i] - px[j], dz = pz[i] - pz[j];
-        if (Math.abs(dx) > m || Math.abs(dz) > m) continue;
-        var d = Math.hypot(dx, dz); if (d < m) m = d;
+      for (var a = 0; a < n; a += st) for (var b3 = a + 1; b3 < n; b3 += st) {
+        var di = Math.min(b3 - a, n - (b3 - a)); if (di < 90) continue;
+        var dx = x[a] - x[b3], dz = z[a] - z[b3]; if (Math.abs(dx) > m || Math.abs(dz) > m) continue;
+        var dd = Math.hypot(dx, dz); if (dd < m) m = dd;
       }
       return m;
     }
-    var lc = spec.loopK || (spec.loopK = {}), ck = lc[mirror ? 'm' : 'n'];
-    var base = (3.2 * Math.PI) / (abs || 1);
-    if (ck === undefined) {
-      var want = 2 * hw * 1.2, best = null, tries = [1, 0.85, 1.15, 0.7, 1.35, 0.55, 1.6, 0.45, 1.9, 0.35, 2.3];
-      for (var ti = 0; ti < tries.length; ti++) {
-        var cl = closeLoop(base * tries[ti]);
-        if (cl.err > 1) continue;
-        var cr = clearance();
-        if (!best || cr > best.cr) best = { k: tries[ti], cr: cr };
-        if (cr >= want) break;
-      }
-      ck = best ? best.k : 1;
-      lc[mirror ? 'm' : 'n'] = ck;
-    }
-    closeLoop(base * ck);
-    py[n] = py[0];
-    return { n: n, loop: true, h: hx, x: px, z: pz, y: py };
-  };
+  }
 
   function buildTrack(id, mirror, weather) {
     var spec = typeof id === 'string' ? R.TRACKS[id] : id;
@@ -202,6 +236,7 @@
     var rand = seeded(id.length * 7919 + id.charCodeAt(0) * 131 + id.charCodeAt(1));
 
     if (spec.custom && spec.after) spec.after(segs);
+    if (!spec.custom && !(segs[0] && segs[0].wp) && (!(spec.touge || spec.p2p || spec.noFinish || spec.stopZone || spec.finishAt) || spec.loop)) fitLoop(segs, spec);
     var GR = R.Map && R.Map.GROUND;
     segs.forEach(function (s, i) {
       if (mirror) { s.curve = -s.curve; if (s.phys !== undefined) s.phys = -s.phys; if (s.wp) { s.wp = { x: -s.wp.x, z: s.wp.z, y: s.wp.y, h: -s.wp.h }; } }
@@ -324,6 +359,24 @@
     return { id: id, spec: spec, pal: pal, segs: segs, length: segs.length * SEG, map: map, path: path };
   }
   R.buildTrack = buildTrack;
+
+  /* 管理者モード: 保存されない一時的な設定（ページを閉じる・初期値に戻す、で消える） */
+  R.adminDefaults = function () {
+    return { speed: 1, accel: 1, grip: 1, rival: 1, traffic: 1, time: 1, nitro: false, god: false, auto: false, laps: 0, weather: 'default', unlockAll: false };
+  };
+  R.admin = R.admin || { on: false, v: R.adminDefaults() };
+  /** 初期値から変えてある項目の短い説明（ゲーム中の表示用） */
+  R.adminSummary = function () {
+    var a = R.admin, d = R.adminDefaults(), out = [];
+    if (!a || !a.on) return out;
+    [['speed', '最高速 ×'], ['accel', '加速 ×'], ['grip', '操作性 ×'], ['rival', 'ライバル ×'], ['traffic', '一般車 ×'], ['time', '制限時間 ×']].forEach(function (k) { if (a.v[k[0]] !== d[k[0]]) out.push(k[1] + a.v[k[0]]); });
+    if (a.v.nitro) out.push('ニトロ無限');
+    if (a.v.god) out.push('無敵');
+    if (a.v.auto) out.push('自動運転');
+    if (a.v.laps) out.push('周回 ' + a.v.laps);
+    if (a.v.weather !== 'default') out.push('天気 ' + a.v.weather);
+    return out;
+  };
 
   /* =====================================================================
      描画の部品（GUI）
@@ -1194,10 +1247,9 @@
     var fogDensity = { fog: 10, rain: 6.5, snow: 7, sand: 7, ash: 7 }[weather] || 5;
 
     // 性能を物理の数字に直す
-    var topSpeed = MAX * (0.7 + st.spd * 0.035);
-    var accel = MAX / 5 * (0.7 + st.acc * 0.07);
-    var steer = 2 * (0.82 + st.grp * 0.03);
-    var grip = (1.35 - st.grp * 0.07) / wGrip;
+    var topSpeed0 = MAX * (0.7 + st.spd * 0.035), accel0 = MAX / 5 * (0.7 + st.acc * 0.07);
+    var steer0 = 2 * (0.82 + st.grp * 0.03), grip0 = (1.35 - st.grp * 0.07) / wGrip;
+    var topSpeed = topSpeed0, accel = accel0, steer = steer0, grip = grip0, RV = 1;   // 管理者モードの倍率で毎フレーム更新する
     var offDecel = -MAX / 2 * (car.offroad ? 0.5 : 1) * (1.2 - st.grp * 0.04);
     var dmgTaken = clamp(1.4 - st.arm * 0.09, 0.35, 1.3);
     var nitroRate = 0.34 / (0.7 + st.nit * 0.08);
@@ -1390,7 +1442,8 @@
                offset: twoWay ? (onc ? 0.5 : -0.5) + (Math.random() - 0.5) * 0.06 : LANE_X[Math.floor(Math.random() * 3)] + (Math.random() - 0.5) * 0.1,
                speed: v, cruise: v, passed: false };
     }
-    for (var ti = 0; ti < (cfg.traffic || 0); ti++) traffic.push(newTraffic(SEG * (30 + ti * (260 / Math.max(1, cfg.traffic)))));
+    var trafficN = Math.round((cfg.traffic || 0) * (R.admin && R.admin.on ? R.admin.v.traffic : 1));
+    for (var ti = 0; ti < trafficN; ti++) traffic.push(newTraffic(SEG * (30 + ti * (260 / Math.max(1, trafficN)))));
     if (spec.train) traffic.push({ body: 'train', color: spec.train === 'entetsu' ? '#d32f2f' : '#eceff1', traffic: true, train: true, wm: 1.35,
                                    total: pz() + SEG * 60, offset: spec.water === 'left' ? 2.6 : -2.6, speed: MAX * 0.28, cruise: MAX * 0.28, dir: 1, passed: true });
 
@@ -1398,7 +1451,7 @@
     var state = demo || cfg.start ? 'race' : 'count', countT = 3.2, raceT = 0, keys = {};
     var msg = { text: '', t: 0 }, popups = [], parts = [], dyn = [];
     var skyOff = 0, hillOff = 0, finishWait = 0, result = null;
-    var timer = cfg.timeLimit || 0, cpDist = trackLen / 3, nextCp = cpDist;
+    var timer = (cfg.timeLimit || 0) * (R.admin && R.admin.on ? R.admin.v.time : 1), cpDist = trackLen / 3, nextCp = cpDist;
     var score = 0, combo = 0, comboT = 0, nearCount = 0, maxCombo = 0, overtakes = 0, topKmh = 0;
     var prevRank = null, eliminated = [], flash = 0, lastHitName = '';
     var ghost = cfg.ghost || null, rec = { s: [], x: [] }, newGhost = null;
@@ -1469,6 +1522,10 @@
     function useGeom() { ROAD_W = geom.rw; CAR_W = geom.cw; OVERLAP = CAR_W * 2 * 0.9; LANES = geom.lanes; }
     function update(dt) {
       useGeom();
+      var adm = R.admin && R.admin.on ? R.admin.v : null;
+      topSpeed = topSpeed0 * (adm ? adm.speed : 1); accel = accel0 * (adm ? adm.accel : 1);
+      steer = steer0 * (adm ? adm.grip : 1); grip = grip0 / (adm ? adm.grip : 1); RV = adm ? adm.rival : 1;
+      if (adm && state === 'race' && !P.finished) { if (adm.nitro) P.nitro = 1; if (adm.god) P.damage = 0; }
       t0 += dt;
       if (msg.t > 0) msg.t -= dt;
       if (radio) { radio.t -= dt; if (radio.t <= 0) radio = null; }
@@ -1491,7 +1548,7 @@
       if (state === 'results') { eng.update({ speed: P.speed / topSpeed, throttle: false }); moveTraffic(dt); return; }
 
       raceT += dt;
-      if (demo || R.auto || P.finished) autopilot();
+      if (demo || R.auto || P.finished || (adm && adm.auto)) autopilot();
 
       var seg = findSeg(pz());
       var pct = P.speed / MAX;
@@ -1903,7 +1960,7 @@
       if (mode === 'drag') {
         cars.forEach(function (c) {
           if (state !== 'race') return;
-          var tgt = c.max * (c.total - PLAYER_Z < dragLen ? 1 : 0.4);
+          var tgt = c.max * RV * (c.total - PLAYER_Z < dragLen ? 1 : 0.4);
           c.speed += (c.speed < tgt ? MAX / 3.4 * (1.2 - c.speed / c.max * 0.6) : -MAX / 2) * dt;
           c.speed = clamp(c.speed, 0, c.max);
           c.total += c.speed * dt;
@@ -1921,7 +1978,7 @@
         if (c.caught) { c.speed = Math.max(0, c.speed - MAX * 0.8 * dt); c.total += c.speed * dt; return; }
         var cs = findSeg(c.total + SEG * 6), curv = Math.abs(cv(cs));
         var cp = c.ai === 'technician' ? 0.5 : c.ai === 'speedster' ? 1.6 : 1;
-        var target = c.max * (1 - curv * 0.022 * (1.2 - c.skill) * cp) * ({ rain: 0.97, snow: 0.94 }[weather] || 1);
+        var target = c.max * RV * (1 - curv * 0.022 * (1.2 - c.skill) * cp) * ({ rain: 0.97, snow: 0.94 }[weather] || 1);
         var gap = pz() - c.total;
         if (!P.finished) {
           if (c.isTarget) {
@@ -2572,6 +2629,8 @@
     }
     function hud0(g) {
       var narrow = W < 500;
+      var admS = R.adminSummary();
+      if (admS.length) text(g, 'ADMIN  ' + admS.join('  '), W / 2, H - 6, 9, '#ff8a80', 'center');
       var racing = mode === 'race' || mode === 'duel' || mode === 'elim' || mode === 'touge' || mode === 'sp';
       var place = P.finished && P.place ? P.place : rank();
 

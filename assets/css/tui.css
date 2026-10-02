@@ -1009,3 +1009,9 @@ body.upside .tui { transform: rotate(180deg); }
 .rx-tab:hover { background: rgba(92,207,160,.15); }
 .rx-tab.on { background: rgba(92,207,160,.25); color: #fff; border-color: #5ccfa0; font-weight: 700; }
 .rx-story-head { margin: 0 0 6px; padding: 6px 10px; border-left: 3px solid #5ccfa0; background: rgba(255,255,255,.04); }
+
+/* 管理者モード・通知 */
+.rx-adm { margin-left: .8em; padding: 0 .5em; font-size: .75em; font-weight: 700; letter-spacing: .08em; color: #1a0000; background: #ff8a80; border-radius: 3px; align-self: center; }
+.rx-toast { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 9; padding: .7em 1.4em; font-weight: 700; color: #fff; background: rgba(8,12,20,.92); border: 1px solid #5ccfa0; border-radius: 999px; box-shadow: 0 8px 30px rgba(0,0,0,.5); animation: rxToast 1.4s ease-in-out forwards; }
+@keyframes rxToast { 0% { opacity: 0; transform: translate(-50%, -12px); } 15%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+.rx-endsum { color: #ffd93d; }
