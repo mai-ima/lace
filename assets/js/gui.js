@@ -151,44 +151,6 @@
 
   function narrow() { return window.innerWidth < 720; }
 
-  /* ---------- GUI / TUI の切り替え ------------------------------------ */
-
-  // 'gui' … ウィンドウで開く / 'tui' … ターミナルの中に文字で描く
-  function uiMode() { return TB.store.get('ui', 'gui') === 'tui' ? 'tui' : 'gui'; }
-
-  /** 引数から gui / tui を取り除き、どちらで開くかを返す */
-  function modeArgs(args) {
-    var tui = uiMode() === 'tui';
-    var rest = (args || []).filter(function (a) {
-      if (/^(tui|text)$/i.test(a)) { tui = true; return false; }
-      if (/^gui$/i.test(a)) { tui = false; return false; }
-      return true;
-    });
-    return { tui: tui, args: rest };
-  }
-
-  function showMode() {
-    var m = uiMode();
-    document.body.classList.toggle('ui-tui', m === 'tui');
-    var st = document.getElementById('st-ui');
-    if (st) st.textContent = m.toUpperCase();
-  }
-
-  // 文字版で動いているもの（GUI へ移れるもの）。1 つだけ。
-  var tuiApp = null;
-  function setTuiApp(app) { tuiApp = app; }
-
-  function setMode(m) {
-    TB.store.set('ui', m);
-    showMode();
-    // 開いているものを新しい方へ移す
-    if (m === 'tui') {
-      wins.slice().forEach(function (w) { if (w.toTui) w.toTui(); });
-    } else if (tuiApp && tuiApp.toGui) {
-      tuiApp.toGui();
-    }
-  }
-
   function openWin(opts) {
     var w = el('div', 'win');
     w.setAttribute('role', 'dialog');
@@ -203,12 +165,6 @@
     bMax.title = L('最大化', 'maximize');
     var bClose = button('×', 'win-btn close', function () { win.close(); });
     bClose.title = L('閉じる (Esc)', 'close (Esc)');
-    if (opts.toTui) {
-      var bTui = button('TUI', 'win-btn mode', function () { win.toTui(); });
-      bTui.title = L('文字版に切り替え (m)', 'switch to text mode (m)');
-      btns.appendChild(bTui);
-      win.toTui = function () { if (!win.closed) opts.toTui(); };
-    }
     btns.appendChild(bMax);
     btns.appendChild(bClose);
     bar.appendChild(title);
@@ -303,13 +259,10 @@
     if (top) { e.preventDefault(); top.close(); }
   });
 
-  showMode();
-
   TB.Win = {
     open: openWin,
     list: function () { return wins.slice(); },
-    closeAll: function () { wins.slice().forEach(function (w) { w.close(); }); },
-    mode: uiMode, setMode: setMode, modeArgs: modeArgs, setTuiApp: setTuiApp
+    closeAll: function () { wins.slice().forEach(function (w) { w.close(); }); }
   };
 
   /* =====================================================================
@@ -347,100 +300,20 @@
 
   var FONT_SIZES = [['auto', 0], ['S', 12], ['M', 14], ['L', 16], ['XL', 18]];
 
-  /* --- 設定の文字版: ↑↓ で項目、←→ で値を変える --- */
-  function settingsText() {
-    var sel = 0, armed = false;
-    function curFs() { var v = parseInt(TB.store.get('fs', ''), 10) || 0; return FONT_SIZES.map(function (p) { return p[1]; }).indexOf(v); }
-    function cycle(list, cur, d) { var i = list.indexOf(cur); return list[(i + d + list.length) % list.length]; }
-    var items = [
-      { label: function () { return L('表示方式', 'Interface'); },
-        value: function () { return uiMode() === 'tui' ? L('TUI（文字）', 'TUI (text)') : L('GUI（ウィンドウ）', 'GUI (windows)'); },
-        change: function () { TB.store.set('ui', uiMode() === 'tui' ? 'gui' : 'tui'); showMode(); } },
-      { label: function () { return L('テーマ', 'Theme'); }, value: function () { return TB.currentTheme(); },
-        change: function (d) { TB.setTheme(cycle(TB.themes, TB.currentTheme(), d)); } },
-      { label: function () { return L('言語', 'Language'); }, value: function () { return TB.state.lang === 'ja' ? '日本語' : 'English'; },
-        change: function () { TB.setLang(TB.state.lang === 'ja' ? 'en' : 'ja'); } },
-      { label: function () { return 'CRT'; }, value: function () { return document.body.classList.contains('crt-on') ? 'ON' : 'OFF'; },
-        change: function () { TB.setCRT(!document.body.classList.contains('crt-on')); } },
-      { label: function () { return L('効果音', 'Sound'); }, value: function () { return enabled() ? 'ON' : 'OFF'; },
-        change: function () { TB.Sfx.set(!enabled()); } },
-      { label: function () { return L('音量', 'Volume'); },
-        value: function () { var v = Math.round(volume() * 100); return TB.Kit.bar(v, 25, 10) + ' ' + v; },
-        change: function (d) { TB.Sfx.setVolume(Math.round(volume() * 100 + d) / 100); } },
-      { label: function () { return L('文字の大きさ', 'Text size'); },
-        value: function () { return FONT_SIZES[Math.max(0, curFs())][0]; },
-        change: function (d) {
-          var i = (Math.max(0, curFs()) + d + FONT_SIZES.length) % FONT_SIZES.length;
-          TB.store.set('fs', FONT_SIZES[i][1] ? String(FONT_SIZES[i][1]) : ''); applyFontSize();
-        } },
-      { label: function () { return L('記録', 'Records'); },
-        value: function () { return armed ? L('もう一度 Enter で消去', 'press Enter again to erase') : L('Enter で消す…', 'Enter to erase…'); },
-        enter: function () { if (armed) { armed = false; eraseRecords(); play('bad'); } else armed = true; } }
-    ];
-    var s = TB.Kit.open({
-      title: L('設定（文字版）', 'Settings (text mode)'),
-      hint: L('↑↓ 項目  ←→ / Enter 変更  クリックでも可  q 閉じる', '↑↓ select  ←→ / Enter change  click works too  q close'),
-      pad: [['↑', 'ArrowUp'], ['←', 'ArrowLeft'], ['→', 'ArrowRight'], ['↓', 'ArrowDown'], ['OK', 'Enter'], ['Q', 'q']],
-      padCols: 3,
-      onKey: function (k) {
-        if (k === 'ArrowUp' || k === 'k') { sel = (sel + items.length - 1) % items.length; armed = false; }
-        else if (k === 'ArrowDown' || k === 'j') { sel = (sel + 1) % items.length; armed = false; }
-        else if (k === 'ArrowLeft' || k === 'h' || k === 'ArrowRight' || k === 'l' || k === 'Enter' || k === ' ') {
-          var it = items[sel], d = (k === 'ArrowLeft' || k === 'h') ? -1 : 1;
-          if (it.enter) { if (k === 'Enter') it.enter(); }
-          else it.change(d);
-          play('click');
-        } else return;
-        draw();
-      },
-      onQuit: function () { return [[{ t: L('設定を閉じました。', 'Settings closed.'), c: 'dim' }]]; }
-    });
-    function draw() {
-      s.body.textContent = '';
-      var box = el('div', 'tset');
-      items.forEach(function (it, i) {
-        var row = el('div', 'tset-row' + (i === sel ? ' on' : ''));
-        row.appendChild(el('span', 'tset-cur', i === sel ? '▶ ' : '  '));
-        row.appendChild(el('span', 'tset-label', it.label()));
-        row.appendChild(el('span', 'tset-val', it.enter ? it.value() : '◀ ' + it.value() + ' ▶'));
-        row.addEventListener('click', function () {
-          if (sel === i) { if (it.enter) it.enter(); else it.change(1); play('click'); }
-          sel = i; draw();
-        });
-        box.appendChild(row);
-      });
-      s.body.appendChild(box);
-      s.status.textContent = L('設定 ', 'Settings ') + (sel + 1) + '/' + items.length;
-    }
-    draw();
-    return s.promise.then(function () { return []; });
-  }
-
   def('settings', {
     group: 'gui',
-    usage: 'settings [gui|tui]',
+    usage: 'settings',
     desc: { ja: '設定画面を開く（表示方式・テーマ・言語・音・文字の大きさ）', en: 'open the settings (interface, theme, language, sound, text size)' },
     run: function (args) {
-      if (modeArgs(args).tui) return settingsText();
       var existing = wins.filter(function (w) { return w.kind === 'settings'; })[0];
       if (existing) { existing.focus(); return []; }
 
-      var win = openWin({ title: L('設定', 'Settings'), width: 460,
-        toTui: function () { win.close(); TB.submit('settings tui'); } });
+      var win = openWin({ title: L('設定', 'Settings'), width: 460 });
       win.kind = 'settings';
       var b = win.body;
 
       function render() {
         b.textContent = '';
-
-        var rowU = section(b, L('表示方式', 'Interface'));
-        [['gui', L('GUI（ウィンドウ）', 'GUI (windows)')], ['tui', L('TUI（文字）', 'TUI (text)')]].forEach(function (p) {
-          rowU.appendChild(button(p[1], 'gbtn' + (uiMode() === p[0] ? ' on' : ''), function () {
-            play('click');
-            if (p[0] === 'tui') setMode('tui');   // この窓も文字版へ移る
-            else { setMode('gui'); render(); }
-          }));
-        });
 
         var rowT = section(b, L('テーマ', 'Theme'));
         TB.themes.forEach(function (name) {
@@ -517,19 +390,6 @@
   var PALETTE = ['#0b1016', '#ffffff', '#9aa5b1', '#e06c75', '#ff9f43', '#ffd93d',
                  '#5ccfa0', '#4dd0e1', '#56a8f5', '#a78bfa', '#ff5fd2', '#8d6e63'];
 
-  /** 端末の半角 1 文字の幅（px） */
-  function charPx() {
-    var probe = el('span', '', 'MMMMMMMMMM');
-    probe.style.visibility = 'hidden'; probe.style.position = 'absolute';
-    (document.getElementById('screen') || document.body).appendChild(probe);
-    var w = probe.getBoundingClientRect().width / 10 || 9;
-    probe.remove();
-    return w;
-  }
-
-  // GUI ⇄ TUI の切り替えで描きかけの絵や式を持ち越す
-  var handoff = {};
-
   function pixToNode(W, H, pix) {
     // 1 マス = 全角 1 文字ぶん（█ を 2 つ）。色は近い CSS 色で付ける。
     var node = el('div');
@@ -560,115 +420,18 @@
     }
   }
 
-  /* --- paint の文字版: カーソルを動かしてマスを塗る --- */
-  function paintText(W, H, pix) {
-    var cx = W >> 1, cy = H >> 1, color = 6, undo = [], pen = false;
-    var PKEYS = '1234567890-=';   // パレット 12 色
-    function snap() { undo.push(pix.slice()); if (undo.length > 40) undo.shift(); }
-    function put(v) { if (pix[cy * W + cx] !== v) { snap(); pix[cy * W + cx] = v; } }
-    var s = TB.Kit.open({
-      title: 'paint — ' + W + '×' + H + L('（文字版）', ' (text mode)'),
-      hint: L('矢印 移動  スペース 塗る  x 消す  f 塗りつぶし  v 連続塗り  1〜0 - = 色  u 戻す  Enter 端末に貼る  m GUI へ  q やめる',
-              'arrows move  space paint  x erase  f fill  v pen-down  1-0 - = colour  u undo  Enter paste  m to GUI  q quit'),
-      pad: [['', ''], ['↑', 'ArrowUp'], ['', ''], ['←', 'ArrowLeft'], ['■', ' '], ['→', 'ArrowRight'],
-            ['x', 'x'], ['↓', 'ArrowDown'], ['f', 'f'], ['色', 'c'], ['u', 'u'], ['貼', 'Enter']],
-      padCols: 3,
-      onKey: function (k) {
-        var mv = { ArrowUp: [0, -1], k: [0, -1], ArrowDown: [0, 1], j: [0, 1], ArrowLeft: [-1, 0], h: [-1, 0], ArrowRight: [1, 0], l: [1, 0] }[k];
-        if (mv) {
-          cx = (cx + mv[0] + W) % W; cy = (cy + mv[1] + H) % H;
-          if (pen) put(color);
-        }
-        else if (k === ' ') { put(pix[cy * W + cx] === color ? -1 : color); play('click'); }
-        else if (k === 'x' || k === 'Backspace' || k === 'Delete') put(-1);
-        else if (k === 'f') { snap(); floodFill(pix, W, H, cx, cy, color); play('coin'); }
-        else if (k === 'v') { pen = !pen; if (pen) put(color); }
-        else if (k === 'c') color = (color + 1) % PALETTE.length;
-        else if (PKEYS.indexOf(k) >= 0) color = PKEYS.indexOf(k);
-        else if (k === 'u') { if (undo.length) pix = undo.pop(); }
-        else if (k === 'Enter') { TB.Term.printAll(['', { node: pixToNode(W, H, pix) }, '']); play('coin'); }
-        else if (k === 'm') { toGui(); return; }
-        else return;
-        draw();
-      },
-      onQuit: function () { setTuiApp(null); return [[{ t: L('お絵かきを閉じました。', 'Painter closed.'), c: 'dim' }]]; }
-    });
-    function toGui() {
-      handoff.paint = { W: W, H: H, pix: pix.slice() };
-      setTuiApp(null);
-      s.end([]);
-      TB.submit('paint gui');
-    }
-    setTuiApp({ toGui: toGui });
-    var grid = el('div', 'tpaint');
-    var palRow = el('div', 'tpal');
-    s.body.appendChild(palRow);
-    s.body.appendChild(grid);
-    grid.addEventListener('pointerdown', function (e) {
-      var c = e.target.closest('[data-i]');
-      if (!c) return;
-      var i = +c.getAttribute('data-i');
-      cx = i % W; cy = Math.floor(i / W);
-      put(e.button === 2 ? -1 : (pix[i] === color ? -1 : color));
-      draw();
-    });
-    grid.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-    function draw() {
-      var frag = document.createDocumentFragment();
-      for (var y = 0; y < H; y++) {
-        var row = el('div', 'g-row');
-        for (var x = 0; x < W; x++) {
-          var i = y * W + x, c = pix[i], here = x === cx && y === cy;
-          var sp = el('span', here ? 'tp-cur' : '', here ? (pen ? '◆◆' : '[]') : (c >= 0 ? '██' : '· '));
-          sp.setAttribute('data-i', i);
-          if (c >= 0) sp.style.color = PALETTE[c];
-          else if (!here) sp.style.color = 'var(--dim)';
-          if (here && c >= 0) sp.style.background = PALETTE[c];
-          row.appendChild(sp);
-        }
-        frag.appendChild(row);
-      }
-      grid.textContent = '';
-      grid.appendChild(frag);
-      palRow.textContent = '';
-      PALETTE.forEach(function (col, i) {
-        var sw = el('span', 'tpal-sw' + (i === color ? ' on' : ''), (i === color ? '[' : ' ') + '██' + (i === color ? ']' : ' '));
-        sw.style.color = col;
-        sw.title = PKEYS.charAt(i);
-        sw.addEventListener('click', function () { color = i; draw(); });
-        palRow.appendChild(sw);
-      });
-      s.status.textContent = L('位置 ', 'pos ') + (cx + 1) + ',' + (cy + 1) + (pen ? L('  連続塗り中', '  pen down') : '') +
-        L('  戻せる回数 ', '  undo ') + undo.length;
-    }
-    draw();
-    return s.promise.then(function () { return []; });
-  }
-
   def('paint', {
     group: 'gui',
-    usage: 'paint [幅] [高さ] [gui|tui]',
-    desc: { ja: 'ドット絵を描く。描いた絵を文字にしてターミナルへ貼れる（GUI / 文字版）', en: 'pixel painter; paste your art into the terminal as text (GUI / text)' },
+    usage: 'paint [幅] [高さ]',
+    desc: { ja: 'ドット絵を描く。描いた絵を文字にしてターミナルへ貼れる', en: 'pixel painter; paste your art into the terminal as text' },
     run: function (args) {
-      var m = modeArgs(args); args = m.args;
       var W = Math.min(Math.max(parseInt(args[0], 10) || 32, 8), 64);
       var H = Math.min(Math.max(parseInt(args[1], 10) || 20, 6), 48);
       var pix = [];
       for (var i = 0; i < W * H; i++) pix.push(-1);
-      if (handoff.paint) { W = handoff.paint.W; H = handoff.paint.H; pix = handoff.paint.pix; handoff.paint = null; }
-      if (m.tui) {
-        // 文字版はターミナルの幅に収まる大きさまで
-        if (!args[0] && !pix.some(function (v) { return v >= 0; })) {
-          var cols = Math.floor(((document.getElementById('screen') || document.body).clientWidth - 40) / charPx());
-          W = Math.max(8, Math.min(W, Math.floor(cols / 2) || W)); H = Math.min(H, 16);
-          pix = []; for (var j = 0; j < W * H; j++) pix.push(-1);
-        }
-        return paintText(W, H, pix);
-      }
       var color = 6, tool = 'pen', undo = [];
 
-      var win = openWin({ title: 'paint — ' + W + '×' + H, width: 560,
-        toTui: function () { handoff.paint = { W: W, H: H, pix: pix.slice() }; win.close(); TB.submit('paint tui'); } });
+      var win = openWin({ title: 'paint — ' + W + '×' + H, width: 560 });
       var b = win.body;
       b.classList.add('paint');
 
@@ -788,10 +551,6 @@
       b.appendChild(wrap);
       b.appendChild(el('div', 'ghint', L('左クリックで描く / 右クリックで消す / ドラッグで続けて描ける',
                                         'Left click draws, right click erases, drag to keep drawing')));
-      win.el.tabIndex = -1;
-      win.el.addEventListener('keydown', function (e) {
-        if (e.key === 'm' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); win.toTui(); }
-      });
       renderTools(); renderPal(); draw();
       return [[{ t: L('お絵かきの窓を開きました。「→ 端末に貼る」で文字の絵になります。',
                       'Opened the painter. "Paste to terminal" turns it into text.'), c: 'dim' }]];
@@ -820,94 +579,13 @@
     return CALC_KEYS.indexOf(k) >= 0 ? k : null;
   }
 
-  /* --- 電卓の文字版: 罫線で描いた電卓。キーでもクリックでも押せる --- */
-  function calcText(init) {
-    var s = init.s || '', val = init.val || '0', last = null, lastT = 0;
-    var ses = TB.Kit.open({
-      title: L('電卓（文字版）', 'Calculator (text mode)'),
-      hint: L('数字・演算子を打つ  Enter =  Backspace 1 字消す  c 全消去  m GUI へ  q やめる',
-              'type digits/operators  Enter =  Backspace delete  c clear  m to GUI  q quit'),
-      onKey: function (k) {
-        if (k === 'm') { toGui(); return; }
-        var ck = calcKey(k);
-        if (ck) press(ck);
-      },
-      onQuit: function () { setTuiApp(null); return [[{ t: L('電卓を閉じました。', 'Calculator closed.'), c: 'dim' }]]; }
-    });
-    function toGui() {
-      handoff.calc = { s: s, val: val };
-      setTuiApp(null);
-      ses.end([]);
-      TB.submit('gcalc gui');
-    }
-    setTuiApp({ toGui: toGui });
-    function press(k) {
-      last = k; lastT = Date.now();
-      play('click');
-      if (k === 'C') { s = ''; val = '0'; }
-      else if (k === '←') s = s.slice(0, -1);
-      else if (k === '=') {
-        if (s) {
-          var r = calcEval(s);
-          if (r.ok) {
-            val = String(r.value);
-            TB.Term.printAll([[{ t: s + ' = ', c: 'dim' }, { t: val, c: 'accent bold' }]]);
-            s = val; play('coin');
-          } else { val = L('エラー', 'Error'); play('bad'); }
-        }
-      }
-      else s += ({ '×': '*', '÷': '/' }[k] || k);
-      draw();
-      setTimeout(function () { if (Date.now() - lastT >= 150) { last = null; draw(); } }, 160);
-    }
-    var view = el('div', 'tcalc');
-    ses.body.appendChild(view);
-    function fitR(t, n) { t = String(t); if (TB.width(t) > n) t = '…' + t.slice(-(n - 1)); return ' '.repeat(Math.max(0, n - TB.width(t))) + t; }
-    function draw() {
-      var IN = 23;
-      view.textContent = '';
-      function line(parts) {
-        var d = el('div', 'g-row');
-        parts.forEach(function (p) {
-          var sp = el('span', p[1] || '', p[0]);
-          if (p[2]) { sp.setAttribute('data-k', p[2]); sp.classList.add('tc-key'); }
-          d.appendChild(sp);
-        });
-        view.appendChild(d);
-      }
-      line([['┌' + '─'.repeat(IN) + '┐', 'dim']]);
-      line([['│', 'dim'], [fitR(s || ' ', IN), 'dim'], ['│', 'dim']]);
-      line([['│', 'dim'], [fitR(val, IN), 'accent bold'], ['│', 'dim']]);
-      line([['├─────┬─────┬─────┬─────┤', 'dim']]);
-      for (var r = 0; r < 5; r++) {
-        var parts = [['│', 'dim']];
-        for (var c = 0; c < 4; c++) {
-          var k = CALC_KEYS[r * 4 + c];
-          var cls = k === last ? 'tc-on' : (k === '=' ? 'accent bold' : (/[÷×\-+]/.test(k) ? 'accent-2' : (k === 'C' ? 'warn' : '')));
-          parts.push(['  ' + k + '  ', cls, k]);
-          parts.push(['│', 'dim']);
-        }
-        line(parts);
-        line([[r < 4 ? '├─────┼─────┼─────┼─────┤' : '└─────┴─────┴─────┴─────┘', 'dim']]);
-      }
-    }
-    view.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-k]');
-      if (t) press(t.getAttribute('data-k'));
-    });
-    draw();
-    return ses.promise.then(function () { return []; });
-  }
-
   def('gcalc', {
     group: 'gui',
-    usage: 'gcalc [gui|tui]',
-    desc: { ja: 'ボタンで押す電卓（キーボードでも打てます。GUI / 文字版）', en: 'a button calculator, keyboard works too (GUI / text)' },
+    usage: 'gcalc',
+    desc: { ja: 'ボタンで押す電卓（キーボードでも打てます）', en: 'a button calculator, keyboard works too' },
     run: function (args) {
-      var init = handoff.calc || {}; handoff.calc = null;
-      if (modeArgs(args).tui) return calcText(init);
-      var win = openWin({ title: L('電卓', 'Calculator'), width: 300,
-        toTui: function () { handoff.calc = { s: s, val: val.textContent }; win.close(); TB.submit('gcalc tui'); } });
+      var init = {};
+      var win = openWin({ title: L('電卓', 'Calculator'), width: 300 });
       var b = win.body;
       b.classList.add('gcalc');
       var disp = el('div', 'gcalc-disp');
@@ -957,7 +635,6 @@
         if (k === null) return;
         if (/^[0-9.()+\-×÷=←C]$/.test(k) || k === '=' || k === '←') { e.preventDefault(); e.stopPropagation(); press(k); }
         else if (k === 'c') { e.preventDefault(); press('C'); }
-        else if (k === 'm') { e.preventDefault(); win.toTui(); }
       });
       setTimeout(function () { win.el.focus(); }, 30);
       show();
@@ -984,40 +661,6 @@
                    L('　音量: ', '  volume: ') + Math.round(volume() * 100), c: 'accent' }]];
     }
   });
-
-  def('ui', {
-    group: 'gui',
-    usage: 'ui [gui|tui]',
-    desc: { ja: '表示方式を GUI（ウィンドウ）と TUI（文字）で切り替える。開いているものも移る', en: 'switch between GUI (windows) and TUI (text); open apps move over' },
-    run: function (args) {
-      var a = (args[0] || '').toLowerCase();
-      var next = a === 'gui' || a === 'tui' ? a : (a ? null : (uiMode() === 'gui' ? 'tui' : 'gui'));
-      if (!next) return [[{ t: TB.ui('usage') + ': ui [gui|tui]', c: 'warn' }]];
-      setMode(next);
-      play('click');
-      return [
-        [{ t: L('表示方式: ', 'interface: '), c: 'dim' }, { t: next.toUpperCase(), c: 'accent bold' },
-         { t: next === 'tui' ? L('  — race / paint / gcalc / settings は文字版で開きます', '  — race / paint / gcalc / settings open in text mode')
-                             : L('  — race / paint / gcalc / settings はウィンドウで開きます', '  — race / paint / gcalc / settings open as windows'), c: 'dim' }],
-        [{ t: L('1 回だけ逆で開くには末尾に ', 'To open the other way once, add '), c: 'dim' },
-         { t: next === 'tui' ? 'gui' : 'tui', c: 'accent' },
-         { t: L(' を付けます（例: ', ' (e.g. '), c: 'dim' },
-         { t: 'race ' + (next === 'tui' ? 'gui' : 'tui'), cmd: 'race ' + (next === 'tui' ? 'gui' : 'tui') },
-         { t: L('）。実行中は m キーでも切り替えられます。', '). Press m inside an app to switch it.'), c: 'dim' }]
-      ];
-    }
-  });
-  def('gui', {
-    group: 'gui',
-    desc: { ja: 'GUI（ウィンドウ）表示にする。ui gui と同じ', en: 'switch to the GUI (same as ui gui)' },
-    run: function () { return TB.commands.ui.run(['gui']); }
-  });
-  def('tui', {
-    group: 'gui',
-    desc: { ja: 'TUI（文字）表示にする。ui tui と同じ', en: 'switch to the TUI (same as ui tui)' },
-    run: function () { return TB.commands.ui.run(['tui']); }
-  });
-  TB.alias.mode = 'ui';
 
   def('windows', {
     group: 'gui',

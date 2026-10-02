@@ -4,7 +4,6 @@
  *
  *   GUI 版 … 1 つのウィンドウの中に「タイトル → メニュー → レース → 結果」がある
  *            （据え置き機のレースゲームのような画面遷移。キーボードでもマウスでも操作できる）
- *   TUI 版 … ターミナルの中でメニューを文字で出し、レースは文字で描く
  */
 (function () {
   'use strict';
@@ -16,6 +15,10 @@
   var def = TB.def;
 
   function t(v) { return TB.t(v); }
+  function dailyLabel(s) {
+    var d = s.daily || {};
+    return d.last === R.today() ? L('本日達成済み　連続 ', 'Done today  streak ') + d.streak + L(' 日', 'd') : (d.streak && d.last === R.yesterday() ? L('連続 ', 'Streak ') + d.streak + L(' 日・今日のぶん', 'd · today\'s race') : L('毎日かわるコース', 'A new track every day'));
+  }
   function trackName(id) { return typeof id === 'string' ? t(R.TRACKS[id].name) : t(id.name); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
 
@@ -199,6 +202,12 @@
       case 'party': if (fin) money = R.PRIZE[r.place - 1] * dm * lm * 0.4; money += (r.coins || 0) * 25;
         if (r.coins) out.lines.push(L('コイン ', 'Coins ') + r.coins + L(' 枚', '')); break;
       case 'gp': if (fin) money = R.PRIZE[r.place - 1] * dm; break;
+      case 'daily':
+        if (fin) money = R.PRIZE[r.place - 1] * dm * lm * 0.8;
+        var bonus = fin ? R.dailyDone(s, r.place) : 0;
+        if (bonus) { money += bonus; out.lines.push(L('📅 デイリー達成！ ' + s.daily.streak + ' 日連続（ボーナス +', '📅 Daily complete! ' + s.daily.streak + '-day streak (bonus +') + yen(bonus) + ')'); }
+        else if (fin && r.place <= 3) out.lines.push(L('📅 今日のボーナスは受け取り済みです', '📅 Today\'s bonus is already claimed'));
+        break;
       case 'touge': if (r.place === 1) { money = 1400 * dm * lm; s.stats.touge = (s.stats.touge || 0) + 1; } break;
       case 'challenge':
         if (mode === 'elim' && fin) money = 1200 * dm;
@@ -235,6 +244,9 @@
     money = Math.round(money);
     s.money += money; out.money = money;
     if (money) out.lines.push(L('賞金 +', 'Prize +') + yen(money) + L('（所持 ', ' (total ') + yen(s.money) + ')');
+    R.checkAch(s).forEach(function (a) {
+      out.lines.push(L('🏆 実績「', '🏆 Achievement: ') + t(a.name) + L('」を解除', '') + (a.reward ? ' +' + yen(a.reward) : ''));
+    });
     R.save(s);
     if (money) sfx('coin');
     return out;
@@ -552,7 +564,7 @@
   function createApp() {
     var app = { closed: false, stack: [], sel: 0, sess: null, demo: null, mode: 'menu', cmd: '', keyHook: null, runOpts: null, paused: false };
     var win = TB.Win.open({ title: 'TUI RACING', width: 960, maximized: true, bodyClass: 'rx-body',
-                            onClose: function () { cleanup(); }, toTui: function () { toTui(); } });
+                            onClose: function () { cleanup(); } });
     app.win = win;
     var stage = el('div', 'rx-stage'), cv = el('canvas', 'rx-canvas'), over = el('div', 'rx-over'), padBox = el('div', 'rx-padbox');
     stage.appendChild(cv); stage.appendChild(over);
@@ -601,12 +613,10 @@
       if (app.keyHook && app.keyHook(k) !== false) return;
       if (app.mode === 'race' && app.sess) {
         if (k === 'Escape' || k === 'p' || k === 'P') { pause(); return; }
-        if (k === 'm' || k === 'M') { toTui(); return; }
         if (k === 'v' || k === 'V') { R.edit(function (s) { s.r3d = !s.r3d; }); if (R.load().r3d) attach3D(); else detach3D(); return; }
         app.sess.key(k, true);
         return;
       }
-      if (k === 'm' || k === 'M') { toTui(); return; }
       var f = focusables();
       if (!f.length) { if (k === 'Escape' || k === 'Backspace') back(); return; }
       var cur = f[app.sel] || f[0];
@@ -704,7 +714,7 @@
       });
       return b;
     }
-    function hint(text) { return el('div', 'rx-hint', text || L('↑↓←→ 選ぶ　Enter 決定　Esc 戻る　m 文字版へ', '↑↓←→ select  Enter confirm  Esc back  m text mode')); }
+    function hint(text) { return el('div', 'rx-hint', text || L('↑↓←→ 選ぶ　Enter 決定　Esc 戻る', '↑↓←→ select  Enter confirm  Esc back')); }
     function preview(track, w, h, weather, mirror) {
       var c = el('canvas', 'rx-prev'); c.width = w || 320; c.height = h || 180;
       try { R.drawPreview(c, track, weather, mirror); } catch (e) { /* ignore */ }
@@ -740,6 +750,7 @@
           item(L('ストーリー', 'Story'), done + ' / ' + R.STORY.length, function () { go(SCREENS.story()); }, { icon: '📖' }),
           item(L('オープンワールド', 'Open World'), L('浜松・東名・名古屋', 'Hamamatsu–Nagoya'), function () { go(SCREENS.world(null)); }, { icon: '🗾' }),
           item(L('アルバイト', 'Part-time Jobs'), L('タクシー・宅配・出前', 'Taxi, parcels, food'), function () { go(SCREENS.jobs()); }, { icon: '🚕' }),
+          item(L('デイリーレース', 'Daily Race'), dailyLabel(s), function () { go(SCREENS.daily()); }, { icon: '📅' }),
           item(L('グランプリ', 'Grand Prix'), L('カップ戦', 'Cups'), function () { go(SCREENS.gp()); }, { icon: '🏆' }),
           item(L('クイックレース', 'Quick Race'), L('コース・天気を選ぶ', 'Pick track & weather'), function () { go(SCREENS.quick(false, 'all')); }, { icon: '🏁' }),
           item(L('実在コース', 'Real Tracks'), L('鈴鹿・富士などのサーキット／榛名・碓氷などの峠／浜松の公道', 'Real circuits, mountain passes and Hamamatsu roads'), function () { go(SCREENS.quick(false, 'circuit')); }, { icon: '🗾' }),
@@ -749,9 +760,9 @@
           item(L('ミニゲーム', 'Mini Games'), L('ジムカーナ・ゼロヨン', 'Gymkhana, drag'), function () { go(SCREENS.minis()); }, { icon: '🎯' }),
           item(L('カジュアル', 'Casual'), L('コイン・加速パネルあり', 'Coins & boost pads'), function () { go(SCREENS.casual()); }, { icon: '🎈' }),
           item(L('ガレージ', 'Garage'), s.owned.length + L(' 台所有', ' owned'), function () { go(SCREENS.garage()); }, { icon: '🔧' }),
+          item(L('実績', 'Achievements'), Object.keys(s.ach || {}).length + ' / ' + R.ACHIEVEMENTS.length, function () { go(SCREENS.achievements()); }, { icon: '🎖' }),
           item(L('記録', 'Records'), '', function () { go(SCREENS.records()); }, { icon: '📊' }),
-          item(L('設定・遊び方', 'Settings & Help'), '', function () { go(SCREENS.settings()); }, { icon: '⚙' }),
-          item(L('文字版（TUI）で遊ぶ', 'Play in text mode'), 'm', function () { toTui(); }, { icon: '⌨' })
+          item(L('設定・遊び方', 'Settings & Help'), '', function () { go(SCREENS.settings()); }, { icon: '⚙' })
         ];
         box.appendChild(list(items, 2));
         box.appendChild(hint());
@@ -1466,6 +1477,72 @@
     };
 
     /* ---------- 記録・設定 ---------- */
+    /* ---------- デイリーレース ---------- */
+    SCREENS.daily = function () {
+      return { build: function (o) {
+        var s = R.load(), key = R.today(), sp = R.dailySpec(key), d = s.daily || {};
+        var p = panel(L('デイリーレース', 'Daily Race'), L('日付で決まる全員共通のコース。表彰台で連続日数とボーナス', 'Same track for everyone each day. Podium for a streak and bonus'));
+        var row = el('div', 'rx-row');
+        var pv = el('div', 'rx-pv');
+        function drawPv() {
+          if (R.needsMap(sp.track) && !R.Map.ready) { pv.innerHTML = ''; pv.appendChild(el('div', 'rx-s', L('地図を読み込み中…', 'Loading map...'))); R.Map.load(drawPv); return; }
+          pv.innerHTML = ''; pv.appendChild(preview(sp.track, 400, 225, sp.weather === 'auto' ? null : sp.weather, sp.mirror));
+        }
+        drawPv();
+        row.appendChild(pv);
+        var col = el('div', 'rx-info');
+        var tb = el('div', 'rx-table cols');
+        [[L('日付', 'Date'), String(key).replace(/(\d{4})(\d\d)(\d\d)/, '$1-$2-$3')],
+         [L('コース', 'Track'), trackName(sp.track)],
+         [L('周回', 'Laps'), sp.laps + (sp.mirror ? L('（ミラー）', ' (mirror)') : '')],
+         [L('天気', 'Weather'), sp.weather === 'auto' ? L('コース標準', 'Track default') : t(R.WEATHERS[sp.weather])],
+         [L('難易度', 'Level'), t(R.LEVEL_NAMES[sp.level])],
+         [L('ライバル', 'Rivals'), sp.rivals + L(' 台', '')],
+         [L('連続日数', 'Streak'), (d.last === key || d.last === R.yesterday() ? d.streak : 0) + L(' 日（最高 ', 'd (best ') + (d.best || 0) + ')'],
+         [L('今日', 'Today'), d.last === key ? L('達成済み', 'Done') : L('未達成（3 位以内でボーナス）', 'Not yet (top 3 for bonus)')]
+        ].forEach(function (kv) { var r2 = el('div', 'rx-tr'); r2.appendChild(el('span', '', kv[0])); r2.appendChild(el('span', '', kv[1])); tb.appendChild(r2); });
+        col.appendChild(tb);
+        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('ガレージで変える', 'Change in garage'), function () { go(SCREENS.garage()); }, { icon: '🔧' }));
+        col.appendChild(item(L('スタート', 'Start'), '', function () { runDaily(); }, { icon: '🏁', cls: 'accent' }));
+        col.appendChild(item(L('戻る', 'Back'), '', back, { icon: '↩' }));
+        row.appendChild(col);
+        p.appendChild(row);
+        p.appendChild(hint());
+        o.appendChild(p);
+      } };
+    };
+    function runDaily() {
+      var sp = R.dailySpec(R.today());
+      app.cmd = 'daily';
+      var pool = R.DRIVERS;
+      run({
+        make: function () { return baseCfg({ track: sp.track, laps: sp.laps, level: sp.level, weather: sp.weather, mirror: sp.mirror,
+                                             field: R.makeField(Math.min(sp.rivals, pool.length), carPace(), pool) }); },
+        onResult: function (r) { return applyResult({ kind: 'daily', track: sp.track, mirror: sp.mirror, level: sp.level }, r); }
+      });
+    }
+
+    /* ---------- 実績 ---------- */
+    SCREENS.achievements = function () {
+      return { build: function (o) {
+        var fresh = R.edit(function (s) { return R.checkAch(s); });
+        if (fresh.length) sfx('coin');
+        var s = R.load(), have = Object.keys(s.ach || {}).length;
+        var p = panel(L('実績', 'Achievements'), have + ' / ' + R.ACHIEVEMENTS.length + (fresh.length ? L('　新しく ', '  ') + fresh.length + L(' 個解除！', ' unlocked!') : ''));
+        var tb = el('div', 'rx-table');
+        R.ACHIEVEMENTS.forEach(function (a) {
+          var on = !!s.ach[a.id], r2 = el('div', 'rx-tr');
+          r2.appendChild(el('span', '', (on ? a.icon : '🔒') + ' ' + t(a.name) + (on ? '' : '')));
+          r2.appendChild(el('span', '', t(a.desc) + (a.reward ? '　' + (on ? '✔ ' : '+') + yen(a.reward) : (on ? '　✔' : ''))));
+          if (!on) r2.style.opacity = '.6';
+          tb.appendChild(r2);
+        });
+        p.appendChild(tb);
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
+        o.appendChild(p);
+      } };
+    };
+
     SCREENS.records = function () {
       return { build: function (o) {
         var s = R.load(), st = s.stats;
@@ -1474,6 +1551,8 @@
         [[L('レース', 'Races'), st.races], [L('優勝', 'Wins'), st.wins], [L('表彰台', 'Podiums'), st.podiums], [L('カップ総合優勝', 'Cup titles'), st.titles],
          [L('峠バトル勝利', 'Touge wins'), st.touge || 0], [L('走行距離', 'Distance'), (st.km || 0).toFixed(1) + ' km'], [L('ニアミス', 'Near misses'), st.near || 0],
          [L('アルバイト', 'Jobs'), (st.jobs || 0) + L(' 件 / ', ' / ') + yen(st.earned || 0)], [L('ストーリー', 'Story'), Math.min(s.story, R.STORY.length) + ' / ' + R.STORY.length],
+         [L('実績', 'Achievements'), Object.keys(s.ach || {}).length + ' / ' + R.ACHIEVEMENTS.length],
+         [L('デイリー連続（最高）', 'Daily streak (best)'), ((s.daily && s.daily.streak) || 0) + ' (' + ((s.daily && s.daily.best) || 0) + ')'],
          [L('所持金', 'Credits'), yen(s.money)]].forEach(function (kv) { var d = el('div', 'rx-tr'); d.appendChild(el('span', '', kv[0])); d.appendChild(el('span', '', String(kv[1]))); tb.appendChild(d); });
         p.appendChild(tb);
         p.appendChild(el('div', 'rx-sec', L('自己ベスト（ラップ／峠は全区間）', 'Best laps (whole run for passes)')));
@@ -1500,7 +1579,7 @@
         var help = el('div', 'rx-help');
         [L('←→ ハンドル　↑ アクセル　↓ ブレーキ　スペース ニトロ（ゼロヨンではシフトアップ）', '←→ steer  ↑ gas  ↓ brake  space nitro (shift up in drag)'),
          L('v レース中に 3D 表示（WebGL）と疑似 3D を切り替え', 'v toggles 3D (WebGL) / pseudo-3D during a race'),
-         L('p / Esc 一時停止　m 文字版（TUI）と GUI の切り替え　r（止まって）オープンワールドで U ターン', 'p / Esc pause  m switch text/GUI  r (stopped) U-turn in open world'),
+         L('p / Esc 一時停止　r（止まって）オープンワールドで U ターン', 'p / Esc pause  r (stopped) U-turn in open world'),
          L('前の車の真後ろにつくとスリップストリームで加速し、ニトロも溜まります。', 'Draft right behind a car to gain speed and refill nitro.'),
          L('峠はガードレールで囲まれています。こすると減速。後追いから始まり、150m 引き離せば即勝利。', 'Passes have guardrails. Touge starts from behind; 150m gap wins instantly.'),
          L('雨・雪では滑ります。4WD（オフロード対応）の車は影響が小さめ。', 'Rain and snow reduce grip. AWD cars suffer less.'),
@@ -1635,8 +1714,7 @@
         !w ? item(L('やり直す', 'Restart'), '', function () { run(app.runOpts); }, { icon: '↻' }) : null,
         item(w ? L('ドライブを終える', 'End the drive') : L('やめる', 'Quit'), '', function () {
           if (w) worldEnd(w); else toMenu();
-        }, { icon: '■' }),
-        item(L('文字版（TUI）へ', 'Text mode'), '', toTui, { icon: '⌨' })
+        }, { icon: '■' })
       ].filter(Boolean);
       p.appendChild(list(items));
       over.appendChild(p);
@@ -1657,11 +1735,6 @@
       app.sel = 0; highlight(); app.keyHook = null;
     }
 
-    function toTui() {
-      var cmd = app.mode === 'race' || app.mode === 'result' ? app.cmd : '';
-      win.close();
-      TB.submit('race tui ' + cmd);
-    }
     function cleanup() {
       if (R.Music) R.Music.stop(true);
       detach3D();
@@ -1699,6 +1772,8 @@
           go(SCREENS.quick(casual)); runQuick(casual);
         } else go(SCREENS.quick(casual));
       }
+      else if (a === 'daily') { go(SCREENS.daily()); if (parts[1] === 'start') runDaily(); }
+      else if (a === 'achievements' || a === 'ach' || a === 'trophy') go(SCREENS.achievements());
       else if (a === 'touge') { if (R.TRACKS[parts[1]] && R.TRACKS[parts[1]].touge) tougeOpt.track = parts[1]; go(SCREENS.touge()); }
       else if (a === 'time') { go(SCREENS.trackPick('time')); if (R.TRACKS[parts[1]]) runSingle('time', parts[1]); }
       else if (['elim', 'duel', 'arcade', 'chase', 'traffic'].indexOf(a) >= 0) { go(SCREENS.challenges()); go(SCREENS.trackPick(a)); if (R.TRACKS[parts[1]] && !isTouge(parts[1])) runSingle(a, parts[1], { boss: parts[2] && s.bosses[parts[2]] ? parts[2] : null }); }
@@ -1715,356 +1790,20 @@
   }
 
   /* =====================================================================
-     TUI 版（ターミナルの中）
-     ===================================================================== */
-
-  function out(lines) { TB.Term.printAll(lines); TB.Term.scroll(); }
-  function ask(label, fn) {
-    TB.setLineHandler(function (input) { TB.setLineHandler(null); fn(String(input || '').trim().toLowerCase()); }, label);
-  }
-  function link(text, cmd, c) { return { t: text, cmd: cmd, c: c || 'accent' }; }
-
-  /** 文字版で 1 本走る。done(result, sum) */
-  function tuiRun(cfg, opts, done) {
-    if (R.needsMap(cfg.track) && !R.Map.ready) { R.Map.load(function () { tuiRun(cfg, opts, done); }); return; }
-    TB.setLineHandler(null);
-    if (R.Music) R.Music.play(R.Music.forRace(cfg));
-    R.runText(cfg, function (r, why, sum) {
-      if (R.Music) R.Music.stop();
-      if (!r) { out([[{ t: L('中断しました。', 'Stopped.'), c: 'dim' }], '']); if (opts.world) out(opts.world.summary().map(function (x) { return [{ t: x, c: 'accent' }]; })); if (done) done(null, null); return; }
-      var lines = [''].concat([[{ t: '── ' + sum.title + ' ', c: 'accent bold' }, { t: sum.sub, c: 'dim' }]]);
-      if (sum.success !== null && sum.success !== undefined) lines.push([{ t: sum.success ? 'MISSION CLEAR' : 'MISSION FAILED', c: sum.success ? 'accent bold' : 'err bold' }]);
-      if (sum.table) sum.table.forEach(function (e, i) { lines.push({ row: [[{ t: (i + 1) + '. ' + (e.you ? L('あなた', 'YOU') : e.name), c: e.you ? 'accent bold' : '' }], e.out ? L('脱落', 'OUT') : e.time !== null && e.time !== undefined ? fmt(e.time * 1000) : '—'] }); });
-      sum.lines.forEach(function (ln) { lines.push([{ t: ln, c: 'warn' }]); });
-      out(lines);
-      if (done) done(r, sum);
-    }, {
-      title: opts.title || 'TUI RACING', subtitle: opts.subtitle,
-      onResult: opts.onResult, chain: opts.chain,
-      onSwitch: function () { TB.setLineHandler(null); setTimeout(function () { TB.submit('race gui ' + (opts.cmd || '')); }, 0); }
-    });
-  }
-
-  function tuiMenu() {
-    var s = R.load();
-    var o = TB.head('TUI RACING');
-    o.push([{ t: L('ターミナル発・本格レーシング。峠からサーキット、浜松から名古屋まで。', 'Serious racing from the terminal — passes, circuits, Hamamatsu to Nagoya.'), c: 'dim' }]);
-    o.push([{ t: L('愛車 ', 'Car ') + t(R.car(s.car).name) + '　' + yen(s.money) + '　' + L('難易度 ', 'Level ') + t(R.LEVEL_NAMES[s.level]), c: 'warn' }], '');
-    function row(label, cmd, desc) { o.push([{ t: '  ' }, link(label, 'race ' + cmd), { t: '   ' + desc, c: 'dim' }]); }
-    o.push([{ t: L('本格', 'Serious'), c: 'accent-2 bold' }]);
-    row(L('ストーリー', 'Story'), 'story', Math.min(s.story, R.STORY.length) + ' / ' + R.STORY.length);
-    row(L('オープンワールド', 'Open world'), 'world', L('浜松〜東名・新東名〜名古屋', 'Hamamatsu to Nagoya'));
-    row(L('アルバイト: タクシー', 'Job: taxi'), 'job taxi', L('お客さんを運ぶ', 'carry fares'));
-    row(L('アルバイト: 宅配便', 'Job: parcels'), 'job delivery', L('こわれものに注意', 'mind the fragile ones'));
-    row(L('アルバイト: 出前', 'Job: food'), 'job food', L('うなぎ弁当を急いで', 'rush the eel lunch'));
-    row(L('グランプリ', 'Grand Prix'), 'gp', R.CUPS.map(function (c) { return c.id; }).join(' / '));
-    row(L('クイックレース', 'Quick race'), 'quick coast', 'race quick <' + L('コース', 'track') + '> [周回] [easy|normal|hard] [天気] [mirror]');
-    row(L('峠バトル', 'Touge battle'), 'touge akimine', R.TOUGE.join(' / '));
-    row(L('タイムアタック', 'Time attack'), 'time coast', L('ゴーストと勝負', 'race your ghost'));
-    row(L('エリミネーション', 'Elimination'), 'elim desert', '');
-    row(L('デュエル', 'Duel'), 'duel coast', L('倒したボスと再戦: race duel <コース> <ボス>', 'rematch: race duel <track> <boss>'));
-    row(L('アーケード', 'Arcade'), 'arcade city', '');
-    row(L('ポリスチェイス', 'Police chase'), 'chase highway', '');
-    row(L('ハイウェイ・サバイバル', 'Highway survival'), 'traffic tomei', '');
-    row(L('ミニゲーム: ジムカーナ', 'Mini: gymkhana'), 'mini gymkhana', '');
-    row(L('ミニゲーム: ゼロヨン', 'Mini: drag'), 'mini drag', L('スペースでシフトアップ', 'space to shift'));
-    row(L('ミニゲーム: ピタッと停止', 'Mini: brake test'), 'mini brake', '');
-    o.push('', [{ t: L('カジュアル（コイン・加速パネルあり）', 'Casual (coins & boost pads)'), c: 'accent-2 bold' }]);
-    row(L('パーティレース', 'Party race'), 'party hamamatsu', '');
-    row(L('コインラッシュ', 'Coin rush'), 'coins', '');
-    o.push('', [{ t: L('そのほか', 'More'), c: 'accent-2 bold' }]);
-    row(L('ガレージ', 'Garage'), 'garage', R.CARS.length + L(' 車種', ' cars'));
-    row(L('記録', 'Records'), 'stats', '');
-    row(L('コース一覧', 'Tracks'), 'tracks', R.ALL_TRACKS.length + L(' コース', ' tracks'));
-    o.push('', [{ t: L('GUI 版（ウィンドウ）で遊ぶ: ', 'GUI version: '), c: 'dim' }, link('race gui', 'race gui')], '');
-    return o;
-  }
-
-  function tuiTracks() {
-    var s = R.load(), o = TB.head(L('コース一覧', 'Tracks'));
-    R.ALL_TRACKS.forEach(function (id) {
-      var tr = R.TRACKS[id];
-      o.push([{ t: '  ' }, link(trackName(id), 'race quick ' + id), { t: '  ' + '★'.repeat(tr.diff) + (tr.touge ? L('  峠', '  pass') : '') + L('  ベスト ', '  best ') + fmt(s.laps[id]), c: 'dim' }]);
-      o.push([{ t: '      ' + t(tr.desc), c: 'dim' }]);
-    });
-    o.push('');
-    return o;
-  }
-
-  function tuiStats() {
-    var s = R.load(), st = s.stats, o = TB.head(L('記録', 'Records'));
-    [[L('レース', 'races'), st.races], [L('優勝', 'wins'), st.wins], [L('表彰台', 'podiums'), st.podiums], [L('カップ優勝', 'cup titles'), st.titles],
-     [L('峠バトル勝利', 'touge wins'), st.touge || 0], [L('走行距離', 'distance'), (st.km || 0).toFixed(1) + ' km'], [L('アルバイト', 'jobs'), (st.jobs || 0) + ' / ' + yen(st.earned || 0)],
-     [L('ストーリー', 'story'), Math.min(s.story, R.STORY.length) + ' / ' + R.STORY.length], [L('所持金', 'credits'), yen(s.money)]].forEach(function (kv) { o.push({ row: [kv[0], String(kv[1])] }); });
-    o.push('', [{ t: L('自己ベスト', 'Best times'), c: 'accent-2' }]);
-    R.ALL_TRACKS.forEach(function (id) { if (s.laps[id]) o.push({ row: [trackName(id), fmt(s.laps[id])] }); });
-    o.push('', [{ t: L('カップ: ', 'Cups: ') + R.CUPS.map(function (c) { return t(c.name) + (s.cups[c.id] ? '(' + t(R.MEDALS[s.cups[c.id]]) + ')' : ''); }).join(' '), c: 'dim' }], '');
-    return o;
-  }
-
-  /* ---------- 文字版ガレージ ---------- */
-  function garageLines() {
-    var s = R.load(), o = TB.head(L('ガレージ', 'Garage'));
-    o.push([{ t: L('所持金 ', 'Credits ') + yen(s.money) + L('　乗車中 ', '  driving ') + t(R.car(s.car).name), c: 'warn bold' }], '');
-    R.CARS.forEach(function (car, i) {
-      var own = R.ownedCar(s, car.id), locked = R.carLocked(s, car), st = R.effStats(car, s.upg[car.id]);
-      var row = [{ t: (s.car === car.id ? '▶' : ' ') + String(i + 1).padStart(2) + '. ', c: 'dim' }, { t: t(car.name), c: own ? 'accent' : '' }, { t: ' [' + car.cls + ']', c: 'dim' }];
-      row.push({ t: '  ' + L('速', 'S') + st.spd.toFixed(0) + ' ' + L('加', 'A') + st.acc.toFixed(0) + ' ' + L('曲', 'G') + st.grp.toFixed(0) + '  ', c: 'dim' });
-      if (own) row.push(s.car === car.id ? { t: L('乗車中', 'in use'), c: 'accent-2' } : link(L('乗る', 'drive'), 'use ' + (i + 1)));
-      else if (locked) row.push({ t: L('未開放', 'locked'), c: 'dim' });
-      else row.push(link(L('買う ', 'buy ') + yen(car.price), 'buy ' + (i + 1), s.money >= car.price ? 'accent' : 'dim'));
-      o.push(row);
-    });
-    var cur = R.car(s.car), u = s.upg[cur.id] || {};
-    o.push('', [{ t: L('改造（乗車中の車）: ', 'Upgrade current car: '), c: 'accent-2' }].concat(R.UPGRADES.map(function (x, i) {
-      var lv = u[x.id] || 0;
-      return lv >= 3 ? { t: t(x.name) + ' MAX  ', c: 'dim' } : link(t(x.name) + ' ' + '■'.repeat(lv) + '□'.repeat(3 - lv) + ' ' + yen(R.upgCost(cur, lv)) + '  ', 'up ' + (i + 1));
-    })));
-    o.push([{ t: L('色: ', 'Paint: '), c: 'dim' }, link(L('色を変える', 'repaint'), 'paint'), { t: L('　buy N / use N / up N / paint / q', '  buy N / use N / up N / paint / q'), c: 'dim' }], '');
-    return o;
-  }
-  function tuiGarage() {
-    function handler(v) {
-      var m = v.match(/^(buy|use|up)\s*(\d+)$/);
-      if (v === 'q' || v === 'quit' || v === '') { out([[{ t: L('ガレージを出ました。', 'Left the garage.'), c: 'dim' }], '']); return; }
-      if (v === 'paint') { R.edit(function (s) { var c = R.car(s.car), i = s.paint[c.id] === undefined ? c.paint : s.paint[c.id]; s.paint[c.id] = (i + 1) % R.PAINTS.length; }); sfx('click'); }
-      else if (m && m[1] === 'up') {
-        var x = R.UPGRADES[+m[2] - 1];
-        if (x) { var r = R.edit(function (s) { var c = R.car(s.car), lv = (s.upg[c.id] || {})[x.id] || 0; if (lv >= 3) return L('最大です', 'maxed'); var cost = R.upgCost(c, lv); if (s.money < cost) return L('お金が足りません', 'not enough credits'); s.money -= cost; s.upg[c.id] = s.upg[c.id] || {}; s.upg[c.id][x.id] = lv + 1; return null; }); if (r) { out([[{ t: r, c: 'err' }]]); sfx('bad'); } else sfx('coin'); }
-      } else if (m) {
-        var car = R.CARS[+m[2] - 1];
-        if (car) {
-          var msg = R.edit(function (s) {
-            if (m[1] === 'use') { if (!R.ownedCar(s, car.id)) return L('持っていません', 'not owned'); s.car = car.id; return null; }
-            if (R.ownedCar(s, car.id)) return L('もう持っています', 'already owned');
-            if (R.carLocked(s, car)) return L('ストーリー・アルバイトで入手します', 'earned in story / jobs');
-            if (s.money < car.price) return L('お金が足りません', 'not enough credits');
-            s.money -= car.price; s.owned.push(car.id); s.car = car.id; return null;
-          });
-          if (msg) { out([[{ t: msg, c: 'err' }]]); sfx('bad'); } else sfx('coin');
-        }
-      }
-      out(garageLines());
-      ask('garage>', handler);
-    }
-    ask('garage>', handler);
-    return garageLines();
-  }
-
-  /* ---------- 文字版の物語 ---------- */
-  function sceneLines(lines) {
-    var out2 = [];
-    lines.forEach(function (ln) {
-      if (ln.bg) return;
-      if (ln.title) { out2.push('', [{ t: '━━━ ' + ln.title + '　' + (ln.sub || '') + ' ━━━', c: 'accent bold' }], ''); return; }
-      if (ln.narr) { out2.push([{ t: '　' + ln.narr, c: 'dim' }]); return; }
-      if (ln.vs) { out2.push([{ t: '　【 ' + ln.vs.map(function (w) { return t((R.CHARS[w] || {}).name || w); }).join('  VS  ') + ' 】', c: 'err bold' }]); return; }
-      var who = ln.who || ln[0], txt = ln.text || ln[1], fx = ln[2] || '';
-      var ch = R.CHARS[who] || { name: who };
-      var sf = (fx.match(/sfx:(\S+)/) || [])[1];
-      var row = [{ t: '▌' + t(ch.name) + '  ', c: 'accent-2 bold' }, { t: t(txt), c: /shake/.test(fx) ? 'warn bold' : '' }];
-      if (sf) row.push({ t: '  ' + sf, c: 'err bold' });
-      out2.push(row);
-    });
-    return out2;
-  }
-  function tuiStory(id) {
-    var s = R.load();
-    var hit = id ? findEvent(id) : null, st = hit ? hit.st : storyOf(id && storyOf(id).id === id ? id : 's1');
-    if (id === 'list' || (id && !hit && !stories().some(function (x) { return x.id === id; }))) {
-      var o0 = TB.head(L('ストーリー', 'Story'));
-      stories().forEach(function (x) {
-        o0.push([link(t(x.name), 'race story ' + x.id), { t: '  ' + x.era + '・' + x.place + '  ' + Math.min(progOf(s, x.id), x.events.length) + '/' + x.events.length, c: 'dim' }]);
-        (x.side || []).forEach(function (e) { if (sideOpen(s, x, e)) o0.push([{ t: '    ★ ' }, link(t(e.title), 'race story ' + e.id), { t: sideDone(s, e) ? '  ✔' : '', c: 'accent' }]); });
-      });
-      out(o0.concat(['']));
-      return;
-    }
-    var side = hit ? hit.side : false, pr = progOf(s, st.id);
-    var idx = hit ? hit.idx : pr;
-    if (!side && idx > pr) { out([[{ t: L('まだ開放されていません。', 'Not unlocked yet.'), c: 'err' }]]); idx = pr; }
-    if (side && !sideOpen(s, st, hit.ev)) { out([[{ t: L('まだ開放されていません。', 'Not unlocked yet.'), c: 'err' }]]); return; }
-    if (!side && idx >= st.events.length) {
-      var o = TB.head(t(st.name));
-      o.push([{ t: L('全エピソードをクリアしました！ もう一度遊ぶ話を選べます。', 'All episodes cleared! Pick one to replay.'), c: 'accent' }]);
-      st.events.forEach(function (e) { o.push([{ t: '  ' }, link(t(e.title), 'race story ' + e.id), { t: '  ' + trackName(e.track), c: 'dim' }]); });
-      o.push([{ t: L('ほかのストーリー: ', 'Other stories: '), c: 'dim' }, link('race story list', 'race story list')]);
-      out(o.concat(['']));
-      return;
-    }
-    var ev = side ? st.side[idx] : st.events[idx];
-    var o2 = [''];
-    var first = !side && st.events.filter(function (e) { return e.ch === ev.ch; })[0] === ev;
-    if (first) o2.push([{ t: '━━ ' + t(st.name) + '　' + t((st.chapters.filter(function (c) { return c.id === ev.ch; })[0] || { name: '' }).name) + ' ━━', c: 'accent bold' }]);
-    if (side) o2.push([{ t: '━━ ' + L('サブストーリー', 'Side story') + ' ━━', c: 'accent bold' }]);
-    if (ev.scene) o2 = o2.concat(sceneLines(ev.scene));
-    o2.push('', [{ t: '■ ' + t(ev.title), c: 'warn bold' }]);
-    o2.push({ row: [L('コース', 'track'), trackName(ev.track)] });
-    o2.push({ row: [L('目標', 'goal'), goalText(ev.goal, ev.track)] });
-    o2.push({ row: [L('報酬', 'reward'), yen(ev.reward)] });
-    if (ev.boss) o2.push({ row: ['BOSS', R.BOSSES[ev.boss].name] });
-    o2.push([{ t: L('Enter でスタート / q でやめる', 'Enter to start / q to quit'), c: 'dim' }], '');
-    out(o2);
-    ask('story>', function (v) {
-      if (v === 'q') { out([[{ t: L('ストーリーを中断しました。', 'Story paused.'), c: 'dim' }], '']); return; }
-      tuiRun(storyCfg(ev, st), { title: t(ev.title), subtitle: goalText(ev.goal, ev.track), cmd: 'story ' + ev.id,
-                                 onResult: function (r) { return applyResult({ kind: 'story', ev: ev, sid: st.id, side: side, track: ev.track }, r); } }, function (r, sum) {
-        if (!sum) return;
-        if (sum.success) {
-          if (ev.post) out(sceneLines(ev.post).concat(['']));
-          if (ev.final) out([[{ t: 'THE END — ' + t(st.name), c: 'accent bold' }], [{ t: L('ほかのストーリー: ', 'More stories: '), c: 'dim' }, link('race story list', 'race story list')], '']);
-          if (side) { out([[{ t: L('サブストーリー完了。', 'Side story complete.'), c: 'accent' }], ['']]); return; }
-          out([[{ t: L('Enter で次の話へ / q でやめる', 'Enter for the next episode / q to stop'), c: 'dim' }]]);
-          ask('story>', function (v2) { if (v2 !== 'q') tuiStory(st.id); });
-        } else {
-          out([[{ t: L('Enter でリトライ / q でやめる', 'Enter to retry / q to stop'), c: 'dim' }]]);
-          ask('story>', function (v2) { if (v2 !== 'q') tuiStory(ev.id); });
-        }
-      });
-    });
-  }
-
-  function tuiCup(cupId) {
-    var s = R.load();
-    var cup = R.CUPS.filter(function (c) { return c.id === cupId; })[0];
-    if (!cup) {
-      var o = TB.head(L('グランプリ', 'Grand Prix'));
-      R.CUPS.forEach(function (c) {
-        var un = R.cupUnlocked(s, c);
-        o.push([{ t: '  ' }, un ? link(t(c.name), 'race gp ' + c.id) : { t: '🔒 ' + t(c.name), c: 'dim' }, { t: '  ' + c.tracks.map(trackName).join(' / ') + (s.cups[c.id] ? '  🏅' + t(R.MEDALS[s.cups[c.id]]) : ''), c: 'dim' }]);
-      });
-      return o.concat(['']);
-    }
-    if (!R.cupUnlocked(s, cup)) return [[{ t: L('まだ開放されていません。', 'Locked.'), c: 'err' }]];
-    var st = Cup(cupId);
-    function next() {
-      out(['', [{ t: t(cup.name) + L(' 第 ', ' round ') + (st.idx + 1) + L(' 戦: ', ': ') + trackName(cup.tracks[st.idx]), c: 'accent-2 bold' }]]);
-      tuiRun(st.cfg(), { title: t(cup.name), cmd: 'gp ' + cupId, onResult: st.result }, function (r) {
-        if (!r) return;
-        out([[{ t: L('選手権順位', 'Standings'), c: 'accent-2' }]].concat(st.table().map(function (e, i) { return { row: [(i + 1) + '. ' + (e.n === 'YOU' ? L('あなた', 'YOU') : e.n), e.p + ' pt'] }; })));
-        if (st.over()) {
-          var f = st.finish();
-          out([[{ t: f.pos === 1 ? '🏆 ' + L('総合優勝！', 'CHAMPION!') : L('総合 ' + f.pos + ' 位', 'Overall P' + f.pos), c: 'accent bold' }], f.bonus ? [{ t: L('ボーナス +', 'Bonus +') + yen(f.bonus), c: 'warn' }] : '', '']);
-          return;
-        }
-        out([[{ t: L('Enter で次のレース / q でやめる', 'Enter for the next race / q to stop'), c: 'dim' }]]);
-        ask('gp>', function (v) { if (v !== 'q') next(); });
-      });
-    }
-    next();
-    return [];
-  }
-
-  function tuiWorld(job, start) {
-    out([[{ t: L('浜松市の地図を読み込み中…', 'Loading the Hamamatsu map...'), c: 'dim' }]]);
-    R.Map.load(function (ok) {
-      if (!ok) { out([[{ t: L('地図データを読み込めませんでした。', 'Could not load the map.'), c: 'err' }]]); return; }
-      var PL = R.worldPlaces();
-      if (start && !PL[start]) start = null;
-      var w = World({ job: job, start: start || 'hm_eki' });
-      out([[{ t: L('交差点では z（左）/ c（右）でウインカー。出さなければ直進。止まって↓長押しでバック、r で U ターン。q で終了。', 'At junctions signal with z (left) / c (right); none = straight. Hold down to reverse, r to U-turn, q to quit.'), c: 'dim' }]]);
-      tuiRun(w.first(), { title: job ? t(R.JOBS[job].name) : L('オープンワールド（浜松市）', 'Open world (Hamamatsu)'), chain: w.next, world: w, cmd: job ? 'job ' + job : 'world' }, null);
-    });
-    return [];
-  }
-
-
-  function tuiSingle(cfg, ctx, cmd, title) {
-    tuiRun(cfg, { title: title, cmd: cmd, onResult: function (r) { return applyResult(ctx, r); } }, function (r) {
-      if (!r) return;
-      out([[{ t: L('もう一度: ', 'Again: '), c: 'dim' }, link('race ' + cmd, 'race ' + cmd), { t: '   ' }, link(L('メニュー', 'menu'), 'race')], '']);
-    });
-    return [];
-  }
-
-  /* =====================================================================
      コマンド
      ===================================================================== */
 
-  function levelOf(args) { for (var i = 0; i < args.length; i++) if (R.LEVELS[args[i]]) return args[i]; return null; }
-  function numOf(args) { for (var i = 0; i < args.length; i++) if (/^\d+$/.test(args[i])) return parseInt(args[i], 10); return null; }
-  function trackOf(args, loopOnly) {
-    for (var i = 0; i < args.length; i++) {
-      var a = args[i];
-      if (R.TRACKS[a] && (!loopOnly || !R.TRACKS[a].touge)) return a;
-      var n = parseInt(a, 10);
-      if (n >= 1 && n <= R.ORDER.length && String(n) === a && loopOnly === 'num') return R.ORDER[n - 1];
-    }
-    return null;
-  }
-
   function runCommand(args) {
-    var m = TB.Win ? TB.Win.modeArgs(args) : { tui: false, args: args };
-    var tui = m.tui;
-    args = m.args.map(function (x) { return x.toLowerCase(); });
-    var a = args[0] || '';
-    var rest = args.slice(1);
-    if (!tui) {
-      openApp(args.join(' ') || 'title');
-      return [[{ t: L('TUI RACING を開きました（↑↓ で選んで Enter）。m で文字版に切り替えられます。', 'Opened TUI RACING (arrows + Enter). Press m for text mode.'), c: 'dim' }]];
-    }
-    var s = R.load();
-    switch (a) {
-      case '': return tuiMenu();
-      case 'tracks': return tuiTracks();
-      case 'stats': case 'records': return tuiStats();
-      case 'garage': case 'shop': case 'cars': return tuiGarage();
-      case 'story': tuiStory(rest[0]); return [];
-      case 'world': return tuiWorld(null, rest[0]);
-      case 'job': case 'jobs': case 'taxi':
-        var job = a === 'taxi' ? 'taxi' : rest[0];
-        if (!R.JOBS[job]) return [[{ t: L('アルバイト: ', 'Jobs: '), c: 'dim' }, link('taxi', 'race job taxi'), { t: ' ' }, link('delivery', 'race job delivery'), { t: ' ' }, link('food', 'race job food')]];
-        return tuiWorld(job, a === 'taxi' ? rest[0] : rest[1]);
-      case 'gp': case 'career': return tuiCup(rest[0]);
-      case 'level':
-        if (R.LEVELS[rest[0]]) { R.edit(function (x) { x.level = rest[0]; }); return [[{ t: L('難易度: ', 'Level: ') + t(R.LEVEL_NAMES[rest[0]]), c: 'accent' }]]; }
-        return [[{ t: 'race level easy|normal|hard', c: 'warn' }]];
-      case 'touge':
-        var tt = trackOf(rest) || 'akimine';
-        if (!R.TRACKS[tt].touge) tt = 'akimine';
-        var rv = R.TOUGE_DRIVERS.filter(function (d) { return rest.indexOf(d.name.toLowerCase()) >= 0; })[0] || U.pick(R.TOUGE_DRIVERS);
-        return tuiSingle(baseCfg({ track: tt, mode: 'touge', field: [{ name: rv.name, color: rv.color, body: rv.body, ai: rv.ai, skill: 0.95, pace: Math.max(0.86, carPace()) }] }),
-                         { kind: 'touge', track: tt }, 'touge ' + tt + ' ' + rv.name.toLowerCase(), L('峠バトル vs ', 'Touge vs ') + rv.name);
-      case 'time':
-        var tr = trackOf(rest) || 'coast';
-        return tuiSingle(baseCfg({ track: tr, mode: 'time' }), { kind: 'time', track: tr }, 'time ' + tr, L('タイムアタック', 'Time attack'));
-      case 'elim': case 'duel': case 'arcade': case 'chase': case 'traffic':
-        var tr2 = trackOf(rest, true) || { elim: 'desert', duel: 'coast', arcade: 'city', chase: 'highway', traffic: 'tomei' }[a];
-        var cpv = carPace(s), bossId = rest.filter(function (x) { return R.BOSSES[x] && s.bosses[x]; })[0];
-        var field = a === 'elim' ? R.makeField(5, cpv) : a === 'duel' ? [bossId ? R.boss(bossId, Math.max(cpv, 0.9)) : { name: 'MONO', color: '#eee', body: 'formula', ai: 'technician', skill: 1, pace: cpv }]
-                    : a === 'chase' ? [R.boss('phantom', 0.88)] : [];
-        return tuiSingle(baseCfg({ track: tr2, mode: a, field: field, carId: a === 'chase' ? 'police' : null, level: levelOf(rest) }), { kind: 'challenge', track: tr2 }, a + ' ' + tr2, t(R.MODES[a].name));
-      case 'mini':
-        var k = R.MINIS[rest[0]] ? rest[0] : 'gymkhana';
-        return tuiSingle(miniCfg(k), { kind: 'mini', track: MINI_SPEC[k] }, 'mini ' + k, t(R.MINIS[k].name));
-      case 'coins':
-        return tuiSingle(miniCfg('coins'), { kind: 'mini', track: 'hamamatsu' }, 'coins', t(R.CASUAL.coins.name));
-      case 'party': case 'quick': default:
-        var id = a === 'quick' || a === 'party' ? (trackOf(rest) || 'coast') : trackOf(args, 'num');
-        if (!id) return [[{ t: L('そのコース・モードはありません: ', 'Unknown track or mode: ') + a, c: 'err' }]].concat(tuiMenu());
-        var laps = numOf(a === 'quick' || a === 'party' ? rest : args.slice(1)) || (R.TRACKS[id].laps || 2);
-        var lv = levelOf(args) || s.level;
-        var wx = args.filter(function (x) { return R.WEATHERS[x]; })[0] || 'auto';
-        var mir = args.indexOf('mirror') >= 0;
-        var casual = a === 'party';
-        var pool = R.TRACKS[id].touge ? R.TOUGE_DRIVERS : R.DRIVERS;
-        return tuiSingle(baseCfg({ track: id, laps: clamp(laps, 1, 9), level: lv, weather: wx, mirror: mir, casual: casual, field: R.makeField(Math.min(7, pool.length), carPace(s), pool) }),
-                         { kind: casual ? 'party' : 'quick', track: id, mirror: mir, level: lv }, (casual ? 'party ' : 'quick ') + id + ' ' + laps + ' ' + lv + ' ' + wx + (mir ? ' mirror' : ''),
-                         trackName(id));
-    }
+    args = args.filter(function (x) { return !/^(gui|tui|text)$/i.test(x); }).map(function (x) { return x.toLowerCase(); });
+    openApp(args.join(' ') || 'title');
+    return [[{ t: L('TUI RACING を開きました（↑↓ で選んで Enter）。', 'Opened TUI RACING (arrows + Enter).'), c: 'dim' }]];
   }
 
   def('race', {
     group: 'game',
-    usage: 'race [gui|tui] [story|world|job|gp|quick|touge|time|elim|duel|arcade|chase|traffic|mini|party|coins|garage|stats|tracks] …',
+    usage: 'race [story|world|job|gp|daily|achievements|quick|touge|time|elim|duel|arcade|chase|traffic|mini|party|coins|garage|stats|tracks] …',
     desc: { ja: '本格レースゲーム。物語・オープンワールド（浜松〜名古屋）・アルバイト・峠・GP・ミニゲーム', en: 'A full racing game: story, open world, jobs, touge, GP and mini games' },
     run: runCommand
-  });
-  def('tuirace', {
-    group: 'game',
-    usage: 'tuirace [race と同じ引数]',
-    desc: { ja: 'レースの文字（TUI）版', en: 'the text-mode racer' },
-    run: function (args) { return runCommand(['tui'].concat(args.length ? args : [])); }
   });
   def('taxi', {
     group: 'game',

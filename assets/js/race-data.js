@@ -1067,7 +1067,7 @@
   var SAVE = 'race:save';
   function fresh() {
     return { v: 2, money: 1000, owned: ['pod'], car: 'pod', paint: {}, upg: {}, story: 0, cups: {}, laps: {},
-             bosses: {}, level: 'normal', stats: { races: 0, wins: 0, podiums: 0, titles: 0, km: 0, near: 0, best: {}, jobs: 0, earned: 0, fares: 0 }, mini: {}, visited: {} };
+             bosses: {}, level: 'normal', stats: { races: 0, wins: 0, podiums: 0, titles: 0, km: 0, near: 0, best: {}, jobs: 0, earned: 0, fares: 0 }, mini: {}, visited: {}, ach: {}, daily: { last: 0, streak: 0, best: 0, total: 0 } };
   }
   R.load = function () {
     var s = null;
@@ -1107,6 +1107,88 @@
   };
   R.saveGhost = function (track, mirror, g) { TB.store.set(R.ghostKey(track, mirror), JSON.stringify(g)); };
   R.lapKey = function (track, mirror) { return track + (mirror ? ':m' : ''); };
+
+  /* =====================================================================
+     実績（トロフィー）— 条件を満たすと賞金つきで解除される
+     test(s) は保存データ s を見て真偽を返す
+     ===================================================================== */
+
+  function nAch(s) { return Object.keys(s.ach || {}).length; }
+  function cupGolds(s) { var n = 0; for (var k in s.cups) if (s.cups[k] === 1) n++; return n; }
+  function bestsCount(s) { return Object.keys(s.laps || {}).length; }
+  R.ACHIEVEMENTS = [
+    { id: 'first', icon: '🏁', reward: 300, name: { ja: 'はじめの一歩', en: 'First Steps' }, desc: { ja: 'レースを 1 回走る', en: 'Run your first race' }, test: function (s) { return s.stats.races >= 1; } },
+    { id: 'win1', icon: '🥇', reward: 500, name: { ja: '初優勝', en: 'First Victory' }, desc: { ja: 'レースで 1 位になる', en: 'Win a race' }, test: function (s) { return s.stats.wins >= 1; } },
+    { id: 'win10', icon: '🏆', reward: 2000, name: { ja: '常勝', en: 'Winning Streak' }, desc: { ja: '通算 10 勝', en: '10 career wins' }, test: function (s) { return s.stats.wins >= 10; } },
+    { id: 'win50', icon: '👑', reward: 8000, name: { ja: '王者', en: 'Champion' }, desc: { ja: '通算 50 勝', en: '50 career wins' }, test: function (s) { return s.stats.wins >= 50; } },
+    { id: 'pod20', icon: '🥉', reward: 1500, name: { ja: '表彰台の常連', en: 'Podium Regular' }, desc: { ja: '表彰台 20 回', en: '20 podium finishes' }, test: function (s) { return s.stats.podiums >= 20; } },
+    { id: 'race100', icon: '🔁', reward: 3000, name: { ja: '走り込み', en: 'Seasoned' }, desc: { ja: '通算 100 レース', en: '100 races' }, test: function (s) { return s.stats.races >= 100; } },
+    { id: 'km100', icon: '🛣', reward: 1500, name: { ja: '100 km ドライバー', en: '100 km Club' }, desc: { ja: '通算 100 km 走る', en: 'Drive 100 km in total' }, test: function (s) { return s.stats.km >= 100; } },
+    { id: 'km1000', icon: '🌏', reward: 6000, name: { ja: '1000 km ドライバー', en: '1000 km Club' }, desc: { ja: '通算 1000 km 走る', en: 'Drive 1000 km in total' }, test: function (s) { return s.stats.km >= 1000; } },
+    { id: 'near100', icon: '😮', reward: 1200, name: { ja: 'ギリギリの男', en: 'Close Shave' }, desc: { ja: 'ニアミス通算 100 回', en: '100 near misses' }, test: function (s) { return s.stats.near >= 100; } },
+    { id: 'touge5', icon: '⛰', reward: 2000, name: { ja: '峠の走り屋', en: 'Pass Runner' }, desc: { ja: '峠バトルに 5 回勝つ', en: 'Win 5 touge battles' }, test: function (s) { return (s.stats.touge || 0) >= 5; } },
+    { id: 'cup1', icon: '🏅', reward: 2500, name: { ja: 'カップ制覇', en: 'Cup Winner' }, desc: { ja: 'いずれかのカップで金メダル', en: 'Take gold in any cup' }, test: function (s) { return cupGolds(s) >= 1; } },
+    { id: 'cupall', icon: '🌟', reward: 12000, name: { ja: '全カップ制覇', en: 'Grand Slam' }, desc: { ja: 'すべてのカップで金メダル', en: 'Take gold in every cup' }, test: function (s) { return cupGolds(s) >= R.CUPS.length; } },
+    { id: 'story3', icon: '📖', reward: 1000, name: { ja: '物語のはじまり', en: 'Story Begins' }, desc: { ja: 'ストーリーを 3 話クリア', en: 'Clear 3 story events' }, test: function (s) { return s.story >= 3; } },
+    { id: 'story24', icon: '👻', reward: 10000, name: { ja: '白い亡霊の最期', en: 'End of the Ghost' }, desc: { ja: '本編「天竜の白い亡霊」を完結', en: 'Finish the main story' }, test: function (s) { return s.story >= R.STORY.length; } },
+    { id: 'cars5', icon: '🚗', reward: 1500, name: { ja: 'ガレージ持ち', en: 'Car Collector' }, desc: { ja: '車を 5 台持つ', en: 'Own 5 cars' }, test: function (s) { return s.owned.length >= 5; } },
+    { id: 'cars15', icon: '🏎', reward: 6000, name: { ja: 'コレクター', en: 'Garage Full' }, desc: { ja: '車を 15 台持つ', en: 'Own 15 cars' }, test: function (s) { return s.owned.length >= 15; } },
+    { id: 'rich', icon: '💰', reward: 0, name: { ja: '大金持ち', en: 'Big Spender' }, desc: { ja: '所持金 100,000 以上', en: 'Hold 100,000 credits' }, test: function (s) { return s.money >= 100000; } },
+    { id: 'jobs10', icon: '🚕', reward: 1500, name: { ja: '働き者', en: 'Hard Worker' }, desc: { ja: 'アルバイトを 10 件こなす', en: 'Finish 10 jobs' }, test: function (s) { return (s.stats.jobs || 0) >= 10; } },
+    { id: 'bests10', icon: '⏱', reward: 2500, name: { ja: 'タイム職人', en: 'Time Smith' }, desc: { ja: '10 コースで自己ベストを記録', en: 'Set personal bests on 10 tracks' }, test: function (s) { return bestsCount(s) >= 10; } },
+    { id: 'bests30', icon: '🗺', reward: 8000, name: { ja: '全国走破', en: 'Track Master' }, desc: { ja: '30 コースで自己ベストを記録', en: 'Set personal bests on 30 tracks' }, test: function (s) { return bestsCount(s) >= 30; } },
+    { id: 'daily1', icon: '📅', reward: 600, name: { ja: '今日のレース', en: 'Daily Driver' }, desc: { ja: 'デイリーレースで表彰台', en: 'Podium in a daily race' }, test: function (s) { return ((s.daily && s.daily.total) || 0) >= 1; } },
+    { id: 'daily7', icon: '🔥', reward: 5000, name: { ja: '一週間連続', en: 'Week Streak' }, desc: { ja: 'デイリーレースを 7 日連続で達成', en: 'Daily race streak of 7 days' }, test: function (s) { return ((s.daily && s.daily.best) || 0) >= 7; } },
+    { id: 'all', icon: '💎', reward: 20000, name: { ja: 'コンプリート', en: 'Completionist' }, desc: { ja: '他のすべての実績を解除', en: 'Unlock every other achievement' }, test: function (s) { return nAch(s) >= R.ACHIEVEMENTS.length - 1; } }
+  ];
+
+  /** 条件を満たした実績を解除し、新しく解除したものの一覧を返す（賞金は s.money に足す） */
+  R.checkAch = function (s) {
+    s.ach = s.ach || {};
+    var got = [], again = true;
+    while (again) {   // 賞金で別の実績の条件が満たされることもあるので、増えなくなるまで見る
+      again = false;
+      R.ACHIEVEMENTS.forEach(function (a) {
+        if (!s.ach[a.id] && a.test(s)) { s.ach[a.id] = 1; s.money += a.reward; got.push(a); again = true; }
+      });
+    }
+    return got;
+  };
+
+  /* =====================================================================
+     デイリーレース — 日付から毎日同じ（全員共通の）コース・天気・周回が決まる
+     ===================================================================== */
+
+  function dateKey(d) { return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); }
+  R.today = function () { return dateKey(new Date()); };
+  R.yesterday = function () { var d = new Date(); d.setDate(d.getDate() - 1); return dateKey(d); };
+
+  /** 日付 key から決まるレース内容 { track, laps, weather, level, rivals, mirror } */
+  R.dailySpec = function (key) {
+    var x = (key * 2654435761) >>> 0;
+    function rnd2() { x = (x + 0x6D2B79F5) >>> 0; var t2 = x; t2 = Math.imul(t2 ^ (t2 >>> 15), t2 | 1); t2 ^= t2 + Math.imul(t2 ^ (t2 >>> 7), t2 | 61); return ((t2 ^ (t2 >>> 14)) >>> 0) / 4294967296; }
+    var loops = R.ALL_TRACKS.filter(function (id) { return !R.TRACKS[id].touge; });
+    var ws = Object.keys(R.WEATHERS);
+    return {
+      track: loops[Math.floor(rnd2() * loops.length)],
+      laps: 2 + Math.floor(rnd2() * 3),
+      weather: rnd2() < 0.45 ? 'auto' : ws[Math.floor(rnd2() * ws.length)],
+      level: ['normal', 'hard', 'hard'][Math.floor(rnd2() * 3)],
+      rivals: 5 + Math.floor(rnd2() * 3),
+      mirror: rnd2() < 0.2
+    };
+  };
+
+  /** デイリー結果を記録する。表彰台なら日ごとに 1 回だけ連続日数を進め、その回のボーナス額を返す */
+  R.dailyDone = function (s, place) {
+    var d = s.daily = s.daily || { last: 0, streak: 0, best: 0, total: 0 };
+    var today = R.today();
+    if (place > 3 || d.last === today) return 0;
+    d.streak = d.last === R.yesterday() ? d.streak + 1 : 1;
+    d.last = today; d.total++;
+    d.best = Math.max(d.best, d.streak);
+    return 1500 + Math.min(d.streak, 10) * 300;
+  };
 
   /** games 一覧の記録欄用 */
   TB.raceBest = function () {

@@ -799,62 +799,6 @@ body.crt-on .screen { text-shadow: var(--glow); }
   .rbtn.nitro { background: #1f3d6b; }
 }
 
-/* レースの文字版。1 マスごとに背景色を塗って絵にする */
-.tr-view {
-  width: fit-content;
-  max-width: 100%;
-  margin: .4em auto;
-  line-height: 1;
-  letter-spacing: 0;
-  padding: 0;
-  overflow: hidden;
-  background: #000;
-  border-radius: 3px;
-}
-.tr-view .g-row { min-height: 1em; }
-.tr-sky { background: var(--tr-sky); }
-.tr-sky2 { background: var(--tr-sky2); }
-.tr-star { background: var(--tr-sky); color: #fff; }
-.tr-star2 { background: var(--tr-sky2); color: #fff; }
-.tr-cloud { background: var(--tr-sky); color: #fff; }
-.tr-hill { background: var(--tr-sky2); color: var(--tr-hill); }
-.tr-grass-a { background: var(--tr-grass-a); color: rgba(0, 0, 0, .25); }
-.tr-grass-b { background: var(--tr-grass-b); }
-.tr-road-a { background: var(--tr-road-a); }
-.tr-road-b { background: var(--tr-road-b); }
-.tr-lane { background: var(--tr-road-a); color: var(--tr-lane); }
-.tr-rumble-a { background: var(--tr-rumble-a); }
-.tr-rumble-b { background: var(--tr-rumble-b); }
-.tr-fin-a { background: #111; color: #eee; }
-.tr-fin-b { background: #eee; color: #111; }
-.tr-tree { color: #1f7a3a; background: var(--tr-grass-b); }
-.tr-trunk { color: #7a4a22; background: var(--tr-grass-b); }
-.tr-rock { color: #9a9a9a; background: var(--tr-grass-b); }
-.tr-pole { color: #777; background: var(--tr-grass-b); }
-.tr-light2 { color: #ffe9a3; background: var(--tr-grass-b); text-shadow: 0 0 6px #ffe9a3; }
-.tr-bld { color: #262b44; background: var(--tr-grass-b); }
-.tr-win { color: #ffd76a; background: #262b44; }
-.tr-sign { color: #e14d4d; background: #f2f2f2; font-weight: bold; }
-.tr-chev { color: #222; background: #ffd93d; font-weight: bold; }
-.tr-glass { color: #1c2433; background: var(--tr-road-b); }
-.tr-light { color: #ff3030; background: var(--tr-road-b); }
-.tr-light-d { color: #8e1c1c; background: var(--tr-road-b); }
-.tr-tyre { color: #111; background: var(--tr-road-b); }
-.tr-boost { color: #8fd3ff; background: var(--tr-road-b); }
-.tr-me { color: #5ccfa0; background: var(--tr-road-b); }
-.tr-c0 { color: #e06c75; background: var(--tr-road-b); }
-.tr-c1 { color: #ffd93d; background: var(--tr-road-b); }
-.tr-c2 { color: #56a8f5; background: var(--tr-road-b); }
-.tr-c3 { color: #a78bfa; background: var(--tr-road-b); }
-.tr-c4 { color: #ff9f43; background: var(--tr-road-b); }
-.tr-c5 { color: #4dd0e1; background: var(--tr-road-b); }
-.tr-c6 { color: #ff5fd2; background: var(--tr-road-b); }
-.tr-label { color: #fff; background: rgba(0, 0, 0, .45); font-weight: bold; }
-.tr-msg { color: #ffd93d; background: rgba(0, 0, 0, .7); font-weight: bold; }
-.tr-warn { color: #ffb74d; background: rgba(0, 0, 0, .6); font-weight: bold; }
-.tr-panel { color: #e8e8f0; background: #0b0f18; }
-.tr-panel-h { color: #ffd93d; background: #0b0f18; font-weight: bold; }
-.tr-panel-me { color: #5ccfa0; background: #0b0f18; font-weight: bold; }
 
 /* ---------- かくれコマンド用 ------------------------------------------ */
 
@@ -889,36 +833,6 @@ body.upside .tui { transform: rotate(180deg); }
   padding: var(--pad);
 }
 .nojs h1 { color: var(--accent); font-size: 1.2em; }
-
-/* ---------- GUI / TUI の切り替え ---------- */
-.win-btn.mode { width: auto; padding: 0 .5em; font-size: .75em; letter-spacing: .05em; }
-.st-ui {
-  font: inherit; color: var(--accent); background: transparent;
-  border: 1px solid var(--border); border-radius: 3px; padding: 0 .5em; cursor: pointer;
-}
-.st-ui:hover { border-color: var(--accent); }
-body.ui-tui .st-ui { color: var(--bg); background: var(--accent); border-color: var(--accent); }
-
-/* 設定（文字版） */
-.tset { display: inline-block; min-width: min(100%, 34em); }
-.tset-row { display: flex; gap: 1em; padding: 0 .25em; cursor: pointer; white-space: pre; }
-.tset-row.on { background: var(--sel, rgba(127,127,127,.18)); }
-.tset-row.on .tset-val { color: var(--accent); font-weight: bold; }
-.tset-cur { color: var(--accent); }
-.tset-label { min-width: 9em; color: var(--dim); }
-
-/* お絵かき（文字版） */
-.tpal { margin-bottom: .4em; cursor: pointer; display: flex; flex-wrap: wrap; }
-.tpal-sw { white-space: pre; }
-.tpal-sw.on { font-weight: bold; }
-.tpaint { line-height: 1; white-space: pre; cursor: crosshair; user-select: none; touch-action: none; overflow-x: auto; }
-.tp-cur { color: var(--accent); outline: 1px solid var(--accent); }
-
-/* 電卓（文字版） */
-.tcalc { white-space: pre; line-height: 1.15; user-select: none; }
-.tc-key { cursor: pointer; }
-.tc-key:hover { color: var(--accent); }
-.tc-on { color: var(--bg); background: var(--accent); }
 
 /* ---------- TUI RACING（GUI 版の画面） ---------- */
 .rx-body { padding: 0 !important; display: flex; flex-direction: column; background: #000; overflow: hidden !important; }
@@ -1017,67 +931,6 @@ body.ui-tui .st-ui { color: var(--bg); background: var(--accent); border-color: 
 }
 
 /* 文字版で増えた色 */
-.tr-water { background: var(--tr-water); color: rgba(255,255,255,.55); }
-.tr-stop { background: #b71c1c; }
-.tr-wall { background: var(--tr-wall); color: rgba(0,0,0,.35); }
-.tr-ceil { background: #1b1d24; color: #2c2f38; }
-.tr-tlight { background: #1b1d24; color: #ffe9a3; }
-.tr-rail { background: var(--tr-grass-b); color: #c9ced4; }
-.tr-neongrid { background: var(--tr-grass-a); color: #00e5ff; }
-.tr-orb { color: #fff6c9; background: var(--tr-sky); }
-.tr-win2 { color: #ffd76a; background: var(--tr-hill); }
-.tr-lights { color: #ff3030; background: rgba(0,0,0,.75); font-weight: bold; }
-.tr-pop { color: #ffd93d; background: rgba(0,0,0,.55); }
-.tr-ghost { color: rgba(200,220,255,.45); background: var(--tr-road-b); }
-.tr-siren { color: #ff3b3b; background: var(--tr-road-b); }
-.tr-label-b { color: #ffd93d; background: rgba(120,0,0,.6); font-weight: bold; }
-.tr-o-cone { color: #ff6d00; background: var(--tr-road-a); }
-.tr-o-debris { color: #8d7b70; background: var(--tr-road-a); }
-.tr-o-oil { color: #0a0a0e; background: var(--tr-road-a); }
-.tr-o-pad { color: #00e5ff; background: var(--tr-road-a); font-weight: bold; }
-.tr-o-coin { color: #ffd54f; background: var(--tr-road-a); font-weight: bold; }
-.tr-snowtree { color: #e8f0f6; background: var(--tr-grass-b); }
-.tr-cactus { color: #2e7d32; background: var(--tr-grass-b); }
-.tr-mesa { color: #b5562a; background: var(--tr-sky2); }
-.tr-lava { color: #ff6f00; background: var(--tr-grass-b); }
-.tr-snowman { color: #ffffff; background: var(--tr-grass-b); }
-.tr-lh-r { color: #e53935; background: var(--tr-grass-b); }
-.tr-lh-w { color: #f5f5f5; background: var(--tr-grass-b); }
-.tr-torii { color: #d32f2f; background: var(--tr-grass-b); }
-.tr-cont0 { color: #c62828; background: var(--tr-grass-b); }
-.tr-cont1 { color: #1565c0; background: var(--tr-grass-b); }
-.tr-cont2 { color: #2e7d32; background: var(--tr-grass-b); }
-.tr-crane { color: #f9a825; background: var(--tr-grass-b); }
-.tr-stand { color: #90a4ae; background: var(--tr-grass-b); }
-.tr-tyrew { color: #e53935; background: var(--tr-grass-b); }
-.tr-neon-c { color: #00e5ff; background: var(--tr-grass-b); text-shadow: 0 0 6px #00e5ff; }
-.tr-neon-m { color: #ff00c8; background: var(--tr-grass-b); text-shadow: 0 0 6px #ff00c8; }
-.tr-holo { color: #ff00c8; background: transparent; font-weight: bold; }
-.tr-cp { color: #fff; background: #1565c0; font-weight: bold; }
-.tr-tower { color: #b0bec5; background: var(--tr-sky2); }
-.tr-tv { color: #e57373; background: var(--tr-sky2); }
-.tr-roof { color: #37474f; background: var(--tr-grass-b); }
-.tr-wallw { color: #f5f5f0; background: var(--tr-grass-b); }
-.tr-gold { color: #ffd700; background: var(--tr-sky2); }
-.tr-ferris { color: #eceff1; background: var(--tr-sky2); }
-.tr-dune { color: #e8d3a0; background: var(--tr-grass-b); }
-.tr-kite { color: #e53935; background: var(--tr-sky2); }
-.tr-unagi { color: #fff; background: #1a237e; }
-.tr-piano { color: #111; background: #fafafa; }
-.tr-swall { color: #9aa7b3; background: var(--tr-grass-b); }
-.tr-green { color: #fff; background: #1b7a3e; font-weight: bold; }
-.tr-banner { color: #fff; background: #0d47a1; font-weight: bold; }
-.tr-maple1 { color: #d84315; background: var(--tr-grass-b); }
-.tr-maple2 { color: #f9a825; background: var(--tr-grass-b); }
-.tr-cw { background: var(--tr-road-a); color: #e8e8e8; }
-.tr-house { color: #eceff1; background: var(--tr-grass-b); }
-.tr-gyoza { color: #fff; background: #c62828; }
-.tr-mikan { color: #ff9800; background: var(--tr-grass-b); }
-.tr-orbis { color: #ff5252; background: var(--tr-sky2); }
-.tr-limit { color: #1a47a0; background: #fff; font-weight: bold; }
-.tr-sig-g { color: #00e0a0; background: #2b2f36; }
-.tr-sig-y { color: #ffc400; background: #2b2f36; }
-.tr-sig-r { color: #ff2a2a; background: #2b2f36; }
 .rx-row > .rx-map { flex: 3 1 560px; }
 
 /* ---------- ストーリーの会話シーン ---------- */
@@ -1136,7 +989,6 @@ body.ui-tui .st-ui { color: var(--bg); background: var(--accent); border-color: 
 .rx-vs-mark { font-size: clamp(3em, 10vw, 7em); font-weight: 900; font-style: italic; color: #ffd93d; -webkit-text-stroke: 3px #000; text-shadow: 6px 6px 0 #000;
   animation: rxVs .7s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes rxVs { from { transform: scale(4) rotate(-20deg); opacity: 0; } to { transform: none; opacity: 1; } }
-.tr-radio { color: #fff; background: rgba(20,40,80,.85); font-weight: bold; }
 .rx-stamp { position: absolute; left: 50%; top: 42%; z-index: 20; pointer-events: none; font-size: clamp(3em, 14vw, 9em); font-weight: 900; font-style: italic;
   letter-spacing: .08em; -webkit-text-stroke: 4px #000; text-shadow: 8px 8px 0 rgba(0,0,0,.6); animation: rxStamp 2.6s ease-out forwards; }
 .rx-stamp.win { color: #ffd93d; } .rx-stamp.lose { color: #9aa5b1; }
