@@ -277,6 +277,12 @@
         var off = side * (big ? 2.4 + (i % 3) * 0.5 : 1.35 + (i % 5) * 0.28);
         seg.sprites.push({ kind: kind, offset: off, seed: i });
       }
+      // 奥の列にも木や建物を置いて、沿道がさびしく見えないようにする
+      if (i % 7 === 3 && !seg.sprites.length) {
+        var kind2 = spec.deco[(i * 13 + 5) % spec.deco.length], big2 = kind2 === 'building' || kind2 === 'mesa' || kind2 === 'grandstand' || kind2 === 'crane';
+        var side3 = spec.water ? (spec.water === 'left' ? 1 : -1) : (i % 2 ? -1 : 1);
+        seg.sprites.push({ kind: kind2, offset: side3 * (big2 ? 3.6 + (i % 4) * 0.6 : 2.2 + (i % 4) * 0.5), seed: i + 3 });
+      }
       if (spec.neon && i % 30 === 0) seg.sprites.push({ kind: 'arch', offset: 0 });
     }
 

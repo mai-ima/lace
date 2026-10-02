@@ -112,6 +112,8 @@
 
   /* ---------- ストーリー（本編・ストーリー2・3、サブストーリー） ---------- */
   /* ---------- 「峠を使わない」設定（設定画面）。ONにすると峠の話が、サーキットの話に置き換わる ---------- */
+  // WebGL の 3D 表示は開発を一時停止中。従来の疑似 3D だけを使う（コードは残してある）。true にすると設定と v キーで使える。
+  R.ENABLE_3D = false;
   var NO_TOUGE_ALT = { akimine: 'circuit', usui: 'fujisp', iroha: 'isetec', hakone: 'coast', ashinoko: 'forest', tenryu: 'harbor',
                        r_haruna: 'r_tsukuba', r_usui: 'r_okayama', r_iroha: 'r_sugo', r_turnpike: 'r_motegi', r_tsubaki: 'r_autopolis', r_akagi: 'r_fuji', r_myogi: 'r_suzuka',
                        hm_tenryu: 'circuit', hm_mikata: 'fujisp', hm_oku: 'isetec', hm_bypass: 'coast', hm_tomei: 'highway', hm_city: 'hamamatsu' };
@@ -701,7 +703,7 @@
       if (app.mode === 'race' && app.sess) {
         if (k === 'Escape' || k === 'p' || k === 'P') { pause(); return; }
         if (k === 'o' || k === 'O' || k === 'F2') { pause(); adminOverlay(); return; }
-        if (k === 'v' || k === 'V') { R.edit(function (s) { s.r3d = !s.r3d; }); if (R.load().r3d) attach3D(); else detach3D(); return; }
+        if (R.ENABLE_3D && (k === 'v' || k === 'V')) { R.edit(function (s) { s.r3d = !s.r3d; }); if (R.load().r3d) attach3D(); else detach3D(); return; }
         app.sess.key(k, true);
         return;
       }
@@ -1809,7 +1811,7 @@
         }));
         p.appendChild(optRow(L('BGM の音量', 'Music volume'), function () { var v = R.load().bgm; v = v === undefined ? 0.6 : v; return v <= 0 ? L('なし', 'off') : Math.round(v * 10) + ' / 10'; },
           function (d) { R.edit(function (s) { var v = s.bgm === undefined ? 0.6 : s.bgm; s.bgm = Math.round(clamp(v + d * 0.1, 0, 1) * 10) / 10; }); if (R.Music) { R.Music.refresh(); if (!R.Music.current) R.Music.play('title'); } }));
-        p.appendChild(optRow(L('描画', 'Renderer'), function () { return R.load().r3d ? L('3D（WebGL・試験版）', '3D (WebGL, beta)') : L('疑似 3D（標準）', 'Pseudo-3D (default)'); },
+        if (R.ENABLE_3D) p.appendChild(optRow(L('描画', 'Renderer'), function () { return R.load().r3d ? L('3D（WebGL・試験版）', '3D (WebGL, beta)') : L('疑似 3D（標準）', 'Pseudo-3D (default)'); },
           function () { R.edit(function (s) { s.r3d = !s.r3d; }); }));
         p.appendChild(optRow(L('ストーリーで峠を使う', 'Use mountain passes in stories'), function () { return R.load().noTouge ? L('使わない（サーキットに置き換え）', 'No (circuits instead)') : L('使う', 'Yes'); },
           function () { R.edit(function (s) { s.noTouge = !s.noTouge; ntFlag = !!s.noTouge; }); R.resetStoryView(); }));
@@ -1852,7 +1854,7 @@
       app.sess = R.Session(cfg);
       app.sess.W = cv.width; app.sess.H = cv.height;
       padBox.innerHTML = ''; padBox.appendChild(R.makePad(function () { return app.sess; }));
-      if (R.load().r3d) attach3D(); else detach3D();
+      if (R.ENABLE_3D && R.load().r3d) attach3D(); else detach3D();
     }
 
     /* --- 3D 表示（WebGL） --- */
