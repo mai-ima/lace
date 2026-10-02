@@ -1,6 +1,6 @@
 /*
- * race-front.js — TUI RACING の入口。メニュー・物語・オープンワールド・アルバイト・
- * グランプリ・ガレージと race コマンド。
+ * race-front.js — TENRYU RACING の入口。メニュー・物語・オープンワールド・アルバイト・
+ * グランプリ・ガレージと ゲーム本体。
  *
  *   GUI 版 … 1 つのウィンドウの中に「タイトル → メニュー → レース → 結果」がある
  *            （据え置き機のレースゲームのような画面遷移。キーボードでもマウスでも操作できる）
@@ -599,7 +599,7 @@
 
   function createApp() {
     var app = { closed: false, stack: [], sel: 0, sess: null, demo: null, mode: 'menu', cmd: '', keyHook: null, runOpts: null, paused: false };
-    var win = TB.Win.open({ title: 'TUI RACING', width: 960, maximized: true, bodyClass: 'rx-body',
+    var win = TB.Win.open({ title: 'TENRYU RACING', width: 960, maximized: true, bodyClass: 'rx-body',
                             onClose: function () { cleanup(); } });
     app.win = win;
     var stage = el('div', 'rx-stage'), cv = el('canvas', 'rx-canvas'), over = el('div', 'rx-over'), padBox = el('div', 'rx-padbox');
@@ -780,8 +780,8 @@
       return { build: function (o) {
         var s = R.load();
         var box = el('div', 'rx-title');
-        box.appendChild(el('div', 'rx-logo', 'TUI RACING'));
-        box.appendChild(el('div', 'rx-tag', L('ターミナル発・本格レーシング ── 峠からサーキット、浜松から名古屋まで', 'From terminal to tarmac — mountain passes, circuits, Hamamatsu to Nagoya')));
+        var logo = el('div', 'rx-logo', 'TENRYU RACING'); logo.addEventListener('click', function () { if (TB.secretTap) TB.secretTap(); }); box.appendChild(logo);
+        box.appendChild(el('div', 'rx-tag', L('本格レーシング ── 峠からサーキット、浜松から名古屋まで', 'Mountain passes, circuits, Hamamatsu to Nagoya')));
         box.appendChild(el('div', 'rx-carline', L('愛車 ', 'Car ') + t(R.car(s.car).name) + '　·　' + yen(s.money) + '　·　' + L('難易度 ', 'Level ') + t(R.LEVEL_NAMES[s.level])));
         var done = Math.min(s.story, R.STORY.length);
         var items = [
@@ -1164,7 +1164,7 @@
       var box = el('div', 'rx-credits');
       var lines = st && st.id !== 's1'
         ? ['THE END', '', t(st.name), L('ストーリー完結！', 'Story complete!'), '', L('サブストーリーのタブで、その後の話が読めます', 'More in the Side stories tab'), '', 'Thank you for playing.']
-        : ['THE END', '', 'TUI RACING', L('本編「天竜の白い亡霊」完結！', 'Main story complete!'), '',
+        : ['THE END', '', 'TENRYU RACING', L('本編「天竜の白い亡霊」完結！', 'Main story complete!'), '',
            L('番外編「峠の走り屋たち」が開放されました', 'Extra chapter "Legends of the Pass" unlocked'), L('プロトタイプ ZERO がガレージに届きました', 'Prototype ZERO is in your garage'),
            L('ストーリー2・3、サブストーリーもどうぞ', 'Try Stories 2 & 3 and the side stories'), '', 'Thank you for playing.'];
       if (pick && st.endings) {
@@ -1770,8 +1770,7 @@
          L('雨・雪では滑ります。4WD（オフロード対応）の車は影響が小さめ。', 'Rain and snow reduce grip. AWD cars suffer less.'),
          L('コインや加速パネルは「カジュアル」だけ。ほかのモードは本格仕様です。', 'Coins and boost pads appear only in Casual. Everything else is serious.')].forEach(function (x) { help.appendChild(el('div', '', '・' + x)); });
         p.appendChild(help);
-        p.appendChild(list([item(L('データを消す（設定コマンドから）', 'Erase data (via settings command)'), L('settings で「記録」を消せます', 'Use the settings command'), function () {}, { icon: '🗑', dis: true }),
-                            item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
         o.appendChild(p);
       } };
     };
@@ -1980,35 +1979,6 @@
     };
     return app;
   }
-
-  /* =====================================================================
-     コマンド
-     ===================================================================== */
-
-  function runCommand(args) {
-    args = args.filter(function (x) { return !/^(gui|tui|text)$/i.test(x); }).map(function (x) { return x.toLowerCase(); });
-    openApp(args.join(' ') || 'title');
-    return [[{ t: L('TUI RACING を開きました（↑↓ で選んで Enter）。', 'Opened TUI RACING (arrows + Enter).'), c: 'dim' }]];
-  }
-
-  def('race', {
-    group: 'game',
-    usage: 'race [story|world|job|gp|daily|achievements|quick|touge|time|elim|duel|arcade|chase|traffic|mini|party|coins|garage|stats|tracks] …',
-    desc: { ja: '本格レースゲーム。物語・オープンワールド（浜松〜名古屋）・アルバイト・峠・GP・ミニゲーム', en: 'A full racing game: story, open world, jobs, touge, GP and mini games' },
-    run: runCommand
-  });
-  def('taxi', {
-    group: 'game',
-    usage: 'taxi [出発地]',
-    desc: { ja: 'タクシーのアルバイト（race job taxi と同じ）', en: 'the taxi job (same as race job taxi)' },
-    run: function (args) { return runCommand(['job', 'taxi'].concat(args)); }
-  });
-  TB.alias.racing = 'race';
-  TB.alias.drive = 'race';
-  TB.alias['レース'] = 'race';
-  TB.alias.openworld = 'race world';
-  TB.alias['タクシー'] = 'taxi';
-  TB.alias.touge = 'race touge';
 
   R.openApp = openApp;
 })();

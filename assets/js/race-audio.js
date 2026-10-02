@@ -1,5 +1,5 @@
 /*
- * race-audio.js — TUI RACING のエンジン音・走行音（Web Audio で合成）。
+ * race-audio.js — TENRYU RACING のエンジン音・走行音（Web Audio で合成）。
  *
  * 車種ごとに「気筒数・回転数の上限・音色」を変えて、
  *   軽の 3 気筒 / 直 4 / 直 6 / 水平対向 / ロータリー / V8 / V12 / フォーミュラ /

@@ -1,13 +1,13 @@
 /*
- * gui.js — ターミナルの上に重ねる、限定的な GUI。
+ * gui.js — 画面に重ねる GUI の部品と、GUI アプリ。
  *
  *   TB.Win  … ドラッグで動かせる小さなウィンドウ（閉じる・最大化つき）
  *   TB.Sfx  … 効果音（WebAudio で合成。音源ファイルは使わない）
  *
- * GUI アプリ:
- *   settings … テーマ・言語・CRT・音・文字の大きさ・記録の消去
- *   paint    … ドット絵。描いた絵を文字にしてターミナルへ貼れる
- *   gcalc    … ボタンで押す電卓（計算は calc と同じ自前の式解釈）
+ * GUI アプリ（「ひみつの遊び場」から開く）:
+ *   settings … 言語・音・文字の大きさ・記録の消去
+ *   paint    … ドット絵（PNG 保存）
+ *   gcalc    … ボタンで押す電卓
  *   sound / windows / closeall
  */
 (function () {
@@ -294,8 +294,7 @@
       }
       keys.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) { /* ignore */ }
-    TB.Term.printAll([[{ t: L('ゲームの記録を消しました（' + keys.length + ' 件）。',
-                              'Game records erased (' + keys.length + ' entries).'), c: 'warn' }]]);
+    return keys.length;
   }
 
   var FONT_SIZES = [['auto', 0], ['S', 12], ['M', 14], ['L', 16], ['XL', 18]];
@@ -315,14 +314,6 @@
       function render() {
         b.textContent = '';
 
-        var rowT = section(b, L('テーマ', 'Theme'));
-        TB.themes.forEach(function (name) {
-          var btn = button(name, 'gbtn' + (TB.currentTheme() === name ? ' on' : ''), function () {
-            TB.setTheme(name); play('click'); render();
-          });
-          rowT.appendChild(btn);
-        });
-
         var rowL = section(b, L('言語', 'Language'));
         [['ja', '日本語'], ['en', 'English']].forEach(function (p) {
           rowL.appendChild(button(p[1], 'gbtn' + (TB.state.lang === p[0] ? ' on' : ''), function () {
@@ -331,10 +322,6 @@
         });
 
         var rowE = section(b, L('表示と音', 'Display & sound'));
-        var crt = document.body.classList.contains('crt-on');
-        rowE.appendChild(button((crt ? '☑ ' : '☐ ') + 'CRT', 'gbtn' + (crt ? ' on' : ''), function () {
-          TB.setCRT(!document.body.classList.contains('crt-on')); render();
-        }));
         rowE.appendChild(button((enabled() ? '☑ ' : '☐ ') + L('効果音', 'Sound'), 'gbtn' + (enabled() ? ' on' : ''), function () {
           TB.Sfx.set(!enabled()); play('click'); render();
         }));
@@ -360,7 +347,8 @@
         rowR.appendChild(button(L('ゲームの記録を消す…', 'Erase game records…'), 'gbtn warn', function () {
           confirmBox(L('ゲームの記録（最高点・ランキング・レースの賞金と改造）をすべて消します。よろしいですか？',
                        'Erase every game record — high scores, rankings, race money and upgrades?'), function () {
-            eraseRecords();
+            var n = eraseRecords();
+            rowR.appendChild(el('span', 'ghint', L(n + ' 件消しました', n + ' erased')));
           });
         }));
 
@@ -423,7 +411,7 @@
   def('paint', {
     group: 'gui',
     usage: 'paint [幅] [高さ]',
-    desc: { ja: 'ドット絵を描く。描いた絵を文字にしてターミナルへ貼れる', en: 'pixel painter; paste your art into the terminal as text' },
+    desc: { ja: 'ドット絵を描く（PNG で保存できる）', en: 'pixel painter (save as PNG)' },
     run: function (args) {
       var W = Math.min(Math.max(parseInt(args[0], 10) || 32, 8), 64);
       var H = Math.min(Math.max(parseInt(args[1], 10) || 20, 6), 48);
@@ -526,11 +514,6 @@
         tools.appendChild(button(L('全部消す', 'Clear'), 'gbtn', function () {
           snapshot(); for (var i = 0; i < pix.length; i++) pix[i] = -1; draw();
         }));
-        tools.appendChild(button(L('→ 端末に貼る', '→ Paste to terminal'), 'gbtn accent', function () {
-          TB.Term.printAll(['', { node: toText() }, '']);
-          TB.Term.scroll();
-          play('coin');
-        }));
         tools.appendChild(button(L('PNG で保存', 'Save PNG'), 'gbtn', function () {
           var out = document.createElement('canvas');
           out.width = W * 16; out.height = H * 16;
@@ -552,8 +535,8 @@
       b.appendChild(el('div', 'ghint', L('左クリックで描く / 右クリックで消す / ドラッグで続けて描ける',
                                         'Left click draws, right click erases, drag to keep drawing')));
       renderTools(); renderPal(); draw();
-      return [[{ t: L('お絵かきの窓を開きました。「→ 端末に貼る」で文字の絵になります。',
-                      'Opened the painter. "Paste to terminal" turns it into text.'), c: 'dim' }]];
+      return [[{ t: L('お絵かきの窓を開きました。',
+                      'Opened the painter.'), c: 'dim' }]];
     }
   });
 
@@ -603,7 +586,6 @@
           if (!isFinite(v)) throw new Error('inf');
           v = Math.round(v * 1e10) / 1e10;
           val.textContent = String(v);
-          TB.Term.printAll([[{ t: s + ' = ', c: 'dim' }, { t: String(v), c: 'accent bold' }]]);
           s = String(v);
           play('coin');
         } catch (e) {

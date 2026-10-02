@@ -1,5 +1,5 @@
 /*
- * race-engine.js — TUI RACING の心臓部。走らせる・描く。
+ * race-engine.js — TENRYU RACING の心臓部。走らせる・描く。
  *
  *   R.Session(cfg)    … 1 回のレース（物理・敵の頭脳・各モードの決まり）
  *     .update(dt) / .render(g) … GUI（Canvas）で描く
@@ -887,7 +887,7 @@
         if (u > 1.2) {
           g.font = 'bold ' + Math.round(u * 1.4) + 'px ui-monospace, monospace'; g.textAlign = 'center';
           g.fillStyle = night ? '#5ccfa0' : '#222';
-          g.fillText(sp.real ? ['RACING', 'TIRES', 'MOTOR OIL', 'BRAKES'][sp.seed % 4] : ['TUI-BASE', '$ race', 'ZERO-DAY', 'NITRO'][sp.seed % 4], x, y - u * 4.9);
+          g.fillText(sp.real ? ['RACING', 'TIRES', 'MOTOR OIL', 'BRAKES'][sp.seed % 4] : ['TENRYU', 'GO!', 'ZERO-DAY', 'NITRO'][sp.seed % 4], x, y - u * 4.9);
         }
         break;
       case 'grandstand':
@@ -917,7 +917,7 @@
         g.strokeRect(x - u * 3, y - u * 7 + Math.sin(t * 2 + sp.seed) * u * 0.3, u * 6, u * 3);
         if (u > 1) {
           g.font = 'bold ' + Math.round(u * 1.6) + 'px ui-monospace, monospace'; g.textAlign = 'center';
-          g.fillStyle = g.strokeStyle; g.fillText(sp.seed % 3 ? 'TUI' : '> _', x, y - u * 5 + Math.sin(t * 2 + sp.seed) * u * 0.3);
+          g.fillStyle = g.strokeStyle; g.fillText(sp.seed % 3 ? 'RACE' : '▶ GO', x, y - u * 5 + Math.sin(t * 2 + sp.seed) * u * 0.3);
         }
         g.lineWidth = 1;
         break;
@@ -1087,7 +1087,7 @@
         g.fillStyle = '#f2f2f2'; g.fillRect(x - u * 1.8, y - u * 4, u * 3.6, u * 1.8);
         if (u > 1.4) {
           g.fillStyle = '#e14d4d'; g.font = 'bold ' + Math.round(u * 1.1) + 'px monospace'; g.textAlign = 'center';
-          g.fillText('TUI', x, y - u * 2.7);
+          g.fillText('GO', x, y - u * 2.7);
         }
         break;
       case 'chevron':

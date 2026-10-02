@@ -1,9 +1,9 @@
 /*
- * race-data.js — TUI RACING のデータ（コース・車・ドライバー・物語・保存）。
+ * race-data.js — TENRYU RACING のデータ（コース・車・ドライバー・物語・保存）。
  *
  *   race-data.js   … ここ。数字と文章だけ
  *   race-engine.js … 走る・描く（GUI の Canvas と TUI の文字の両方）
- *   race-front.js  … メニュー・物語・ガレージと race コマンド
+ *   race-front.js  … メニュー・物語・ガレージと ゲーム本体
  *
  * 3 つのファイルは window.TB.Race を共有する。
  */

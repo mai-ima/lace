@@ -1,5 +1,5 @@
 /*
- * race-story.js — TUI RACING 本編ストーリー「天竜の白い亡霊」。
+ * race-story.js — TENRYU RACING 本編ストーリー「天竜の白い亡霊」。
  *
  * 台本の書き方
  *   ['mina', 'せりふ', 'fx']        … 話す人・せりふ・演出（空白区切り）
@@ -564,7 +564,7 @@
         ['you', '明日の朝、配達、手伝えよ。天竜の山道、一緒に下ろうぜ。', 'emo:smile'],
         ['soichi', '……ああ。十年ぶりの、夜明けの配達だ。', 'emo:smile'],
         ['mina', 'おかえり、ソウイチおじさん。……おかえり、ユウ。', 'emo:smile'],
-        { narr: '——TUI RACING　完。' },
+        { narr: '——TENRYU RACING　完。' },
         { narr: 'だが、道はどこまでも続いている。' }
       ] }),
 

@@ -1,5 +1,5 @@
 /*
- * race-music.js — TUI RACING の BGM（Web Audio でその場で演奏する）。
+ * race-music.js — TENRYU RACING の BGM（Web Audio でその場で演奏する）。
  *
  *   R.Music.play('battle')  … ユーロビート風のバトル曲（155 BPM・A マイナー）
  *   R.Music.play('boss')    … ボス戦（165 BPM・D マイナー、和声的短音階）

@@ -1,5 +1,5 @@
 /*
- * race-3d.js — TUI RACING の 3D 描画（WebGL / three.js）。
+ * race-3d.js — TENRYU RACING の 3D 描画（WebGL / three.js）。
  *
  * 物理は race-engine.js の Session のまま。ここでは Session の区間データから
  *   ・道路（路面・路肩・白線・芝・水面・トンネル・ガードレール・交差点）

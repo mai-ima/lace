@@ -1,7 +1,6 @@
 /* =====================================================================
-   TUI-BASE — stylesheet
-   1. tokens / themes      2. base      3. layout (window/pane/status)
-   4. terminal             5. input     6. effects      7. responsive
+   TENRYU RACING — stylesheet
+   1. tokens      2. base      3. game screen (hidden playground)      4. GUI windows      5. race
    ===================================================================== */
 
 /* ---------- 1. tokens / themes -------------------------------------- */
@@ -30,43 +29,6 @@
   --err:       #e06c75;
   --sel:       #22405c;
   --glow:      0 0 12px rgba(92, 207, 160, .18);
-}
-
-[data-theme="amber"] {
-  --bg: #14100a; --bg-pane: #191309; --bg-inset: #1f1810;
-  --fg: #f0c078; --dim: #8a6a3a; --faint: #3a2c17; --border: #352814;
-  --accent: #ffb347; --accent-2: #e08b3a; --warn: #ffd98a; --err: #ff7a59;
-  --sel: #4a3410; --glow: 0 0 14px rgba(255, 179, 71, .22);
-}
-
-[data-theme="matrix"] {
-  --bg: #030705; --bg-pane: #06100a; --bg-inset: #08160e; --fg: #9ff0b6;
-  --dim: #3f7a55; --faint: #17311f; --border: #17311f;
-  --accent: #39ff88; --accent-2: #7be0a4; --warn: #d7ff6e; --err: #ff6b6b;
-  --sel: #0f4425; --glow: 0 0 14px rgba(57, 255, 136, .22);
-}
-
-[data-theme="synth"] {
-  --bg: #0e0a18; --bg-pane: #140e24; --bg-inset: #1a1130; --fg: #e4d9ff;
-  --dim: #7a6aa8; --faint: #2c2247; --border: #2c2247;
-  --accent: #ff5fd2; --accent-2: #4fe3ff; --warn: #ffd166; --err: #ff5f7e;
-  --sel: #3d2a63; --glow: 0 0 16px rgba(255, 95, 210, .25);
-}
-
-/* コナミコマンドで開く隠しテーマ */
-[data-theme="konami"] {
-  --bg: #0a0a12; --bg-pane: #10101f; --bg-inset: #16162a; --fg: #e8e8f0;
-  --dim: #7d7db0; --faint: #2a2a45; --border: #2a2a45;
-  --accent: #ffd93d; --accent-2: #4ea3ff; --warn: #ff9f1c; --err: #ff4d6d;
-  --sel: #3a2a70; --glow: 0 0 14px rgba(255, 217, 61, .3);
-}
-
-[data-theme="paper"] {
-  --bg: #f4f1ea; --bg-pane: #fbf9f4; --bg-inset: #eeeae0; --fg: #2f3338;
-  --dim: #7b8189; --faint: #ddd8cc; --border: #ddd8cc;
-  --accent: #1f7a5c; --accent-2: #2a5fa8; --warn: #a06a12; --err: #b23a3a;
-  --sel: #cfe3d8; --glow: none;
-  color-scheme: light;
 }
 
 /* ---------- 2. base -------------------------------------------------- */
@@ -107,144 +69,7 @@ a:hover, a:focus-visible { color: var(--accent); }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ---------- 3. layout ------------------------------------------------ */
-.boot {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  padding: var(--pad);
-  background: var(--bg);
-  color: var(--accent);
-  white-space: pre-wrap;
-  overflow: hidden;
-  cursor: pointer;
-}
-.boot .boot-line { opacity: .92; }
-.boot .boot-hint { color: var(--dim); margin-top: 1.5em; }
-
-.tui {
-  display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "title  title"
-    "nav    main"
-    "status status";
-  height: 100dvh;
-  padding: var(--pad);
-  gap: 0;
-}
-
-/* --- title bar --- */
-.titlebar {
-  grid-area: title;
-  display: flex;
-  align-items: center;
-  gap: .75ch;
-  padding: .25em 1ch;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: var(--radius) var(--radius) 0 0;
-  background: var(--bg-pane);
-  min-width: 0;
-}
-.titlebar .dots { letter-spacing: .2ch; color: var(--faint); }
-.titlebar .dots b { color: var(--accent); font-weight: inherit; }
-.titlebar .title {
-  color: var(--fg);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.titlebar .title .sep { color: var(--faint); }
-.titlebar .spacer { flex: 1; }
-.titlebar .tag { color: var(--dim); white-space: nowrap; }
-
-/* --- panes --- */
-.pane {
-  background: var(--bg-pane);
-  border: 1px solid var(--border);
-  min-height: 0;
-  min-width: 0;
-}
-
-.nav {
-  grid-area: nav;
-  border-right: 0;
-  padding: .6em 0;
-  overflow-y: auto;
-}
-.nav h2 {
-  margin: 0 0 .4em;
-  padding: 0 1.5ch;
-  font-size: 1em;
-  font-weight: normal;
-  color: var(--dim);
-  letter-spacing: .1ch;
-}
-.nav ul { list-style: none; margin: 0 0 1.2em; padding: 0; }
-.nav li { margin: 0; }
-.nav button {
-  display: flex;
-  align-items: baseline;
-  gap: 1ch;
-  width: 100%;
-  padding: .1em 1.5ch;
-  font: inherit;
-  color: var(--fg);
-  background: none;
-  border: 0;
-  border-left: 2px solid transparent;
-  text-align: left;
-  cursor: pointer;
-}
-.nav button .k { color: var(--faint); }
-.nav button:hover, .nav button:focus-visible {
-  background: var(--bg-inset);
-  border-left-color: var(--accent);
-  color: var(--accent);
-}
-.nav button:hover .k, .nav button:focus-visible .k { color: var(--accent); }
-.nav button[aria-current="true"] { color: var(--accent); border-left-color: var(--accent); }
-
-.main {
-  grid-area: main;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  cursor: text;
-}
-
-/* --- status bar --- */
-.statusbar {
-  grid-area: status;
-  display: flex;
-  align-items: center;
-  gap: 2ch;
-  padding: .25em 1ch;
-  border: 1px solid var(--border);
-  border-top: 0;
-  border-radius: 0 0 var(--radius) var(--radius);
-  background: var(--bg-inset);
-  color: var(--dim);
-  white-space: nowrap;
-  overflow: hidden;
-}
-.statusbar .mode {
-  color: var(--bg);
-  background: var(--accent);
-  padding: 0 1ch;
-  font-weight: bold;
-}
-.statusbar .hint { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.statusbar kbd {
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg-pane);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0 .5ch;
-}
-
-/* ---------- 4. terminal ---------------------------------------------- */
+/* ---------- 3. game screen ---------------------------------------------- */
 .screen {
   /* 内容ぶんだけ縦に伸び、画面を超えたらそこで止まってスクロールする。
      こうするとプロンプトが常に最後の出力のすぐ下に来る。 */
@@ -274,65 +99,12 @@ a:hover, a:focus-visible { color: var(--accent); }
 .bold     { font-weight: bold; }
 .inv      { background: var(--accent); color: var(--bg); padding: 0 .5ch; }
 
-.banner {
-  color: var(--accent);
-  text-shadow: var(--glow);
-  white-space: pre;
-  overflow-x: auto;
-  scrollbar-width: none;
-  line-height: 1.05;
-  margin: .2em 0 .4em;
-}
-.banner::-webkit-scrollbar { display: none; }
-.banner-sm { display: none; }
-
-/* echoed command line */
-.echo .prompt { color: var(--accent); }
-
-/* two-column rows (JA/EN safe: no space padding) */
-.row {
-  display: grid;
-  grid-template-columns: minmax(8ch, 16ch) minmax(0, 1fr);
-  gap: 0 2ch;
-  align-items: baseline;
-}
-.row > .k { color: var(--accent); overflow-wrap: anywhere; }
-.row > .v { color: var(--fg); overflow-wrap: anywhere; }
-.row.sub > .k { color: var(--dim); }
-
-.card {
-  border-left: 2px solid var(--faint);
-  padding: 0 0 0 2ch;
-  margin: .25em 0 .9em;
-}
-.card .head { display: flex; flex-wrap: wrap; gap: 0 2ch; align-items: baseline; }
-.card .name { color: var(--accent); font-weight: bold; }
-.card .year { color: var(--dim); }
-.card .tags { color: var(--accent-2); }
-.card .desc { color: var(--fg); }
-
-.grid-tags { display: flex; flex-wrap: wrap; gap: 0 2ch; }
-
-/* manual の別名一覧。桁を揃えたいので CSS の段組みにする */
-.alias-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(24ch, 1fr));
-  gap: 0 2ch;
-  padding-left: 2ch;
-}
-
 .hr {
   min-height: 0;
   height: 0;
   margin: .7em 0;
   border-top: 1px dashed var(--faint);
 }
-
-.neofetch { display: flex; gap: 0 3ch; flex-wrap: wrap; }
-.neofetch .logo { color: var(--accent); white-space: pre; line-height: 1.15; }
-.neofetch .info { min-width: 0; }
-
-.rain { color: var(--accent); white-space: pre; overflow: hidden; line-height: 1.25; }
 
 /* ---------- ゲーム ---------------------------------------------------- */
 /* 三目並べの盤。罫線をつなげるため行間を詰める */
@@ -421,18 +193,6 @@ a:hover, a:focus-visible { color: var(--accent); }
   --p-i: #4dd0e1; --p-o: #ffd54f; --p-t: #ce93d8;
   --p-s: #81c784; --p-z: #e57373; --p-j: #64b5f6; --p-l: #ffb74d;
 }
-/* コナミコマンドで開く隠しテーマ */
-[data-theme="konami"] {
-  --bg: #0a0a12; --bg-pane: #10101f; --bg-inset: #16162a; --fg: #e8e8f0;
-  --dim: #7d7db0; --faint: #2a2a45; --border: #2a2a45;
-  --accent: #ffd93d; --accent-2: #4ea3ff; --warn: #ff9f1c; --err: #ff4d6d;
-  --sel: #3a2a70; --glow: 0 0 14px rgba(255, 217, 61, .3);
-}
-
-[data-theme="paper"] {
-  --p-i: #00838f; --p-o: #a67c00; --p-t: #7b1fa2;
-  --p-s: #2e7d32; --p-z: #c62828; --p-j: #1565c0; --p-l: #e65100;
-}
 .p-i { color: var(--p-i); }
 .p-o { color: var(--p-o); }
 .p-t { color: var(--p-t); }
@@ -492,157 +252,6 @@ a:hover, a:focus-visible { color: var(--accent); }
 }
 .g-pad button:active { color: var(--accent); border-color: var(--accent); }
 .g-pad button.wide { grid-column: 1 / -1; color: var(--dim); }
-
-/* ---------- 5. input ------------------------------------------------- */
-.inputline {
-  position: relative;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0 1ch;
-  padding: .35em 2ch .9em;
-  background: var(--bg-pane);
-}
-.inputline .prompt { color: var(--accent); white-space: nowrap; }
-.inputline .prompt .path { color: var(--accent-2); }
-.inputline .mirror {
-  flex: 1;
-  min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.inputline .ghost { color: var(--faint); }
-
-.caret {
-  background: var(--fg);
-  color: var(--bg);
-  animation: blink 1.05s steps(1) infinite;
-}
-.caret.wide { padding-right: .1ch; }
-.inputline.idle .caret { animation: none; background: transparent; color: inherit; box-shadow: inset 0 0 0 1px var(--dim); }
-@keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
-
-#cmdline {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: transparent;
-  caret-color: transparent;
-  font: inherit;
-  font-size: max(16px, 1em); /* iOS: prevent zoom on focus */
-  opacity: 0;
-  resize: none;
-}
-
-/* ---------- 6. effects ----------------------------------------------- */
-.crt {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity .2s;
-}
-body.crt-on .crt { opacity: 1; }
-.crt::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, .035) 0 1px,
-    transparent 1px 3px
-  );
-}
-.crt::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .45) 100%);
-}
-body.crt-on .screen { text-shadow: var(--glow); }
-
-/* ---------- 7. responsive / motion ----------------------------------- */
-@media (max-width: 720px) {
-  :root { --pad: 0px; }
-
-  .tui {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "title"
-      "nav"
-      "main"
-      "status";
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    height: 100dvh;
-  }
-  .titlebar, .statusbar { border-radius: 0; border-left: 0; border-right: 0; }
-  .titlebar .tag { display: none; }
-
-  /* 左メニューは 1 行の横スクロールに畳む */
-  .nav {
-    display: flex;
-    align-items: stretch;
-    border-right: 1px solid var(--border);
-    border-left: 0;
-    border-bottom: 0;
-    padding: .35em 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-  }
-  .nav h2 { display: none; }
-  .nav ul {
-    display: flex;
-    gap: 0;
-    margin: 0;
-    padding: 0 .5ch;
-    width: max-content;
-  }
-  .nav button {
-    border-left: 0;
-    border-bottom: 2px solid transparent;
-    padding: .1em 1.5ch;
-    white-space: nowrap;
-  }
-  .nav button .k { display: none; }
-  .nav button:hover, .nav button:focus-visible, .nav button[aria-current="true"] {
-    border-left-color: transparent;
-    border-bottom-color: var(--accent);
-  }
-  .main { border-left: 0; border-right: 0; }
-  .pane { border-left: 0; border-right: 0; }
-
-  .statusbar .hint { display: none; }
-
-  .banner-lg { display: none; }
-  .banner-sm { display: block; }
-
-  .row { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .row > .v { padding-left: 2ch; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .caret { animation: none; }
-  * { transition-duration: .01ms !important; }
-}
-
-/* ---------- クリックで実行できるコマンド ------------------------------ */
-.cmdlink {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  border-bottom: 1px dashed currentColor;
-  padding: 0;
-  cursor: pointer;
-}
-.cmdlink:hover, .cmdlink:focus-visible { color: var(--accent); background: var(--bg-inset); }
-.cmdlink.dim { border-bottom-style: dotted; }
 
 /* ---------- GUI: ウィンドウ -------------------------------------------- */
 .win {
@@ -800,41 +409,7 @@ body.crt-on .screen { text-shadow: var(--glow); }
 }
 
 
-/* ---------- かくれコマンド用 ------------------------------------------ */
-
-/* toast: 画面の下に少しだけ出る小さな帯 */
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 8vh;
-  transform: translateX(-50%);
-  z-index: 60;
-  max-width: min(90vw, 60ch);
-  padding: .5em 2ch;
-  background: var(--bg-inset);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, .35);
-  opacity: 1;
-  transition: opacity .5s;
-  pointer-events: none;
-  overflow-wrap: anywhere;
-}
-.toast.go { opacity: 0; }
-
-/* upside: 画面をひっくり返す */
-body.upside .tui { transform: rotate(180deg); }
-
-/* ---------- no-JS fallback ------------------------------------------- */
-.nojs {
-  max-width: 72ch;
-  margin: 0 auto;
-  padding: var(--pad);
-}
-.nojs h1 { color: var(--accent); font-size: 1.2em; }
-
-/* ---------- TUI RACING（GUI 版の画面） ---------- */
+/* ---------- TENRYU RACING（レースの画面） ---------- */
 .rx-body { padding: 0 !important; display: flex; flex-direction: column; background: #000; overflow: hidden !important; }
 .rx-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000; }
 .rx-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; image-rendering: auto; touch-action: none; }
@@ -1015,3 +590,46 @@ body.upside .tui { transform: rotate(180deg); }
 .rx-toast { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 9; padding: .7em 1.4em; font-weight: 700; color: #fff; background: rgba(8,12,20,.92); border: 1px solid #5ccfa0; border-radius: 999px; box-shadow: 0 8px 30px rgba(0,0,0,.5); animation: rxToast 1.4s ease-in-out forwards; }
 @keyframes rxToast { 0% { opacity: 0; transform: translate(-50%, -12px); } 15%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
 .rx-endsum { color: #ffd93d; }
+
+
+/* ---------- ランディング（レースを閉じたあとの画面） ---------- */
+.landing {
+  position: fixed; inset: 0; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2em;
+  background: radial-gradient(ellipse at 50% 30%, #1b2a3c 0%, #0b1016 70%);
+  text-align: center;
+}
+.landing .lg { font-size: clamp(28px, 7vw, 64px); font-weight: bold; letter-spacing: .12em; color: var(--accent); text-shadow: var(--glow); user-select: none; }
+.landing .sub { color: var(--dim); }
+.landing button {
+  font: inherit; font-size: 1.2em; padding: .6em 2.4em; cursor: pointer;
+  color: var(--bg); background: var(--accent); border: 0; border-radius: 999px; font-weight: bold;
+}
+.landing button:hover { filter: brightness(1.1); }
+
+/* ---------- ひみつの遊び場 ---------- */
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.hub-tile {
+  display: flex; flex-direction: column; align-items: center; gap: .25em;
+  font: inherit; color: var(--fg); background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 8px; padding: .8em .4em; cursor: pointer;
+}
+.hub-tile:hover, .hub-tile:focus-visible { border-color: var(--accent); color: var(--accent); }
+.hub-ic { font-size: 1.8em; line-height: 1; }
+.hub-note { text-align: center; opacity: .5; margin-top: .8em; }
+.gh-body { display: flex; flex-direction: column; min-height: 0; }
+.gh-screen { flex: 1 1 auto; min-height: 280px; max-height: 70vh; overflow-y: auto; }
+.gh-bar { display: flex; gap: 8px; padding: 8px; justify-content: center; }
+
+/* ボタンで遊ぶゲーム */
+.gg { padding: 14px; display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.gg-msg { text-align: center; }
+.gg-big { text-align: center; font-size: 2em; letter-spacing: .2em; color: var(--accent); }
+.gg-input { font: inherit; font-size: 1.2em; text-align: center; background: var(--bg-inset); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: .4em; }
+.gg-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 0 auto; width: 100%; }
+.gg-cell { font: inherit; font-size: 2em; aspect-ratio: 1; background: var(--bg-inset); color: var(--dim); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.gg-cell.me { color: var(--accent); } .gg-cell.cpu { color: var(--warn); }
+.gg-keys { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+.gg-key.dis { opacity: .3; }
+.gg-hand { font-size: 1.3em; padding: .8em 1em; }
+.gg-opt { text-align: left; }
