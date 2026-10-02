@@ -1,14 +1,14 @@
 /*
- * race-story4c.js — ストーリー4「グリッドの向こうの夏」  その 3 / 3
+ * race-story5c.js — ストーリー5「グリッドの向こうの夏」  その 3 / 3
  * 第四章（全国への道）・最終章（グリッドの向こう）・サイド・6 つのエンディング・登録
  */
 (function () {
   'use strict';
-  var R = window.TB.Race, P = R.S4, EV = P.EV, SIDE = P.SIDE, CH = P.CH, S = P.S;
+  var R = window.TB.Race, P = R.S5, EV = P.EV, SIDE = P.SIDE, CH = P.CH, S = P.S;
 
   EV.push(
     /* ===================== 第四章 ===================== */
-    S({ id: 's4_t15', ch: '4', title: '全国への道', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1200,
+    S({ id: 's5_t15', ch: '4', title: '全国への道', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1200,
       scene: [
         { title: '全国への道', sub: '第四章' },
         { bg: 'coast' },
@@ -37,7 +37,7 @@
         ['haruka', '（先生にも、グリッドの向こうに、置いてきたものが、あるんだ）', 'emo:smile']
       ] }),
 
-    S({ id: 's4_t16', ch: '4', title: '前夜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1400,
+    S({ id: 's5_t16', ch: '4', title: '前夜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1400,
       scene: [
         { bg: 'circuit' },
         { narr: '全国大会前夜。鈴鹿近くの、古い旅館。大部屋で、部員全員が、布団を並べた。' },
@@ -77,7 +77,7 @@
   );
 
   EV.push(
-    S({ id: 's4_9', ch: '4', title: '全国大会・予選', track: 'isetec', mode: 'race', laps: 4, rivals: 9, pace: 0.93, car: 'kart_s3', goal: { type: 'place', n: 4 }, reward: 6000,
+    S({ id: 's5_9', ch: '4', title: '全国大会・予選', track: 'isetec', mode: 'race', laps: 4, rivals: 9, pace: 0.93, car: 'kart_s3', goal: { type: 'place', n: 4 }, reward: 6000,
       scene: [
         { bgm: 'tension' },
         { bg: 'circuit' },
@@ -97,7 +97,7 @@
         ['ren', '……僕も、決勝です。星野さん。……決勝で。', 'emo:smile']
       ] }),
 
-    S({ id: 's4_t17', ch: '4', title: '決勝前のピット', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1500,
+    S({ id: 's5_t17', ch: '4', title: '決勝前のピット', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1500,
       scene: [
         { bg: 'circuit' },
         { narr: '決勝を、三十分後に控えた、ピット。部員全員が、ハルカの、カートの周りに、集まっていた。' },
@@ -118,7 +118,7 @@
 
   /* ===================== 最終章 ===================== */
   EV.push(
-    S({ id: 's4_10', ch: '5', title: '全国決勝', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 5, pace: 1.04, car: 'kart_s3', goal: { type: 'win' }, reward: 10000, unlock: 'kart_s3',
+    S({ id: 's5_10', ch: '5', title: '全国決勝', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 5, pace: 1.04, car: 'kart_s3', goal: { type: 'win' }, reward: 10000, unlock: 'kart_s3',
       scene: [
         { title: 'グリッドの向こう', sub: '最終章' },
         { bgm: 'final' },
@@ -143,7 +143,7 @@
         ['haruka', 'こっちこそ。……レンが、いたから、ここまで、来れた。', 'emo:smile']
       ] }),
 
-    S({ id: 's4_t18', ch: '5', title: '表彰式のあと', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 3000, final: true,
+    S({ id: 's5_t18', ch: '5', title: '表彰式のあと', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 3000, final: true,
       scene: [
         { bg: 'coast' },
         { narr: '表彰式のあと。夕暮れの、鈴鹿の、パドック。ハルカは、トロフィーを、胸に抱えて、一人、ベンチに座っていた。' },
@@ -161,7 +161,7 @@
 
   /* ===================== サイド ===================== */
   SIDE.push(
-    S({ id: 's4_sq1', after: 's4_2', title: 'コナツの応援歌', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s1', goal: { type: 'lap', factor: 0.46 }, reward: 1500, char: 'konatsu',
+    S({ id: 's5_sq1', after: 's5_2', title: 'コナツの応援歌', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s1', goal: { type: 'lap', factor: 0.46 }, reward: 1500, char: 'konatsu',
       scene: [
         { bg: 'circuit' },
         ['konatsu', 'ハルカ、見て！ 応援団に、頼んで、応援歌を、作ってもらったの！', 'right emo:smile'],
@@ -170,7 +170,7 @@
       ],
       radio: [{ at: 'final', who: 'konatsu', text: 'いいよ、いいよ、ハルカ！ ラストー！' }],
       post: [['konatsu', '今の、走り、すっごく、リズムが、良かった！ 本番も、この歌で、行こう！', 'emo:smile']] }),
-    S({ id: 's4_sq2', after: 's4_4', title: 'ユウタの特訓', track: 'isetec', mode: 'race', laps: 2, rivals: 4, pace: 0.8, car: 'kart_s1', goal: { type: 'place', n: 2 }, reward: 2000, char: 'yuta',
+    S({ id: 's5_sq2', after: 's5_4', title: 'ユウタの特訓', track: 'isetec', mode: 'race', laps: 2, rivals: 4, pace: 0.8, car: 'kart_s1', goal: { type: 'place', n: 2 }, reward: 2000, char: 'yuta',
       scene: [
         { bg: 'circuit' },
         ['yuta', 'ハルカ先輩……いや、同期！ 俺と、勝負してください！ 俺、強くなりたいんす！', 'right emo:angry'],
@@ -178,7 +178,7 @@
       ],
       radio: [{ at: 'close', who: 'yuta', text: 'うおおお！ 負けねえっす！' }],
       post: [['yuta', 'うう……負けたっす。でも、楽しかったっす！ 来年は、勝ちますから！', 'emo:smile']] }),
-    S({ id: 's4_sq3', after: 's4_6', title: 'アカネ先輩の車体', boss: 'akane', track: 'circuit', mode: 'duel', laps: 3, pace: 0.9, car: 'kart_s2', goal: { type: 'win' }, reward: 3200, char: 'akane',
+    S({ id: 's5_sq3', after: 's5_6', title: 'アカネ先輩の車体', boss: 'akane', track: 'circuit', mode: 'duel', laps: 3, pace: 0.9, car: 'kart_s2', goal: { type: 'win' }, reward: 3200, char: 'akane',
       scene: [
         { bg: 'circuit' },
         ['akane', 'ハルカちゃん。……最後に、一度だけ、本気で、走らせて。先輩として、ね。', 'right emo:cool'],
@@ -187,7 +187,7 @@
       ],
       radio: [{ at: 'close', who: 'akane', text: '……やるじゃない。でも、まだよ！' }],
       post: [['akane', '……強くなったわね。私の、自慢の後輩よ。', 'emo:smile']] }),
-    S({ id: 's4_sq4', after: 's4_8', title: 'コウキ先輩の最後の一周', boss: 'koki', track: 'isetec', mode: 'duel', laps: 3, pace: 0.9, car: 'kart_s2', goal: { type: 'win' }, reward: 3500, char: 'koki',
+    S({ id: 's5_sq4', after: 's5_8', title: 'コウキ先輩の最後の一周', boss: 'koki', track: 'isetec', mode: 'duel', laps: 3, pace: 0.9, car: 'kart_s2', goal: { type: 'win' }, reward: 3500, char: 'koki',
       scene: [
         { bg: 'circuit' },
         ['koki', 'ハルカ。……最後に、一回だけ、俺と、走ってくれ。部長として、お前に、見せたいんだ。', 'right emo:cool'],
@@ -196,7 +196,7 @@
       ],
       radio: [{ at: 'final', who: 'koki', text: '……ありがとな、ハルカ。いい、最後の、一周だ。' }],
       post: [['koki', '……ははっ。やっぱり、お前は、速いな。……全国、頼んだぞ。', 'emo:smile']] }),
-    S({ id: 's4_sq5', after: 's4_t16', title: 'ミナトの夜間データ取り', track: 'circuit', mode: 'time', laps: 2, car: 'kart_s3', goal: { type: 'lap', factor: 0.6 }, reward: 3000, char: 'minato',
+    S({ id: 's5_sq5', after: 's5_t16', title: 'ミナトの夜間データ取り', track: 'circuit', mode: 'time', laps: 2, car: 'kart_s3', goal: { type: 'lap', factor: 0.6 }, reward: 3000, char: 'minato',
       scene: [
         { bg: 'circuit' },
         ['minato', '星野さん。……明日の、本番前に、もう一度だけ、データを、取らせてください。', 'right emo:cool'],
@@ -282,7 +282,7 @@
   ];
 
   R.STORIES = R.STORIES || [];
-  R.STORIES.push({ id: 's4', name: { ja: 'ストーリー4　グリッドの向こうの夏（中高生）', en: 'Story 4: Summer Beyond the Grid' }, hero: 'haruka', era: '2015 年', place: '静岡・潮見台学園／鈴鹿',
+  R.STORIES.push({ id: 's5', name: { ja: 'ストーリー5　グリッドの向こうの夏（中高生）', en: 'Story 5: Summer Beyond the Grid' }, hero: 'haruka', era: '2015 年', place: '静岡・潮見台学園／鈴鹿',
                    desc: { ja: '廃部寸前のカート部と、中学三年のハルカ。恐怖、友情、ライバル、受験。仲間との選択で、6 つの結末に分かれる青春の物語。', en: 'A junior-high girl joins a kart club on the brink of closure. Six endings.' },
                    chapters: CH, events: EV, side: SIDE, endings: ENDINGS, filter: 'saturate(1.12) contrast(1.04) brightness(1.02)' });
 })();

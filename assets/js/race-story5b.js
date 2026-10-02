@@ -1,13 +1,13 @@
 /*
- * race-story4b.js — ストーリー4「グリッドの向こうの夏」  その 2 / 3（第二章・第三章）
+ * race-story5b.js — ストーリー5「グリッドの向こうの夏」  その 2 / 3（第二章・第三章）
  */
 (function () {
   'use strict';
-  var R = window.TB.Race, P = R.S4, EV = P.EV, S = P.S;
+  var R = window.TB.Race, P = R.S5, EV = P.EV, S = P.S;
 
   EV.push(
     /* ===================== 第二章 ===================== */
-    S({ id: 's4_t7', ch: '2', title: '合宿の朝', talk: true, track: 'isetec', goal: { type: 'talk' }, reward: 600,
+    S({ id: 's5_t7', ch: '2', title: '合宿の朝', talk: true, track: 'isetec', goal: { type: 'talk' }, reward: 600,
       scene: [
         { title: '第二章', sub: '夏合宿' },
         { bg: 'coast' },
@@ -34,7 +34,7 @@
         { narr: '星が、ひとつ、流れた。誰かが、小さく、息を呑んだ。誰も、願い事を、口にしなかった。けれど、みんな、それぞれの胸の中で、願っていた。' }
       ] }),
 
-    S({ id: 's4_4', ch: '2', title: '合宿サバイバル', track: 'isetec', mode: 'elim', rivals: 5, pace: 0.86, car: 'kart_s2', goal: { type: 'survive' }, reward: 2500,
+    S({ id: 's5_4', ch: '2', title: '合宿サバイバル', track: 'isetec', mode: 'elim', rivals: 5, pace: 0.86, car: 'kart_s2', goal: { type: 'survive' }, reward: 2500,
       scene: [
         { bg: 'circuit' },
         { narr: '合宿三日目。最後の夜練前に、部内の「サバイバルレース」が、開かれた。一周ごとに、最下位が、脱落する。' },
@@ -52,7 +52,7 @@
         ['haruka', '……きれい。……この夏のこと、一生、忘れないと、思う。', 'emo:smile']
       ] }),
 
-    S({ id: 's4_t8', ch: '2', title: '先輩の手首', talk: true, track: 'isetec', goal: { type: 'talk' }, reward: 800,
+    S({ id: 's5_t8', ch: '2', title: '先輩の手首', talk: true, track: 'isetec', goal: { type: 'talk' }, reward: 800,
       scene: [
         { bg: 'circuit' },
         { narr: '合宿四日目の、早朝。まだ、薄暗い、校庭。ハルカは、水を飲みに、ピットに向かった。' },
@@ -83,7 +83,7 @@
         ] }
       ] }),
 
-    S({ id: 's4_t9', ch: '2', title: '桜ヶ丘の来訪', talk: true, track: 'fujisp', goal: { type: 'talk' }, reward: 700,
+    S({ id: 's5_t9', ch: '2', title: '桜ヶ丘の来訪', talk: true, track: 'fujisp', goal: { type: 'talk' }, reward: 700,
       scene: [
         { bg: 'circuit' },
         { narr: '合宿五日目。午後二時。合宿所の駐車場に、白い大型トラックが、ゆっくりと入ってきた。荷台には、カートが、整然と並べられている。' },
@@ -105,7 +105,7 @@
         ['ren', '……楽しみに、しています。', 'emo:smile']
       ] }),
 
-    S({ id: 's4_5', ch: '2', title: '雨のデュエル', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 3, pace: 1.0, weather: 'rain', car: 'kart_s2', goal: { type: 'finish' }, reward: 3000,
+    S({ id: 's5_5', ch: '2', title: '雨のデュエル', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 3, pace: 1.0, weather: 'rain', car: 'kart_s2', goal: { type: 'finish' }, reward: 3000,
       scene: [
         { bgm: 'tension' },
         { bg: 'circuit', weather: 'rain' },
@@ -129,7 +129,7 @@
         { narr: 'レンは、一瞬、何か言いかけた。けれど、結局、黙って、一礼し、ヘルメットを抱えて、桜ヶ丘のピットへ戻っていった。その背中が、少しだけ、揺れていた。' }
       ] }),
 
-    S({ id: 's4_t10', ch: '2', title: 'コンビニの夜', talk: true, track: 'fujisp', goal: { type: 'talk' }, reward: 800,
+    S({ id: 's5_t10', ch: '2', title: 'コンビニの夜', talk: true, track: 'fujisp', goal: { type: 'talk' }, reward: 800,
       scene: [
         { bg: 'coast' },
         { narr: 'その夜。合宿所から徒歩十分の、小さなコンビニ。ハルカは、みんなの分のアイスを、買いに来ていた。' },
@@ -160,7 +160,7 @@
       ] }),
 
     /* ===================== 第三章 ===================== */
-    S({ id: 's4_t11', ch: '3', title: '文化祭の準備', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 800,
+    S({ id: 's5_t11', ch: '3', title: '文化祭の準備', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 800,
       scene: [
         { title: '第三章', sub: '文化祭と期末テスト' },
         { bg: 'city' },
@@ -190,7 +190,7 @@
         ] }
       ] }),
 
-    S({ id: 's4_6', ch: '3', title: '文化祭の体験コース', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s2', goal: { type: 'lap', factor: 0.55 }, reward: 2500,
+    S({ id: 's5_6', ch: '3', title: '文化祭の体験コース', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s2', goal: { type: 'lap', factor: 0.55 }, reward: 2500,
       scene: [
         { bg: 'circuit' },
         ['minato', '本番前の、最終確認。……星野さん、お手本の、一周を、走ってほしい。ゆっくり、丁寧に、安全に。', 'right emo:cool'],
@@ -205,7 +205,7 @@
         ['haruka', 'うん。……走るのって、勝つことだけじゃ、ないんだなって、改めて、思った。', 'emo:smile']
       ] }),
 
-    S({ id: 's4_t12', ch: '3', title: '文化祭の日', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
+    S({ id: 's5_t12', ch: '3', title: '文化祭の日', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
       scene: [
         { bg: 'city' },
         { narr: '文化祭、当日。校門には、色とりどりの旗。校庭には、屋台の煙。模擬店、お化け屋敷、バンドの演奏、ダンスパフォーマンス。' },
@@ -233,7 +233,7 @@
         { narr: '夕陽に染まる、校庭。赤い屋根の整備小屋が、いつもより、少しだけ、誇らしげに、見えた。' }
       ] }),
 
-    S({ id: 's4_t13', ch: '3', title: '期末テスト', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
+    S({ id: 's5_t13', ch: '3', title: '期末テスト', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
       scene: [
         { bg: 'city' },
         { narr: '十月上旬。期末テストの、前日。放課後の、図書室。窓際の席に、ハルカとミナトとコナツが、教科書を広げて、向かい合っていた。' },
@@ -264,7 +264,7 @@
         ['haruka', '……うん。一緒に、がんばろう。', 'emo:smile']
       ] }),
 
-    S({ id: 's4_7', ch: '3', title: '県大会・予選', track: 'isetec', mode: 'race', laps: 4, rivals: 7, pace: 0.88, car: 'kart_s2', goal: { type: 'place', n: 3 }, reward: 4000,
+    S({ id: 's5_7', ch: '3', title: '県大会・予選', track: 'isetec', mode: 'race', laps: 4, rivals: 7, pace: 0.88, car: 'kart_s2', goal: { type: 'place', n: 3 }, reward: 4000,
       scene: [
         { bgm: 'tension' },
         { bg: 'circuit' },
@@ -285,7 +285,7 @@
         { narr: 'ピットに戻ったハルカを、仲間たちが、揉みくちゃにした。その輪の外で、コウキが、右手をそっと隠しながら、笑っていた。' }
       ] }),
 
-    S({ id: 's4_t14', ch: '3', title: '決勝前夜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
+    S({ id: 's5_t14', ch: '3', title: '決勝前夜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
       scene: [
         { bg: 'circuit' },
         { narr: '予選のあと、会場の脇の、ホテルの食堂。部員たちが、お疲れ様会を、開いていた。長テーブルに、唐揚げと、焼きそばと、大皿のサラダ。' },
@@ -313,7 +313,7 @@
         ['haruka', '（……おじいちゃん。明日、見ててね。最後の一周まで、全部、話すから）', 'emo:smile']
       ] }),
 
-    S({ id: 's4_8', ch: '3', title: '県大会・決勝', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 4, pace: 1.02, car: 'kart_s2', goal: { type: 'win' }, reward: 6000,
+    S({ id: 's5_8', ch: '3', title: '県大会・決勝', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 4, pace: 1.02, car: 'kart_s2', goal: { type: 'win' }, reward: 6000,
       scene: [
         { bgm: 'tension' },
         { bg: 'circuit' },
