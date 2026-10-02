@@ -37,7 +37,8 @@
 
     S({ id: 's2_t13', ch: '5', title: '先生の告白', talk: true, track: 'highway', goal: { type: 'talk' }, reward: 1000,
       scene: [
-        { bg: 'highway' },
+        { bgm: 'sad' },
+        { bg: 'classroom' },
         { narr: '大黒パーキングの端。自販機の青白い光の下で、トウコと先生は、ベンチに並んで座った。缶コーヒーは、二つとも、手つかずのまま冷めていった。' },
         ['shindo', '八月十一日の夜、私は非番でした。昼は白衣、夜は黒いポルシェ。……そういう二重生活でした。', 'right emo:sad'],
         { when: 'told', lines: [
@@ -87,7 +88,8 @@
 
     S({ id: 's2_t14', ch: '5', title: 'ふたりの夜', talk: true, track: 'city', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'city' },
+        { bgm: 'night' },
+        { bg: 'seaside' },
         { narr: '明け方、築地の裏通り。二十四時間営業の、小さな定食屋。トウコと先生は、湯気の立つ味噌汁を前に、向かい合って座っていた。' },
         ['shindo', '……すみません。こんな時間に、付き合わせてしまって。', 'right emo:smile'],
         ['touko', '私も、お腹、空いてたので。……先生、意外と、よく食べるんですね。', 'emo:smile'],
@@ -241,7 +243,8 @@
 
     S({ id: 's2_t17', ch: '6', title: '出頭の道', talk: true, track: 'highway', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'highway' },
+        { bgm: 'sad' },
+        { bg: 'station' },
         { narr: '東の空が、わずかに白み始めていた。後藤は、赤いカウンタックのドアを開けた。出頭するため、湾岸署へ向かう途中だった。' },
         { when: 'revenge', lines: [
           { narr: 'しかし、トウコの胸の中の炎は、まだ消えていなかった。彼女は、後藤の車を、じっと見つめていた。' },
@@ -279,7 +282,8 @@
 
     S({ id: 's2_t18', ch: '6', title: '夜明け前の救命室', talk: true, track: 'city', goal: { type: 'talk' }, reward: 1000,
       scene: [
-        { bg: 'city' },
+        { bgm: 'tension' },
+        { bg: 'hospital' },
         { narr: '午前五時。晴海中央病院、救命救急センター。三か月前と同じ、あの一番ベッドに、後藤が運ばれてきた。' },
         ['hasegawa', '搬入！ 銃創、左肩。出血、多量。先生、お願いします！', 'right emo:shock'],
         ['shindo', 'すぐに手術室へ。……神崎さん、第一助手に。やれますか。', 'emo:cool'],
@@ -304,7 +308,8 @@
 
     S({ id: 's2_t19', ch: '6', title: 'それぞれの朝', talk: true, track: 'harbor', goal: { type: 'talk' }, reward: 1000,
       scene: [
-        { bg: 'harbor' },
+        { bgm: 'ending' },
+        { bg: 'seaside' },
         { narr: '事件から一週間。新聞の一面には、「東亜信用銀行　不正融資事件」「久我興産　会長ら逮捕」の文字が踊った。' },
         { when: 'route==1', lines: [
           ['kurosawa', '久我の逮捕状が、今朝、出た。後藤の証言と、修くんのテープ。二つが、決め手だった。', 'right emo:smile'],

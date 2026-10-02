@@ -1201,6 +1201,51 @@
       case 'buzz': px(6, 3, 12, 2, shade(hair, 1.2)); break;
     }
     var mouth = shade(f.skin, 0.6), brow = shade(f.hair === f.skin ? '#555555' : f.hair, 0.8);
+    var EXTRA = { laugh: 1, worry: 1, blush: 1, cry: 1, think: 1, sleepy: 1, wink: 1, smug: 1, determined: 1, panic: 1, tired: 1, gentle: 1 };
+    if (EXTRA[emo]) {
+      var ey = f.eyes, tear = '#8ad7ff', cheek = 'rgba(240,110,110,.5)', dark = '#3a1010';
+      switch (emo) {
+        case 'laugh':   // 目を細めて大きく笑う
+          px(7, 11, 1, 1, ey); px(8, 10, 2, 1, ey); px(10, 11, 1, 1, ey); px(13, 11, 1, 1, ey); px(14, 10, 2, 1, ey); px(16, 11, 1, 1, ey);
+          px(9, 14, 6, 1, mouth); px(10, 15, 4, 2, dark); px(11, 16, 2, 1, '#e57373'); px(7, 13, 2, 1, cheek); px(15, 13, 2, 1, cheek); break;
+        case 'worry':   // 眉がハの字、小さな口、汗
+          px(8, 10, 2, 2, ey); px(14, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 10, 1, 1, '#fff');
+          px(8, 8, 2, 1, brow); px(10, 7, 1, 1, brow); px(14, 8, 2, 1, brow); px(13, 7, 1, 1, brow);
+          px(10, 16, 1, 1, mouth); px(11, 15, 2, 1, mouth); px(13, 16, 1, 1, mouth); px(18, 7, 1, 2, tear); break;
+        case 'blush':   // はにかみ（ほおが赤い）
+          px(8, 10, 2, 1, ey); px(14, 10, 2, 1, ey); px(8, 11, 1, 1, ey); px(15, 11, 1, 1, ey);
+          px(7, 12, 3, 2, cheek); px(14, 12, 3, 2, cheek); px(10, 15, 4, 1, mouth); px(9, 14, 1, 1, mouth); px(14, 14, 1, 1, mouth); break;
+        case 'cry':     // なみだ
+          px(8, 10, 2, 2, ey); px(14, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 10, 1, 1, '#fff');
+          px(9, 8, 2, 1, brow); px(7, 9, 2, 1, brow); px(13, 8, 2, 1, brow); px(15, 9, 2, 1, brow);
+          px(8, 12, 1, 4, tear); px(15, 12, 1, 4, tear); px(7, 13, 1, 2, tear); px(16, 13, 1, 2, tear);
+          px(9, 15, 6, 1, mouth); px(9, 16, 1, 1, mouth); px(14, 16, 1, 1, mouth); break;
+        case 'think':   // 片眉を上げて考える
+          px(8, 10, 2, 2, ey); px(14, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 10, 1, 1, '#fff');
+          px(7, 8, 3, 1, brow); px(14, 7, 3, 1, brow); px(10, 15, 3, 1, mouth); px(13, 14, 1, 1, mouth); break;
+        case 'sleepy':  // うとうと
+          px(8, 11, 3, 1, ey); px(14, 11, 3, 1, ey); px(8, 8, 3, 1, brow); px(14, 8, 3, 1, brow); px(11, 15, 2, 2, mouth); px(18, 6, 2, 1, '#fff'); px(19, 5, 2, 1, '#fff'); break;
+        case 'wink':    // ウインク
+          px(8, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 11, 3, 1, ey); px(15, 10, 1, 1, ey);
+          px(9, 14, 1, 1, mouth); px(14, 14, 1, 1, mouth); px(10, 15, 4, 1, mouth); px(15, 13, 2, 1, cheek); break;
+        case 'smug':    // ドヤ顔（半目と片側だけ上がる口）
+          px(8, 11, 3, 1, ey); px(14, 11, 3, 1, ey); px(8, 10, 3, 1, brow); px(14, 10, 3, 1, brow);
+          px(10, 15, 4, 1, mouth); px(14, 14, 2, 1, mouth); px(16, 13, 1, 1, mouth); break;
+        case 'determined': // 決意（まっすぐな目と、きゅっと結んだ口）
+          px(8, 10, 2, 2, ey); px(14, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 10, 1, 1, '#fff');
+          px(7, 9, 3, 1, brow); px(14, 9, 3, 1, brow); px(8, 8, 1, 1, brow); px(15, 8, 1, 1, brow); px(10, 15, 4, 1, mouth); px(10, 14, 4, 1, shade(f.skin, 0.8)); break;
+        case 'panic':   // あわてる（目が丸く、汗、波うつ口）
+          px(7, 9, 4, 4, '#fff'); px(13, 9, 4, 4, '#fff'); px(9, 10, 1, 2, ey); px(14, 10, 1, 2, ey);
+          px(8, 7, 3, 1, brow); px(13, 7, 3, 1, brow); px(9, 15, 1, 1, mouth); px(10, 16, 1, 1, mouth); px(11, 15, 1, 1, mouth); px(12, 16, 1, 1, mouth); px(13, 15, 1, 1, mouth);
+          px(5, 8, 1, 2, tear); px(19, 7, 1, 2, tear); px(18, 10, 1, 1, tear); break;
+        case 'tired':   // つかれた顔
+          px(8, 11, 2, 1, ey); px(14, 11, 2, 1, ey); px(8, 12, 2, 1, shade(f.skin, 0.8)); px(14, 12, 2, 1, shade(f.skin, 0.8));
+          px(8, 9, 2, 1, brow); px(14, 9, 2, 1, brow); px(10, 16, 4, 1, mouth); px(9, 15, 1, 1, mouth); px(14, 15, 1, 1, mouth); break;
+        case 'gentle':  // おだやかな笑み
+          px(8, 10, 2, 1, ey); px(14, 10, 2, 1, ey); px(7, 11, 1, 1, ey); px(10, 11, 1, 1, ey); px(13, 11, 1, 1, ey); px(16, 11, 1, 1, ey);
+          px(8, 8, 2, 1, brow); px(14, 8, 2, 1, brow); px(10, 15, 4, 1, mouth); px(9, 14, 1, 1, mouth); px(14, 14, 1, 1, mouth); break;
+      }
+    } else {
     if (emo === 'shock') { px(7, 9, 4, 3, '#fff'); px(13, 9, 4, 3, '#fff'); px(8, 10, 1, 1, f.eyes); px(14, 10, 1, 1, f.eyes); }
     else if (emo === 'cool') { px(8, 11, 2, 1, f.eyes); px(14, 11, 2, 1, f.eyes); }
     else if (emo === 'smile') { px(8, 10, 2, 1, f.eyes); px(14, 10, 2, 1, f.eyes); px(7, 11, 1, 1, f.eyes); px(10, 11, 1, 1, f.eyes); px(13, 11, 1, 1, f.eyes); px(16, 11, 1, 1, f.eyes); }
@@ -1210,6 +1255,7 @@
     else if (emo === 'smile') { px(9, 14, 1, 1, mouth); px(14, 14, 1, 1, mouth); px(10, 15, 4, 1, mouth); }
     else if (emo === 'shock') { px(11, 14, 2, 3, '#3a1010'); }
     else px(10, 15, 4, 1, mouth);
+    }
     switch (f.acc) {
       case 'goggles': px(6, 4, 12, 2, '#5d4037'); px(7, 4, 4, 2, '#80deea'); px(13, 4, 4, 2, '#80deea'); break;
       case 'headset': px(5, 8, 1, 5, '#222'); px(18, 8, 1, 5, '#222'); px(5, 3, 14, 1, '#222'); px(15, 14, 4, 1, '#222'); break;
@@ -1350,7 +1396,7 @@
       if (src) { src.total = -1e9; src.cop = false; }   // 巡回中のパトカーが追跡に移る
       cops.push({ name: 'POLICE', color: '#f5f5f5', body: 'police', total: pz() - gapBack, offset: P.x, speed: Math.max(P.speed, MAX * 0.5), wm: 1, cop: true, siren: true });
       wantedT = 0; escapeT = 0; bustHits = 0;
-      say(L('🚨 パトカーが追ってくる！', '🚨 POLICE PURSUIT!'), 2.2); sfx('bad');
+      say(L('パトカーが追ってくる！', 'POLICE PURSUIT!'), 2.2); sfx('bad');
       if (!sirenA && R.sirenAudio) sirenA = R.sirenAudio();
       if (cfg.onPursuit) cfg.onPursuit(true);
     }
@@ -1391,7 +1437,7 @@
       }
       if (sig.orbis && !orbisDone && pz() > spec.orbisSeg * SEG) {
         orbisDone = true;
-        if (limitKmh && kmNow > limitKmh + 40) { sig.orbis.flash = 0.3; flash = 0.25; pop(L('📸 オービスが光った…', '📸 Speed camera flash!'), '#ffffff'); if (cfg.onViolation) cfg.onViolation('orbis', true, kmNow - limitKmh); }
+        if (limitKmh && kmNow > limitKmh + 40) { sig.orbis.flash = 0.3; flash = 0.25; pop(L('オービスが光った…', 'Speed camera flash!'), '#ffffff'); if (cfg.onViolation) cfg.onViolation('orbis', true, kmNow - limitKmh); }
       }
       if (sig.orbis && sig.orbis.flash > 0) sig.orbis.flash -= dt;
       // 追跡
@@ -2820,7 +2866,7 @@
           var cg = Math.round((pz() - cops[0].total) / SEG * MPS);
           var blink = Math.floor(t0 * 4) % 2;
           panel(g, W / 2 - 110, 92 + (cfg.hud ? 50 : 0), 220, 26);
-          text(g, (blink ? '🚨 ' : '　 ') + L('追跡中  ', 'PURSUIT  ') + cg + 'm' + L('  400m 離せば逃げ切り', '  get 400m away'), W / 2, 110 + (cfg.hud ? 50 : 0), 11, blink ? '#ff5252' : '#7fb0ff', 'center');
+          text(g, (blink ? '■ ' : '　 ') + L('追跡中  ', 'PURSUIT  ') + cg + 'm' + L('  400m 離せば逃げ切り', '  get 400m away'), W / 2, 110 + (cfg.hud ? 50 : 0), 11, blink ? '#ff5252' : '#7fb0ff', 'center');
         }
       }
       // 後ろから迫る車
@@ -2847,7 +2893,7 @@
         panel(g, rx, ry, rw, 40);
         if (!cache['face_' + radio.who] && R.CHARS[radio.who]) { var fc = document.createElement('canvas'); fc.width = fc.height = 48; R.drawPortrait(fc, R.CHARS[radio.who].face); cache['face_' + radio.who] = fc; }
         if (cache['face_' + radio.who]) g.drawImage(cache['face_' + radio.who], rx + 4, ry + 4, 32, 32);
-        text(g, '📻 ' + radio.name, rx + 42, ry + 15, 9, radio.color);
+        text(g, '[無線] ' + radio.name, rx + 42, ry + 15, 9, radio.color);
         text(g, radio.text.length > 34 ? radio.text.slice(0, 34) + '…' : radio.text, rx + 42, ry + 31, 11, '#ffffff');
         g.globalAlpha = 1;
       }

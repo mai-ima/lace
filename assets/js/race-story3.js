@@ -224,7 +224,8 @@
 
     S({ id: 's3_t4', ch: '1', title: 'ドクの工房', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { bg: 'forest' },
+        { bgm: 'story' },
+        { bg: 'garage_in' },
         { narr: '日曜の朝。山の裏手の、トタン屋根の工場。「ドクの工房」の看板は、半分剥がれて、斜めに垂れていた。' },
         ['doc', '入りな。……散らかってるのは、勘弁な。', 'right emo:smile'],
         { narr: '壁一面に、年代物のレースポスターが貼られている。ル・マン、鈴鹿、ニュルブルクリンク。その隅に、小さな白黒の写真。若き日のドクが、ピットで、ヘルメットを抱えて笑っていた。' },
@@ -252,7 +253,8 @@
 
     S({ id: 's3_t5', ch: '1', title: 'ガードレールの花', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { bg: 'forest' },
+        { bgm: 'sad' },
+        { bg: 'shrine' },
         { narr: '「ヤマト・チューニング」。国道沿いの、小さな整備工場。看板の下には、色とりどりのステッカーを貼った、改造車が並んでいる。' },
         ['ryo', 'カズマ君。……来てくれたか。コーヒー、飲むか。', 'right emo:smile'],
         ['kazuma', 'いただきます。……ここ、リョウさんのお店なんですね。', 'emo:cool'],

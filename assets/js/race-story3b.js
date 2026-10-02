@@ -67,7 +67,8 @@
 
     S({ id: 's3_t7', ch: '2', title: '負けた夜の、台所', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { bg: 'forest' },
+        { bgm: 'sad' },
+        { bg: 'bedroom' },
         { narr: '午前二時。カズマは、静かに、給油所の裏口を開けた。台所の灯りが、まだ、ついていた。' },
         ['michiko', '……おかえり。ご飯、温めるわね。', 'right emo:smile'],
         ['kazuma', '母さん。起きてたの。……ごめん、遅くなって。', 'emo:sad'],
@@ -149,7 +150,7 @@
     S({ id: 's3_t9', ch: '3', title: '町民説明会', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 800,
       scene: [
         { title: '第三章', sub: '封鎖' },
-        { bg: 'forest' },
+        { bg: 'classroom' },
         { narr: '町の公民館、二階の大広間。パイプ椅子が百脚、ぎっしりと並べられていた。壁際に、町の職員。演台には、町長。' },
         ['mayor', '——では、ただいまより、榛名ヶ丘町、夜間交通安全対策の、住民説明会を、開催いたします。', 'right emo:cool'],
         { narr: '前方に座る、中年の男が、手を挙げる。「夜中に、エンジン音が、うるさくて眠れない」。別の女性が、続く。「子どもが、怖がって、夜、泣くんです」。' },
@@ -187,7 +188,8 @@
     /* ----- ルート 1: 合法（署名・公認イベント） ----- */
     S({ id: 's3_t10', ch: '3', title: '署名の夏', talk: true, only: 'route==1', track: 'r_haruna', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'forest' },
+        { bgm: 'festival' },
+        { bg: 'festival' },
         { narr: '試験期間の、一か月目。カズマは、ガクとヒナタを連れて、町中を、署名用紙を持って歩き回っていた。' },
         ['gaku', 'しかし、暑ぃ……。なんで、俺たちが、こんな、役場の窓口みたいなこと。', 'right emo:sad'],
         ['hinata', 'ガクさん、文句言わない！ ほら、次、あそこの八百屋さん！', 'emo:smile shake'],

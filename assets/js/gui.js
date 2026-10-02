@@ -322,7 +322,7 @@
         });
 
         var rowE = section(b, L('表示と音', 'Display & sound'));
-        rowE.appendChild(button((enabled() ? '☑ ' : '☐ ') + L('効果音', 'Sound'), 'gbtn' + (enabled() ? ' on' : ''), function () {
+        rowE.appendChild(button((enabled() ? '[入] ' : '[切] ') + L('効果音', 'Sound'), 'gbtn' + (enabled() ? ' on' : ''), function () {
           TB.Sfx.set(!enabled()); play('click'); render();
         }));
 

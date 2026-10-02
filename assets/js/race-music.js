@@ -100,6 +100,90 @@
         [52, 'M', [[0, 68, 16]]]
       ]
     },
+    school: {
+      bpm: 128, drums: 'pop', bass: 'walk', ep: true, pad: true, leadWave: 'tri',
+      intro: [[48, 'M'], [55, 'M'], [57, 'm'], [53, 'M']],
+      loop: [
+        [48, 'M', [[0, 76, 2], [2, 79, 2], [4, 84, 4], [8, 83, 2], [10, 79, 2], [12, 76, 4]]],
+        [55, 'M', [[0, 74, 2], [2, 79, 2], [4, 83, 4], [8, 81, 2], [10, 79, 2], [12, 74, 4]]],
+        [57, 'm', [[0, 76, 2], [2, 81, 2], [4, 84, 4], [8, 83, 2], [10, 81, 2], [12, 76, 4]]],
+        [53, 'M', [[0, 77, 4], [4, 81, 4], [8, 79, 4], [12, 77, 4]]],
+        [48, 'M', [[0, 84, 4], [4, 83, 2], [6, 81, 2], [8, 79, 4], [12, 76, 4]]],
+        [55, 'M', [[0, 79, 2], [2, 83, 2], [4, 86, 4], [8, 83, 4], [12, 79, 4]]],
+        [53, 'M', [[0, 81, 4], [4, 84, 4], [8, 81, 2], [10, 79, 2], [12, 77, 4]]],
+        [55, 'M', [[0, 79, 8], [8, 74, 8]]]
+      ]
+    },
+    sad: {
+      bpm: 66, drums: null, bass: 'sustain', piano: true, pad: true, leadWave: 'piano', soft: true,
+      intro: [[53, 'M'], [55, 'M']],
+      loop: [
+        [53, 'M7', [[0, 77, 8], [8, 76, 4], [12, 72, 4]]],
+        [52, 'm7', [[0, 71, 6], [6, 72, 2], [8, 76, 8]]],
+        [50, 'm7', [[0, 74, 8], [8, 72, 4], [12, 69, 4]]],
+        [55, 'd7', [[0, 71, 16]]],
+        [53, 'M7', [[0, 77, 6], [6, 79, 2], [8, 81, 8]]],
+        [52, 'm7', [[0, 79, 4], [4, 76, 4], [8, 72, 8]]],
+        [57, 'm', [[0, 76, 8], [8, 72, 4], [12, 69, 4]]],
+        [55, 'sus', [[0, 74, 10], [10, 71, 6]]]
+      ]
+    },
+    festival: {
+      bpm: 124, drums: 'pop', bass: 'pulse', arp: true, pad: true, leadWave: 'square',
+      intro: [[50, 'm'], [50, 'm'], [53, 'M'], [55, 'M']],
+      loop: [
+        [50, 'm', [[0, 74, 2], [2, 77, 2], [4, 79, 2], [6, 81, 2], [8, 84, 4], [12, 81, 4]]],
+        [50, 'm', [[0, 79, 2], [2, 81, 2], [4, 79, 2], [6, 77, 2], [8, 74, 8]]],
+        [53, 'M', [[0, 77, 2], [2, 79, 2], [4, 81, 2], [6, 84, 2], [8, 86, 4], [12, 84, 4]]],
+        [55, 'M', [[0, 84, 2], [2, 81, 2], [4, 79, 2], [6, 77, 2], [8, 79, 8]]],
+        [50, 'm', [[0, 86, 4], [4, 84, 2], [6, 81, 2], [8, 79, 4], [12, 77, 4]]],
+        [53, 'M', [[0, 79, 2], [2, 77, 2], [4, 74, 4], [8, 77, 4], [12, 79, 4]]],
+        [55, 'M', [[0, 81, 4], [4, 79, 2], [6, 77, 2], [8, 79, 4], [12, 81, 4]]],
+        [50, 'm', [[0, 74, 12]]]
+      ]
+    },
+    night: {
+      bpm: 96, drums: 'wave', bass: 'walk', ep: true, pad: true, leadWave: 'tri', soft: true,
+      intro: [[57, 'm7'], [50, 'm7'], [55, 'M7'], [52, 'm7']],
+      loop: [
+        [57, 'm7', [[0, 76, 4], [4, 79, 4], [8, 81, 6], [14, 79, 2]]],
+        [50, 'm7', [[0, 77, 4], [4, 74, 4], [8, 72, 8]]],
+        [55, 'M7', [[0, 71, 4], [4, 74, 4], [8, 76, 8]]],
+        [52, 'm7', [[0, 79, 6], [6, 76, 2], [8, 74, 8]]],
+        [57, 'm7', [[0, 81, 4], [4, 83, 4], [8, 84, 6], [14, 81, 2]]],
+        [50, 'm7', [[0, 81, 4], [4, 77, 4], [8, 74, 8]]],
+        [55, 'M7', [[0, 79, 4], [4, 76, 4], [8, 74, 4], [12, 71, 4]]],
+        [52, 'm7', [[0, 76, 12]]]
+      ]
+    },
+    ending: {
+      bpm: 84, drums: null, bass: 'sustain', piano: true, pad: true, leadWave: 'tri',
+      intro: [[55, 'M'], [52, 'm']],
+      loop: [
+        [55, 'M', [[0, 79, 4], [4, 83, 4], [8, 86, 8]]],
+        [52, 'm', [[0, 83, 4], [4, 79, 4], [8, 76, 8]]],
+        [48, 'M', [[0, 79, 6], [6, 76, 2], [8, 72, 8]]],
+        [50, 'M', [[0, 78, 8], [8, 74, 8]]],
+        [55, 'M', [[0, 86, 4], [4, 83, 4], [8, 79, 8]]],
+        [57, 'm', [[0, 84, 4], [4, 81, 4], [8, 76, 8]]],
+        [48, 'M', [[0, 84, 8], [8, 79, 4], [12, 76, 4]]],
+        [55, 'M', [[0, 83, 16]]]
+      ]
+    },
+    final: {
+      bpm: 160, drums: 'euro', bass: 'octave', arp: true, pad: true, leadWave: 'saw', dark: true,
+      intro: [[52, 'm'], [48, 'M'], [50, 'M'], [52, 'm']],
+      loop: [
+        [52, 'm', [[0, 79, 2], [2, 79, 2], [4, 83, 2], [6, 86, 2], [8, 83, 4], [12, 79, 4]]],
+        [48, 'M', [[0, 79, 2], [2, 76, 2], [4, 79, 2], [6, 84, 2], [8, 83, 8]]],
+        [50, 'M', [[0, 78, 2], [2, 81, 2], [4, 86, 4], [8, 85, 4], [12, 81, 4]]],
+        [52, 'm', [[0, 83, 8], [8, 79, 4], [12, 76, 4]]],
+        [52, 'm', [[0, 88, 4], [4, 86, 2], [6, 83, 2], [8, 86, 4], [12, 91, 4]]],
+        [48, 'M', [[0, 88, 4], [4, 84, 4], [8, 79, 4], [12, 84, 4]]],
+        [50, 'M', [[0, 90, 4], [4, 88, 2], [6, 86, 2], [8, 85, 8]]],
+        [47, 'd7', [[0, 83, 12], [12, 86, 2], [14, 83, 2]]]
+      ]
+    },
     tension: {
       bpm: 130, drums: 'tension', bass: 'sixteen', pad: true, dark: true, soft: true,
       intro: [[49, 'm'], [45, 'M']],
@@ -219,7 +303,9 @@
   }
   function tick() {
     if (!cur || !ac) return;
+    if (ac.state === 'suspended') { try { ac.resume(); } catch (e) { /* ignore */ } }
     var la = ac.currentTime + 0.15;
+    if (next < ac.currentTime - 0.3) next = ac.currentTime + 0.05;   // 裏画面に回っていたあと、遅れた分を一気に鳴らさない
     while (next < la) { playStep(next); next += 60 / cur.bpm / 4; }
   }
 
@@ -241,7 +327,7 @@
     // 次の曲のために新しいバスを用意する（鳴り残りは古いバスごと消える）
     if (ac) { var old = bus; setTimeout(function () { try { old.disconnect(); } catch (e) { /* ignore */ } }, 1200); bus = ac.createGain(); bus.gain.value = 0.0001; bus.connect(comp); delay.disconnect(); var dl = ac.createGain(); dl.gain.value = 0.22; delay.connect(dl); dl.connect(bus); var fb = ac.createGain(); fb.gain.value = 0.28; delay.connect(fb); fb.connect(delay); }
   };
-  M.refresh = function () { if (bus && cur && ac) bus.gain.setTargetAtTime(Math.max(0.0001, level()), ac.currentTime, 0.1); if (cur && level() <= 0) M.stop(true); };
+  M.refresh = function () { if (M.current && !cur && level() > 0) { var nm = M.current; M.current = null; M.play(nm); return; } if (bus && cur && ac) bus.gain.setTargetAtTime(Math.max(0.0001, level()), ac.currentTime, 0.1); if (cur && level() <= 0) M.stop(true); };
   M.jingle = function (kind) {
     var keep = M.current; M.stop(true);
     if (!setup() || level() <= 0) return;
@@ -265,6 +351,44 @@
     if (cfg.mode === 'time' || cfg.mode === 'brake' || cfg.mode === 'drag' || cfg.mode === 'gymkhana') return 'drive';
     return 'battle';
   };
+
+  /* ---------- アルバム（曲を順に聴く） ---------- */
+  var TRACKLIST = [
+    ['title', 'タイトル', 'メニューで流れる、静かなシンセウェイブ。'],
+    ['school', '放課後の坂道', '学校の場面。明るくて軽い、昼下がりのポップ。'],
+    ['story', 'ピアノの小さな部屋', '会話の場面のピアノ。ゆっくり、静かに。'],
+    ['sad', '雨のあとで', 'しんみりした場面。切ないピアノ。'],
+    ['night', '夜の高速を降りて', '夜景を眺める、シティポップ風の曲。'],
+    ['drive', 'ドライブ・ウェイ', 'オープンワールドを走るときの、涼しい曲。'],
+    ['festival', '提灯の夜', '祭りの夜の、和風のにぎやかな曲。'],
+    ['tension', '張りつめた空気', '緊迫した場面。低く、せまってくる曲。'],
+    ['battle', 'バトル・ライン', 'レースで流れる、ユーロビート風の曲。'],
+    ['boss', 'ボス戦', '強敵との勝負。暗く、激しい曲。'],
+    ['final', '最後の勝負', '最終決戦の曲。速く、高く駆け上がる。'],
+    ['ending', 'その先へ', 'エンディングの曲。明るく、おだやかに終わる。']
+  ];
+  function songSecs(name) { var S = SONGS[name]; return (S.intro.length + S.loop.length * 2) * 16 * 60 / S.bpm / 4; }
+  var alb = { active: false, idx: 0, repeat: 'all', timer: 0 };
+  function albPlay(i) {
+    clearTimeout(alb.timer);
+    alb.active = true; alb.idx = (i + TRACKLIST.length) % TRACKLIST.length;
+    var id = TRACKLIST[alb.idx][0];
+    M.stop(true); M.play(id);
+    // 一曲ぶん（前奏 + 本編 1 周）が終わったら、次へ（または同じ曲をもう一度）
+    alb.timer = setTimeout(function () {
+      if (!alb.active) return;
+      if (alb.repeat === 'one') albPlay(alb.idx); else if (alb.repeat === 'all' || alb.idx < TRACKLIST.length - 1) albPlay(alb.idx + 1); else alb.stop();
+      if (alb.onChange) alb.onChange();
+    }, (songSecs(id) + 1.2) * 1000);
+    if (alb.onChange) alb.onChange();
+  }
+  alb.tracks = TRACKLIST.map(function (t) { return { id: t[0], name: t[1], desc: t[2], secs: Math.round(songSecs(t[0])) }; });
+  alb.play = albPlay;
+  alb.next = function () { albPlay(alb.idx + 1); };
+  alb.prev = function () { albPlay(alb.idx - 1); };
+  alb.stop = function () { clearTimeout(alb.timer); var was = alb.active; alb.active = false; if (was) M.stop(true); if (alb.onChange) alb.onChange(); };
+  alb.setRepeat = function (r) { alb.repeat = r; };
+  M.album = alb;
   M.SONGS = SONGS;
   M.tap = function () { return comp; };   // テスト用（出力の手前）
 })();

@@ -19,7 +19,7 @@
   /* ===== 2a のあと：峠の茶屋・夜のガレージ ===== */
   after('2a', S({ id: '2t1', ch: '2', title: '峠の茶屋「ひなた」', talk: true, track: 'iroha', goal: { type: 'talk' }, reward: 600,
     scene: [
-      { bg: 'iroha' },
+      { bg: 'teahouse' },
       { narr: '勝負のあと。ゲンは何も言わず、山道の途中の、小さな茶屋に車を停めた。軒先の提灯に、「ひなた」と書いてある。' },
       ['hana', 'いらっしゃい。……あらあら、ゲンさん。珍しいわね、お連れさんなんて。', 'right emo:smile'],
       ['gen', '客だ。熱いお茶と、握り飯を二つ。', 'emo:cool'],
@@ -48,7 +48,7 @@
 
   after('2t1', S({ id: '2t2', ch: '2', title: '夜のガレージ', talk: true, track: 'iroha', goal: { type: 'talk' }, reward: 600,
     scene: [
-      { bg: 'garage' },
+      { bg: 'garage_in' },
       { narr: '夜。ガレージの蛍光灯が、ジジ、と音を立てていた。ミナが、床に寝転がって、ハチロクの下に潜り込んでいる。' },
       ['mina', 'ユウ、ブレーキフルードの色、見て！ ほら、こんなに濁ってる！ 紅葉の勝負で、よく止まったなあ！', 'right emo:angry'],
       ['you', '悪い。……自分の車の、ことなのに。', 'emo:sad'],
@@ -127,7 +127,7 @@
   /* ===== 2c のあと：山小屋の一枚の写真・ソウイチの声 ===== */
   after('2c', S({ id: '2t4', ch: '2', title: '三人の写真', talk: true, track: 'ridge', goal: { type: 'talk' }, reward: 800,
     scene: [
-      { bg: 'ridge' },
+      { bg: 'teahouse' },
       { narr: 'デーモンとの勝負のあと。夜の山小屋。囲炉裏の火が、三人の顔を、ゆらゆらと照らしていた。' },
       ['daemon', '……これを、見ろ。', 'right emo:cool'],
       { narr: 'デーモンが、古い手帳から、一枚の写真を出した。若き日の、ソウイチ。ゲン。そして、まだ髪の黒い、デーモン。三人は、ハチロクを背に、肩を組んで、笑っていた。' },
@@ -147,7 +147,7 @@
 
   after('2t4', S({ id: '2t5', ch: '2', title: '助手席の、カセット', talk: true, track: 'ridge', goal: { type: 'talk' }, reward: 800,
     scene: [
-      { bg: 'garage' },
+      { bg: 'garage_in' },
       { narr: '深夜。ガレージに戻ったユウは、ハチロクのグローブボックスを、何気なく開けた。' },
       { narr: '奥に、古いカセットテープが、一本。ラベルには、父の字で、「ユウへ」。' },
       ['mina', 'それ……ラジカセ、あるよ。うちの店の、お古だけど。', 'right emo:shock'],

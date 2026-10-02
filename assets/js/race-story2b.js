@@ -324,7 +324,8 @@
 
     S({ id: 's2_t12', ch: '4', title: 'ユリの告白', talk: true, track: 'tomei', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'tomei' },
+        { bgm: 'night' },
+        { bg: 'bayroad' },
         { narr: '深夜、病院の裏口。白衣のトウコに、一人の女性が駆け寄ってきた。' },
         ['yuri', '神崎トウコさん……ですよね。修さんの、同僚の篠宮ユリです。', 'right emo:shock'],
         ['touko_n', '篠宮さん。……ご連絡を、お待ちしていました。', 'emo:cool'],

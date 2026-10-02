@@ -1021,11 +1021,11 @@
      ===================================================================== */
 
   R.JOBS = {
-    taxi: { name: { ja: 'タクシー', en: 'Taxi' }, icon: '🚕', car: 'taxi',
+    taxi: { name: { ja: 'タクシー', en: 'Taxi' }, icon: 'taxi', car: 'taxi',
             desc: { ja: 'お客さんを目的地まで運ぶ。早いほどチップが増え、ぶつけると減る。', en: 'Drive fares to their destination. Faster means bigger tips; crashes cut them.' } },
-    delivery: { name: { ja: '宅配便', en: 'Parcel Delivery' }, icon: '📦',
+    delivery: { name: { ja: '宅配便', en: 'Parcel Delivery' }, icon: 'box',
                 desc: { ja: '荷物を届ける。「こわれもの」は車の傷みに応じて報酬が減る。', en: 'Deliver parcels. Fragile items pay less the more damage you take.' } },
-    food: { name: { ja: 'うなぎ弁当の出前', en: 'Eel Lunch Delivery' }, icon: '🍱',
+    food: { name: { ja: 'うなぎ弁当の出前', en: 'Eel Lunch Delivery' }, icon: 'bento',
             desc: { ja: '出来たての弁当を短い時間で届ける。時間との勝負。', en: 'Rush a fresh eel lunch box across town. It is all about time.' } }
   };
   R.PASSENGERS = [
@@ -1121,33 +1121,33 @@
     return !!st && ((s.stories || {})[id] || 0) >= st.events.length;
   }
   R.ACHIEVEMENTS = [
-    { id: 'first', icon: '🏁', reward: 300, name: { ja: 'はじめの一歩', en: 'First Steps' }, desc: { ja: 'レースを 1 回走る', en: 'Run your first race' }, test: function (s) { return s.stats.races >= 1; } },
-    { id: 'win1', icon: '🥇', reward: 500, name: { ja: '初優勝', en: 'First Victory' }, desc: { ja: 'レースで 1 位になる', en: 'Win a race' }, test: function (s) { return s.stats.wins >= 1; } },
-    { id: 'win10', icon: '🏆', reward: 2000, name: { ja: '常勝', en: 'Winning Streak' }, desc: { ja: '通算 10 勝', en: '10 career wins' }, test: function (s) { return s.stats.wins >= 10; } },
-    { id: 'win50', icon: '👑', reward: 8000, name: { ja: '王者', en: 'Champion' }, desc: { ja: '通算 50 勝', en: '50 career wins' }, test: function (s) { return s.stats.wins >= 50; } },
-    { id: 'pod20', icon: '🥉', reward: 1500, name: { ja: '表彰台の常連', en: 'Podium Regular' }, desc: { ja: '表彰台 20 回', en: '20 podium finishes' }, test: function (s) { return s.stats.podiums >= 20; } },
-    { id: 'race100', icon: '🔁', reward: 3000, name: { ja: '走り込み', en: 'Seasoned' }, desc: { ja: '通算 100 レース', en: '100 races' }, test: function (s) { return s.stats.races >= 100; } },
-    { id: 'km100', icon: '🛣', reward: 1500, name: { ja: '100 km ドライバー', en: '100 km Club' }, desc: { ja: '通算 100 km 走る', en: 'Drive 100 km in total' }, test: function (s) { return s.stats.km >= 100; } },
-    { id: 'km1000', icon: '🌏', reward: 6000, name: { ja: '1000 km ドライバー', en: '1000 km Club' }, desc: { ja: '通算 1000 km 走る', en: 'Drive 1000 km in total' }, test: function (s) { return s.stats.km >= 1000; } },
-    { id: 'near100', icon: '😮', reward: 1200, name: { ja: 'ギリギリの男', en: 'Close Shave' }, desc: { ja: 'ニアミス通算 100 回', en: '100 near misses' }, test: function (s) { return s.stats.near >= 100; } },
-    { id: 'touge5', icon: '⛰', reward: 2000, name: { ja: '峠の走り屋', en: 'Pass Runner' }, desc: { ja: '峠バトルに 5 回勝つ', en: 'Win 5 touge battles' }, test: function (s) { return (s.stats.touge || 0) >= 5; } },
-    { id: 'cup1', icon: '🏅', reward: 2500, name: { ja: 'カップ制覇', en: 'Cup Winner' }, desc: { ja: 'いずれかのカップで金メダル', en: 'Take gold in any cup' }, test: function (s) { return cupGolds(s) >= 1; } },
-    { id: 'cupall', icon: '🌟', reward: 12000, name: { ja: '全カップ制覇', en: 'Grand Slam' }, desc: { ja: 'すべてのカップで金メダル', en: 'Take gold in every cup' }, test: function (s) { return cupGolds(s) >= R.CUPS.length; } },
-    { id: 'story3', icon: '📖', reward: 1000, name: { ja: '物語のはじまり', en: 'Story Begins' }, desc: { ja: 'ストーリーを 3 話クリア', en: 'Clear 3 story events' }, test: function (s) { return s.story >= 3; } },
-    { id: 'story24', icon: '👻', reward: 10000, name: { ja: '白い亡霊の最期', en: 'End of the Ghost' }, desc: { ja: '本編「天竜の白い亡霊」を完結', en: 'Finish the main story' }, test: function (s) { var f = R.STORY.map(function (e) { return e.id; }).indexOf('f2'); return s.story >= (f < 0 ? R.STORY.length : f + 1); } },
-    { id: 's2clear', icon: '🌃', reward: 6000, name: { ja: '湾岸の夜明け', en: 'Wangan Dawn' }, desc: { ja: 'ストーリー2「湾岸 1989」を完結', en: 'Finish Story 2' }, test: function (s) { return storyDone(s, 's2'); } },
-    { id: 's3clear', icon: '🏔', reward: 6000, name: { ja: '七人目の星', en: 'The Seventh Star' }, desc: { ja: 'ストーリー3「六連星」を完結', en: 'Finish Story 3' }, test: function (s) { return storyDone(s, 's3'); } },
-    { id: 's4clear', icon: '⭐', reward: 6000, name: { ja: '星の井戸へ', en: 'To the Star Well' }, desc: { ja: 'ストーリー4「星の砂漠 1983」を完結', en: 'Finish Story 4' }, test: function (s) { return storyDone(s, 's4'); } },
-    { id: 's5clear', icon: '🏁', reward: 6000, name: { ja: 'グリッドの向こうへ', en: 'Beyond the Grid' }, desc: { ja: 'ストーリー5「グリッドの向こうの夏」を完結', en: 'Finish Story 5' }, test: function (s) { return storyDone(s, 's5'); } },
-    { id: 'cars5', icon: '🚗', reward: 1500, name: { ja: 'ガレージ持ち', en: 'Car Collector' }, desc: { ja: '車を 5 台持つ', en: 'Own 5 cars' }, test: function (s) { return s.owned.length >= 5; } },
-    { id: 'cars15', icon: '🏎', reward: 6000, name: { ja: 'コレクター', en: 'Garage Full' }, desc: { ja: '車を 15 台持つ', en: 'Own 15 cars' }, test: function (s) { return s.owned.length >= 15; } },
-    { id: 'rich', icon: '💰', reward: 0, name: { ja: '大金持ち', en: 'Big Spender' }, desc: { ja: '所持金 100,000 以上', en: 'Hold 100,000 credits' }, test: function (s) { return s.money >= 100000; } },
-    { id: 'jobs10', icon: '🚕', reward: 1500, name: { ja: '働き者', en: 'Hard Worker' }, desc: { ja: 'アルバイトを 10 件こなす', en: 'Finish 10 jobs' }, test: function (s) { return (s.stats.jobs || 0) >= 10; } },
-    { id: 'bests10', icon: '⏱', reward: 2500, name: { ja: 'タイム職人', en: 'Time Smith' }, desc: { ja: '10 コースで自己ベストを記録', en: 'Set personal bests on 10 tracks' }, test: function (s) { return bestsCount(s) >= 10; } },
-    { id: 'bests30', icon: '🗺', reward: 8000, name: { ja: '全国走破', en: 'Track Master' }, desc: { ja: '30 コースで自己ベストを記録', en: 'Set personal bests on 30 tracks' }, test: function (s) { return bestsCount(s) >= 30; } },
-    { id: 'daily1', icon: '📅', reward: 600, name: { ja: '今日のレース', en: 'Daily Driver' }, desc: { ja: 'デイリーレースで表彰台', en: 'Podium in a daily race' }, test: function (s) { return ((s.daily && s.daily.total) || 0) >= 1; } },
-    { id: 'daily7', icon: '🔥', reward: 5000, name: { ja: '一週間連続', en: 'Week Streak' }, desc: { ja: 'デイリーレースを 7 日連続で達成', en: 'Daily race streak of 7 days' }, test: function (s) { return ((s.daily && s.daily.best) || 0) >= 7; } },
-    { id: 'all', icon: '💎', reward: 20000, name: { ja: 'コンプリート', en: 'Completionist' }, desc: { ja: '他のすべての実績を解除', en: 'Unlock every other achievement' }, test: function (s) { return nAch(s) >= R.ACHIEVEMENTS.length - 1; } }
+    { id: 'first', icon: 'flag', reward: 300, name: { ja: 'はじめの一歩', en: 'First Steps' }, desc: { ja: 'レースを 1 回走る', en: 'Run your first race' }, test: function (s) { return s.stats.races >= 1; } },
+    { id: 'win1', icon: 'medal', reward: 500, name: { ja: '初優勝', en: 'First Victory' }, desc: { ja: 'レースで 1 位になる', en: 'Win a race' }, test: function (s) { return s.stats.wins >= 1; } },
+    { id: 'win10', icon: 'trophy', reward: 2000, name: { ja: '常勝', en: 'Winning Streak' }, desc: { ja: '通算 10 勝', en: '10 career wins' }, test: function (s) { return s.stats.wins >= 10; } },
+    { id: 'win50', icon: 'crown', reward: 8000, name: { ja: '王者', en: 'Champion' }, desc: { ja: '通算 50 勝', en: '50 career wins' }, test: function (s) { return s.stats.wins >= 50; } },
+    { id: 'pod20', icon: 'medal', reward: 1500, name: { ja: '表彰台の常連', en: 'Podium Regular' }, desc: { ja: '表彰台 20 回', en: '20 podium finishes' }, test: function (s) { return s.stats.podiums >= 20; } },
+    { id: 'race100', icon: 'loop', reward: 3000, name: { ja: '走り込み', en: 'Seasoned' }, desc: { ja: '通算 100 レース', en: '100 races' }, test: function (s) { return s.stats.races >= 100; } },
+    { id: 'km100', icon: 'road', reward: 1500, name: { ja: '100 km ドライバー', en: '100 km Club' }, desc: { ja: '通算 100 km 走る', en: 'Drive 100 km in total' }, test: function (s) { return s.stats.km >= 100; } },
+    { id: 'km1000', icon: 'globe', reward: 6000, name: { ja: '1000 km ドライバー', en: '1000 km Club' }, desc: { ja: '通算 1000 km 走る', en: 'Drive 1000 km in total' }, test: function (s) { return s.stats.km >= 1000; } },
+    { id: 'near100', icon: 'eye', reward: 1200, name: { ja: 'ギリギリの男', en: 'Close Shave' }, desc: { ja: 'ニアミス通算 100 回', en: '100 near misses' }, test: function (s) { return s.stats.near >= 100; } },
+    { id: 'touge5', icon: 'mountain', reward: 2000, name: { ja: '峠の走り屋', en: 'Pass Runner' }, desc: { ja: '峠バトルに 5 回勝つ', en: 'Win 5 touge battles' }, test: function (s) { return (s.stats.touge || 0) >= 5; } },
+    { id: 'cup1', icon: 'medal', reward: 2500, name: { ja: 'カップ制覇', en: 'Cup Winner' }, desc: { ja: 'いずれかのカップで金メダル', en: 'Take gold in any cup' }, test: function (s) { return cupGolds(s) >= 1; } },
+    { id: 'cupall', icon: 'star', reward: 12000, name: { ja: '全カップ制覇', en: 'Grand Slam' }, desc: { ja: 'すべてのカップで金メダル', en: 'Take gold in every cup' }, test: function (s) { return cupGolds(s) >= R.CUPS.length; } },
+    { id: 'story3', icon: 'book', reward: 1000, name: { ja: '物語のはじまり', en: 'Story Begins' }, desc: { ja: 'ストーリーを 3 話クリア', en: 'Clear 3 story events' }, test: function (s) { return s.story >= 3; } },
+    { id: 'story24', icon: 'ghost', reward: 10000, name: { ja: '白い亡霊の最期', en: 'End of the Ghost' }, desc: { ja: '本編「天竜の白い亡霊」を完結', en: 'Finish the main story' }, test: function (s) { var f = R.STORY.map(function (e) { return e.id; }).indexOf('f2'); return s.story >= (f < 0 ? R.STORY.length : f + 1); } },
+    { id: 's2clear', icon: 'city', reward: 6000, name: { ja: '湾岸の夜明け', en: 'Wangan Dawn' }, desc: { ja: 'ストーリー2「湾岸 1989」を完結', en: 'Finish Story 2' }, test: function (s) { return storyDone(s, 's2'); } },
+    { id: 's3clear', icon: 'mountain', reward: 6000, name: { ja: '七人目の星', en: 'The Seventh Star' }, desc: { ja: 'ストーリー3「六連星」を完結', en: 'Finish Story 3' }, test: function (s) { return storyDone(s, 's3'); } },
+    { id: 's4clear', icon: 'star', reward: 6000, name: { ja: '星の井戸へ', en: 'To the Star Well' }, desc: { ja: 'ストーリー4「星の砂漠 1983」を完結', en: 'Finish Story 4' }, test: function (s) { return storyDone(s, 's4'); } },
+    { id: 's5clear', icon: 'flag', reward: 6000, name: { ja: 'グリッドの向こうへ', en: 'Beyond the Grid' }, desc: { ja: 'ストーリー5「グリッドの向こうの夏」を完結', en: 'Finish Story 5' }, test: function (s) { return storyDone(s, 's5'); } },
+    { id: 'cars5', icon: 'car', reward: 1500, name: { ja: 'ガレージ持ち', en: 'Car Collector' }, desc: { ja: '車を 5 台持つ', en: 'Own 5 cars' }, test: function (s) { return s.owned.length >= 5; } },
+    { id: 'cars15', icon: 'racecar', reward: 6000, name: { ja: 'コレクター', en: 'Garage Full' }, desc: { ja: '車を 15 台持つ', en: 'Own 15 cars' }, test: function (s) { return s.owned.length >= 15; } },
+    { id: 'rich', icon: 'coin', reward: 0, name: { ja: '大金持ち', en: 'Big Spender' }, desc: { ja: '所持金 100,000 以上', en: 'Hold 100,000 credits' }, test: function (s) { return s.money >= 100000; } },
+    { id: 'jobs10', icon: 'taxi', reward: 1500, name: { ja: '働き者', en: 'Hard Worker' }, desc: { ja: 'アルバイトを 10 件こなす', en: 'Finish 10 jobs' }, test: function (s) { return (s.stats.jobs || 0) >= 10; } },
+    { id: 'bests10', icon: 'stopwatch', reward: 2500, name: { ja: 'タイム職人', en: 'Time Smith' }, desc: { ja: '10 コースで自己ベストを記録', en: 'Set personal bests on 10 tracks' }, test: function (s) { return bestsCount(s) >= 10; } },
+    { id: 'bests30', icon: 'map', reward: 8000, name: { ja: '全国走破', en: 'Track Master' }, desc: { ja: '30 コースで自己ベストを記録', en: 'Set personal bests on 30 tracks' }, test: function (s) { return bestsCount(s) >= 30; } },
+    { id: 'daily1', icon: 'calendar', reward: 600, name: { ja: '今日のレース', en: 'Daily Driver' }, desc: { ja: 'デイリーレースで表彰台', en: 'Podium in a daily race' }, test: function (s) { return ((s.daily && s.daily.total) || 0) >= 1; } },
+    { id: 'daily7', icon: 'flame', reward: 5000, name: { ja: '一週間連続', en: 'Week Streak' }, desc: { ja: 'デイリーレースを 7 日連続で達成', en: 'Daily race streak of 7 days' }, test: function (s) { return ((s.daily && s.daily.best) || 0) >= 7; } },
+    { id: 'all', icon: 'gem', reward: 20000, name: { ja: 'コンプリート', en: 'Completionist' }, desc: { ja: '他のすべての実績を解除', en: 'Unlock every other achievement' }, test: function (s) { return nAch(s) >= R.ACHIEVEMENTS.length - 1; } }
   ];
 
   /** 条件を満たした実績を解除し、新しく解除したものの一覧を返す（賞金は s.money に足す） */

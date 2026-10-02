@@ -10,8 +10,9 @@
     /* ===================== 第四章 ===================== */
     S({ id: 's5_t15', ch: '4', title: '全国への道', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1200,
       scene: [
+        { bgm: 'school' },
         { title: '全国への道', sub: '第四章' },
-        { bg: 'coast' },
+        { bg: 'seaside' },
         { narr: '県大会の翌週。全国大会は、八月の終わり、三重県の鈴鹿サーキット・カート場。部員たちは、マイクロバスで、会場の下見に向かった。' },
         { narr: '窓の外を、浜名湖の水面が、流れていく。ユウタが、後ろの席で、コナツと、お菓子を取り合っていた。' },
         ['akane', '……ハルカちゃん。ちょっと、隣、いい？', 'right emo:cool'],
@@ -39,7 +40,8 @@
 
     S({ id: 's5_t16', ch: '4', title: '前夜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1400,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'night' },
+        { bg: 'bedroom' },
         { narr: '全国大会前夜。鈴鹿近くの、古い旅館。大部屋で、部員全員が、布団を並べた。' },
         ['yuta', '先輩ー！ 枕投げ、やりましょう！', 'right emo:smile shake'],
         ['konatsu', 'ユウタ、うるさい！ 明日、早いんだから！', 'emo:angry'],
@@ -80,7 +82,7 @@
     S({ id: 's5_9', ch: '4', title: '全国大会・予選', track: 'isetec', mode: 'race', laps: 4, rivals: 9, pace: 0.93, car: 'kart_s3', goal: { type: 'place', n: 4 }, reward: 6000,
       scene: [
         { bgm: 'tension' },
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '全国大会、予選。全国から集まった、四十台の、カート。ハルカは、グリッドの、後方から、スタートする。' },
         ['announcer', '全国中学・高校カート選手権、予選第三組。……ジュニアクラス、スタート五分前です。', 'right emo:cool'],
         ['haruka', '（大丈夫。……ミナト君のデータ。アカネ先輩の車体。コウキ先輩のライン。……全部、私の、中にある）', 'emo:cool lines'],
@@ -99,7 +101,8 @@
 
     S({ id: 's5_t17', ch: '4', title: '決勝前のピット', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1500,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'tension' },
+        { bg: 'paddock' },
         { narr: '決勝を、三十分後に控えた、ピット。部員全員が、ハルカの、カートの周りに、集まっていた。' },
         ['akane', '最後の、調整。……ギア比は、このまま。タイヤの空気圧は、ミナト君の、数字で。', 'right emo:cool'],
         ['minato', '路面温度、三十八度。……空気圧、〇・一、下げましょう。', 'emo:cool'],
@@ -122,7 +125,7 @@
       scene: [
         { title: 'グリッドの向こう', sub: '最終章' },
         { bgm: 'final' },
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '全国決勝。スタンドの、最前列に、潮見台学園の、部員と、家族と、校長先生の姿があった。垂れ幕には、大きく、「ハルカ、グリッドの、向こうへ」。' },
         ['announcer', '……ポールポジション、藤堂レン、潮見台学園。二番手、星野ハルカ、潮見台学園。……同じ学校の、二人です！', 'right emo:shock'],
         ['ren', '星野さん。……手加減は、一切、なしです。', 'emo:cool'],
@@ -145,7 +148,8 @@
 
     S({ id: 's5_t18', ch: '5', title: '表彰式のあと', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 3000, final: true,
       scene: [
-        { bg: 'coast' },
+        { bgm: 'ending' },
+        { bg: 'seaside' },
         { narr: '表彰式のあと。夕暮れの、鈴鹿の、パドック。ハルカは、トロフィーを、胸に抱えて、一人、ベンチに座っていた。' },
         ['kishimoto', '星野。……ここ、いいか。', 'right emo:smile'],
         ['haruka', '先生。……先生が、二十年前に、置いてきたもの。私、拾えましたか？', 'emo:smile'],
@@ -163,7 +167,7 @@
   SIDE.push(
     S({ id: 's5_sq1', after: 's5_2', title: 'コナツの応援歌', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s1', goal: { type: 'lap', factor: 0.46 }, reward: 1500, char: 'konatsu',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['konatsu', 'ハルカ、見て！ 応援団に、頼んで、応援歌を、作ってもらったの！', 'right emo:smile'],
         ['haruka', 'ええっ。恥ずかしいよ！', 'emo:shock'],
         ['konatsu', '歌に、合わせて、走ってみて！ リズムに、乗るのが、コツ！', 'emo:smile lines']
@@ -172,7 +176,7 @@
       post: [['konatsu', '今の、走り、すっごく、リズムが、良かった！ 本番も、この歌で、行こう！', 'emo:smile']] }),
     S({ id: 's5_sq2', after: 's5_4', title: 'ユウタの特訓', track: 'isetec', mode: 'race', laps: 2, rivals: 4, pace: 0.8, car: 'kart_s1', goal: { type: 'place', n: 2 }, reward: 2000, char: 'yuta',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['yuta', 'ハルカ先輩……いや、同期！ 俺と、勝負してください！ 俺、強くなりたいんす！', 'right emo:angry'],
         ['haruka', 'いいよ。ユウタ君が、本気なら、私も、本気で、行く。', 'emo:cool']
       ],
@@ -180,7 +184,7 @@
       post: [['yuta', 'うう……負けたっす。でも、楽しかったっす！ 来年は、勝ちますから！', 'emo:smile']] }),
     S({ id: 's5_sq3', after: 's5_6', title: 'アカネ先輩の車体', boss: 'akane', track: 'circuit', mode: 'duel', laps: 3, pace: 0.9, car: 'kart_s2', goal: { type: 'win' }, reward: 3200, char: 'akane',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['akane', 'ハルカちゃん。……最後に、一度だけ、本気で、走らせて。先輩として、ね。', 'right emo:cool'],
         ['haruka', '……はい。胸を、お借りします。', 'emo:cool'],
         { vs: ['haruka', 'akane'] }
@@ -189,7 +193,7 @@
       post: [['akane', '……強くなったわね。私の、自慢の後輩よ。', 'emo:smile']] }),
     S({ id: 's5_sq4', after: 's5_8', title: 'コウキ先輩の最後の一周', boss: 'koki', track: 'isetec', mode: 'duel', laps: 3, pace: 0.9, car: 'kart_s2', goal: { type: 'win' }, reward: 3500, char: 'koki',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['koki', 'ハルカ。……最後に、一回だけ、俺と、走ってくれ。部長として、お前に、見せたいんだ。', 'right emo:cool'],
         { narr: 'コウキの右手には、テーピングが、何重にも、巻かれていた。それでも、その目は、真っ直ぐだった。' },
         { vs: ['haruka', 'koki'] }
@@ -198,7 +202,7 @@
       post: [['koki', '……ははっ。やっぱり、お前は、速いな。……全国、頼んだぞ。', 'emo:smile']] }),
     S({ id: 's5_sq5', after: 's5_t16', title: 'ミナトの夜間データ取り', track: 'circuit', mode: 'time', laps: 2, car: 'kart_s3', goal: { type: 'lap', factor: 0.6 }, reward: 3000, char: 'minato',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['minato', '星野さん。……明日の、本番前に、もう一度だけ、データを、取らせてください。', 'right emo:cool'],
         ['haruka', 'うん。……何周でも、付き合うよ。', 'emo:smile']
       ],
@@ -226,7 +230,7 @@
       ] },
     { id: 'rivals', name: { ja: '同じ空の下で', en: 'Under the Same Sky' }, hint: { ja: 'レンと、本当のライバルになる', en: '' }, when: 'rival && friend',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '——それから、三年後。夏の、全日本ジュニア・カート選手権。' },
         { narr: '表彰台の一番上には、ハルカ。二番目には、レン。三番目には、ミナト。三人とも、潮見台の、ユニフォームだった。' },
         ['ren', '……また、負けた。これで、通算、七勝、七敗。', 'emo:smile'],
@@ -250,7 +254,7 @@
       ] },
     { id: 'duo', name: { ja: 'ミナトとの二人乗り', en: 'Two-Seater with Minato' }, hint: { ja: 'ミナトを信じ、二人で夢を追う', en: '' }, when: 'friend',
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '——大会の翌年。ハルカとミナトは、二人で、小さな、チームを、立ち上げた。名前は、「グリッド・ツー」。' },
         { narr: 'ハルカが、ドライバー。ミナトが、データ解析と、メカニック。放課後の、赤い屋根の下が、二人の、研究所になった。' },
         ['minato', '……星野さん。次の、セッティング、ちょっと、変わった提案、していいですか。', 'emo:smile'],

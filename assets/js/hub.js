@@ -15,15 +15,15 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
 
   var KEY_GAMES = [
-    ['tetris', 'テトリス', 'Tetris', '🧱'], ['snake', 'スネーク', 'Snake', '🐍'], ['2048', '2048', '2048', '🔢'],
-    ['mine', 'マインスイーパ', 'Minesweeper', '💣'], ['sokoban', '倉庫番', 'Sokoban', '📦'], ['rogue', 'ローグライク', 'Roguelike', '🗡']
+    ['tetris', 'テトリス', 'Tetris', 'brick'], ['snake', 'スネーク', 'Snake', 'snake'], ['2048', '2048', '2048', 'num'],
+    ['mine', 'マインスイーパ', 'Minesweeper', 'bomb'], ['sokoban', '倉庫番', 'Sokoban', 'box'], ['rogue', 'ローグライク', 'Roguelike', 'dagger']
   ];
   var BTN_GAMES = [
-    ['guess', '数当て', 'Guess', '🎯'], ['ttt', '三目並べ', 'Tic-tac-toe', '⭕'], ['rps', 'じゃんけん', 'RPS', '✌'],
-    ['hangman', '言葉当て', 'Hangman', '🔤'], ['blackjack', 'ブラックジャック', 'Blackjack', '🃏'], ['quiz', 'レース・クイズ', 'Racing quiz', '❓']
+    ['guess', '数当て', 'Guess', 'target'], ['ttt', '三目並べ', 'Tic-tac-toe', 'circleo'], ['rps', 'じゃんけん', 'RPS', 'hand'],
+    ['hangman', '言葉当て', 'Hangman', 'letters'], ['blackjack', 'ブラックジャック', 'Blackjack', 'cards'], ['quiz', 'レース・クイズ', 'Racing quiz', 'question']
   ];
   var TOOLS = [
-    ['paint', 'ドット絵', 'Pixel paint', '🎨'], ['gcalc', '電卓', 'Calculator', '🧮'], ['settings', '設定', 'Settings', '⚙']
+    ['paint', 'ドット絵', 'Pixel paint', 'palette'], ['gcalc', '電卓', 'Calculator', 'calc'], ['settings', '設定', 'Settings', 'gear']
   ];
 
   /** キー操作のゲームは、ウィンドウの中の文字盤に描かせる */
@@ -75,7 +75,7 @@
       var grid = el('div', 'hub-grid');
       list.forEach(function (g) {
         var bt = el('button', 'hub-tile'); bt.type = 'button';
-        bt.appendChild(el('span', 'hub-ic', g[3]));
+        var hic = el('span', 'hub-ic'); hic.appendChild(TB.Race.iconNode(g[3], 34)); bt.appendChild(hic);
         bt.appendChild(el('span', 'hub-nm', L(g[1], g[2])));
         bt.addEventListener('click', function () { if (TB.Sfx) TB.Sfx.play('click'); launch(kind, g[0], L(g[1], g[2])); });
         grid.appendChild(bt);

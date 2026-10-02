@@ -343,7 +343,7 @@
       hint: L('← → 移動   ↑/x 右回転   z 左回転   ↓ ソフトドロップ   スペース ハードドロップ   c ホールド   p 一時停止   q やめる',
               'move ← →   rotate ↑/x (z = left)   soft ↓   hard space   hold c   pause p   quit q'),
       padCols: 3,
-      pad: [['←', 'ArrowLeft'], ['↻', 'ArrowUp'], ['→', 'ArrowRight'],
+      pad: [['←', 'ArrowLeft'], ['回転', 'ArrowUp'], ['→', 'ArrowRight'],
             ['↓', 'ArrowDown'], ['落', ' '], ['H', 'c'],
             ['やめる', 'q', 'wide']],
       onQuit: function () {
@@ -518,7 +518,7 @@
       swipe: true,
       padCols: 3,
       pad: [[' ', ''], ['↑', 'ArrowUp'], [' ', ''],
-            ['←', 'ArrowLeft'], ['⏸', 'p'], ['→', 'ArrowRight'],
+            ['←', 'ArrowLeft'], ['停止', 'p'], ['→', 'ArrowRight'],
             [' ', ''], ['↓', 'ArrowDown'], [' ', ''],
             ['やめる', 'q', 'wide']],
       onQuit: function () {

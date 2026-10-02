@@ -294,8 +294,8 @@
       case 'daily':
         if (fin) money = R.PRIZE[r.place - 1] * dm * lm * 0.8;
         var bonus = fin ? R.dailyDone(s, r.place) : 0;
-        if (bonus) { money += bonus; out.lines.push(L('📅 デイリー達成！ ' + s.daily.streak + ' 日連続（ボーナス +', '📅 Daily complete! ' + s.daily.streak + '-day streak (bonus +') + yen(bonus) + ')'); }
-        else if (fin && r.place <= 3) out.lines.push(L('📅 今日のボーナスは受け取り済みです', '📅 Today\'s bonus is already claimed'));
+        if (bonus) { money += bonus; out.lines.push(L('デイリー達成！ ' + s.daily.streak + ' 日連続（ボーナス +', 'Daily complete! ' + s.daily.streak + '-day streak (bonus +') + yen(bonus) + ')'); }
+        else if (fin && r.place <= 3) out.lines.push(L('今日のボーナスは受け取り済みです', 'Today\'s bonus is already claimed'));
         break;
       case 'touge': if (r.place === 1) { money = 1400 * dm * lm; s.stats.touge = (s.stats.touge || 0) + 1; } break;
       case 'challenge':
@@ -321,12 +321,12 @@
       case 'story':
         var ev = ctx.ev, stO = storyOf(ctx.sid || 's1'), idx = stO.events.indexOf(ev);
         out.success = checkGoal(ev.goal, r, ev.track);
-        out.lines.unshift(out.success ? L('✔ 目標達成：', '✔ Objective complete: ') + goalText(ev.goal, ev.track) : L('✘ 目標未達成：', '✘ Objective failed: ') + goalText(ev.goal, ev.track));
+        out.lines.unshift(out.success ? L('目標達成：', 'Objective complete: ') + goalText(ev.goal, ev.track) : L('目標未達成：', 'Objective failed: ') + goalText(ev.goal, ev.track));
         if (out.success) {
           if (ctx.side) { s.side = s.side || {}; money = s.side[ev.id] ? ev.reward * 0.3 : ev.reward; s.side[ev.id] = true; }
           else { money = progOf(s, stO.id) > idx ? ev.reward * 0.3 : ev.reward; setProg(s, stO.id, idx + 1); }
           if (ev.boss) s.bosses[ev.boss] = true;
-          if (ev.unlock && s.owned.indexOf(ev.unlock) < 0) { s.owned.push(ev.unlock); out.lines.push(L('🔓 新しい車「', '🔓 New car: ') + t(R.car(ev.unlock).name) + L('」が手に入った！', '')); }
+          if (ev.unlock && s.owned.indexOf(ev.unlock) < 0) { s.owned.push(ev.unlock); out.lines.push(L('新しい車「', 'New car: ') + t(R.car(ev.unlock).name) + L('」が手に入った！', '')); }
         }
         break;
     }
@@ -334,7 +334,7 @@
     s.money += money; out.money = money;
     if (money) out.lines.push(L('賞金 +', 'Prize +') + yen(money) + L('（所持 ', ' (total ') + yen(s.money) + ')');
     R.checkAch(s).forEach(function (a) {
-      out.lines.push(L('🏆 実績「', '🏆 Achievement: ') + t(a.name) + L('」を解除', '') + (a.reward ? ' +' + yen(a.reward) : ''));
+      out.lines.push(L('実績「', 'Achievement: ') + t(a.name) + L('」を解除', '') + (a.reward ? ' +' + yen(a.reward) : ''));
     });
     R.save(s);
     if (money) sfx('coin');
@@ -450,12 +450,12 @@
     function violation(kind, seen, over) {
       w.violations++;
       if (w.order) w.order.bad = (w.order.bad || 0) + 1;
-      if (kind === 'orbis') { fine(9000 + Math.round((over || 0) * 300), L('📸 オービス（' + Math.round(over) + 'km/h 超過）', '📸 Speed camera (' + Math.round(over) + ' over)')); return; }
+      if (kind === 'orbis') { fine(9000 + Math.round((over || 0) * 300), L('オービス（' + Math.round(over) + 'km/h 超過）', 'Speed camera (' + Math.round(over) + ' over)')); return; }
       var why = { signal: L('信号無視', 'Red light'), speed: L('速度違反', 'Speeding'), accident: L('事故', 'Accident'), copHit: L('パトカーに衝突', 'Hit a police car') }[kind];
       if (!seen) w.flash = { text: why + L('（見られていない…）', ' (unseen...)'), t: 3 };
     }
-    function busted() { fine(15000, L('🚨 確保された', '🚨 Busted')); }
-    function escaped() { w.flash = { text: L('🚨 警察を振り切った！', '🚨 Lost the police!'), t: 4 }; }
+    function busted() { fine(15000, L('確保された', 'Busted')); }
+    function escaped() { w.flash = { text: L('警察を振り切った！', 'Lost the police!'), t: 4 }; }
 
     /* --- 仕事 --- */
     function newOrder(at) {
@@ -480,9 +480,9 @@
       if (k) {
         var first = R.edit(function (s) { s.visited = s.visited || {}; if (s.visited[k]) return false; s.visited[k] = true; if (!w.job) s.money += 300; return true; });
         if (first && !w.job) { w.earned += 300; w.flash = { text: L('初めて訪れた！ ' + t(R.NODES[k].name) + '  +300 円', 'First visit! ' + t(R.NODES[k].name) + ' +300'), t: 4 }; sfx('coin'); }
-        else if (!w.job) w.flash = { text: '📍 ' + t(R.NODES[k].name), t: 3 };
+        else if (!w.job) w.flash = { text: t(R.NODES[k].name), t: 3 };
       }
-      if (dest && !w.job && PL[dest] && nd === PL[dest].node) { w.flash = { text: L('🏁 目的地に着きました：', '🏁 Arrived: ') + t(R.NODES[dest].name), t: 5 }; sfx('win'); dest = null; }
+      if (dest && !w.job && PL[dest] && nd === PL[dest].node) { w.flash = { text: L('目的地に着きました：', 'Arrived: ') + t(R.NODES[dest].name), t: 5 }; sfx('win'); dest = null; }
       if (w.order && nd === w.order.node) {
         var o = w.order, late = o.left <= 0;
         var base = o.fare * (late ? 0.5 : 1), tip = late ? 0 : o.fare * 0.5 * (o.left / o.time);
@@ -515,11 +515,11 @@
       var tn = targetNode();
       if (tn < 0 || exits.length === 0) return null;
       var at = M.to(h);
-      if (at === tn) return { arrow: '🏁', text: L('この先の交差点が目的地', 'Destination at the next junction'), dir: 'goal' };
+      if (at === tn) return { arrow: '◎', text: L('この先の交差点が目的地', 'Destination at the next junction'), dir: 'goal' };
       var rt = M.route(at, tn);
       if (!rt || !rt.hs.length) return null;
       var nx = rt.hs[0], i = exits.findIndex(function (ex) { return ex.h === nx; });
-      if (i < 0) return { arrow: '↺', text: L('次の交差点で進める方向へ（遠回り）', 'Take any exit (reroute)'), dir: 'any' };
+      if (i < 0) return { arrow: 'redo', text: L('次の交差点で進める方向へ（遠回り）', 'Take any exit (reroute)'), dir: 'any' };
       var d = exits[i].dir;
       return { arrow: dirArrow(d), text: L('次の交差点を ' + dirWord(d), 'Next junction: ' + dirWord(d)) + (exits.length > 1 && d !== 'straight' ? L('（' + (d === 'left' ? 'Q' : 'E') + ' でウインカー）', ' (blinker ' + (d === 'left' ? 'Q' : 'E') + ')') : ''), dir: d, km: rt.len / 1000 };
     }
@@ -536,7 +536,7 @@
       }
       if (exits.length > 1) lines.push({ t: L('交差点: ', 'Junction: ') + exits.map(function (ex) { return dirArrow(ex.dir) + ' ' + exitLabel(ex); }).join('　'), c: '#9fe8c8' });
       if (w.flash) lines.push({ t: w.flash.text, c: '#ffd93d' });
-      var title = w.job ? R.JOBS[w.job].icon + ' ' + t(R.JOBS[w.job].name) + L('　稼ぎ ', '  earned ') + yen(w.earned) : '🗺 ' + L('浜松市', 'Hamamatsu') + L('　走行 ', '  driven ') + (w.dist / 1000).toFixed(1) + 'km';
+      var title = w.job ? t(R.JOBS[w.job].name) + L('　稼ぎ ', '  earned ') + yen(w.earned) : L('浜松市', 'Hamamatsu') + L('　走行 ', '  driven ') + (w.dist / 1000).toFixed(1) + 'km';
       return { title: title, lines: lines };
     }
     /** ミニマップ（北が上。実際の道の形） */
@@ -740,6 +740,7 @@
       over.classList.remove('hidden');
       over.innerHTML = '';
       app.keyHook = null; app.curScreen = screen; app.tabKeys = null;
+      if (R.Music && R.Music.album && R.Music.album.active && !screen.isAlbum) R.Music.album.stop();
       screen.build(over);
       if (!keepSel) app.sel = screen.sel || 0;
       var f = focusables();
@@ -776,7 +777,7 @@
       opt = opt || {};
       var b = el('button', 'rx-item rx-f' + (opt.dis ? ' dis' : '') + (opt.cls ? ' ' + opt.cls : ''));
       b.type = 'button';
-      if (opt.icon) b.appendChild(el('span', 'rx-ic', opt.icon));
+      if (opt.icon) { var ic = el('span', 'rx-ic'); ic.appendChild(R.iconNode(opt.icon, 22)); b.appendChild(ic); }
       var tx = el('span', 'rx-tx');
       tx.appendChild(el('span', 'rx-l', label));
       if (sub) tx.appendChild(el('span', 'rx-s', sub));
@@ -838,23 +839,24 @@
         box.appendChild(el('div', 'rx-carline', L('愛車 ', 'Car ') + t(R.car(s.car).name) + '　·　' + yen(s.money) + '　·　' + L('難易度 ', 'Level ') + t(R.LEVEL_NAMES[s.level])));
         var done = Math.min(s.story, R.STORY.length);
         var items = [
-          item(L('ストーリー', 'Story'), done + ' / ' + R.STORY.length, function () { go(SCREENS.story()); }, { icon: '📖' }),
-          item(L('オープンワールド', 'Open World'), L('浜松・東名・名古屋', 'Hamamatsu–Nagoya'), function () { go(SCREENS.world(null)); }, { icon: '🗾' }),
-          item(L('アルバイト', 'Part-time Jobs'), L('タクシー・宅配・出前', 'Taxi, parcels, food'), function () { go(SCREENS.jobs()); }, { icon: '🚕' }),
-          item(L('デイリーレース', 'Daily Race'), dailyLabel(s), function () { go(SCREENS.daily()); }, { icon: '📅' }),
-          item(L('グランプリ', 'Grand Prix'), L('カップ戦', 'Cups'), function () { go(SCREENS.gp()); }, { icon: '🏆' }),
-          item(L('クイックレース', 'Quick Race'), L('コース・天気を選ぶ', 'Pick track & weather'), function () { go(SCREENS.quick(false, 'all')); }, { icon: '🏁' }),
-          item(L('実在コース', 'Real Tracks'), L('鈴鹿・富士などのサーキット／榛名・碓氷などの峠／浜松の公道', 'Real circuits, mountain passes and Hamamatsu roads'), function () { go(SCREENS.quick(false, 'circuit')); }, { icon: '🗾' }),
-          item(L('峠バトル', 'Touge Battle'), L('ダウンヒル 1 対 1', 'Downhill 1v1'), function () { go(SCREENS.touge()); }, { icon: '⛰' }),
-          item(L('タイムアタック', 'Time Attack'), L('ゴーストと勝負', 'Beat your ghost'), function () { go(SCREENS.trackPick('time')); }, { icon: '⏱' }),
-          item(L('チャレンジ', 'Challenges'), L('脱落戦・追跡など', 'Elimination, chase…'), function () { go(SCREENS.challenges()); }, { icon: '🔥' }),
-          item(L('ミニゲーム', 'Mini Games'), L('ジムカーナ・ゼロヨン', 'Gymkhana, drag'), function () { go(SCREENS.minis()); }, { icon: '🎯' }),
-          item(L('カジュアル', 'Casual'), L('コイン・加速パネルあり', 'Coins & boost pads'), function () { go(SCREENS.casual()); }, { icon: '🎈' }),
-          item(L('ガレージ', 'Garage'), s.owned.length + L(' 台所有', ' owned'), function () { go(SCREENS.garage()); }, { icon: '🔧' }),
-          item(L('実績', 'Achievements'), Object.keys(s.ach || {}).length + ' / ' + R.ACHIEVEMENTS.length, function () { go(SCREENS.achievements()); }, { icon: '🎖' }),
-          item(L('記録', 'Records'), '', function () { go(SCREENS.records()); }, { icon: '📊' }),
-          item(L('設定・遊び方', 'Settings & Help'), '', function () { go(SCREENS.settings()); }, { icon: '⚙' }),
-          item(L('管理者モード', 'Admin mode'), R.admin && R.admin.on ? 'ON' : L('スキップ・数値の変更（保存なし）', 'Skip & tweak (not saved)'), function () { go(SCREENS.admin()); }, { icon: '🛠' })
+          item(L('ストーリー', 'Story'), done + ' / ' + R.STORY.length, function () { go(SCREENS.story()); }, { icon: 'book' }),
+          item(L('オープンワールド', 'Open World'), L('浜松・東名・名古屋', 'Hamamatsu–Nagoya'), function () { go(SCREENS.world(null)); }, { icon: 'map' }),
+          item(L('アルバイト', 'Part-time Jobs'), L('タクシー・宅配・出前', 'Taxi, parcels, food'), function () { go(SCREENS.jobs()); }, { icon: 'taxi' }),
+          item(L('デイリーレース', 'Daily Race'), dailyLabel(s), function () { go(SCREENS.daily()); }, { icon: 'calendar' }),
+          item(L('グランプリ', 'Grand Prix'), L('カップ戦', 'Cups'), function () { go(SCREENS.gp()); }, { icon: 'trophy' }),
+          item(L('クイックレース', 'Quick Race'), L('コース・天気を選ぶ', 'Pick track & weather'), function () { go(SCREENS.quick(false, 'all')); }, { icon: 'flag' }),
+          item(L('実在コース', 'Real Tracks'), L('鈴鹿・富士などのサーキット／榛名・碓氷などの峠／浜松の公道', 'Real circuits, mountain passes and Hamamatsu roads'), function () { go(SCREENS.quick(false, 'circuit')); }, { icon: 'map' }),
+          item(L('峠バトル', 'Touge Battle'), L('ダウンヒル 1 対 1', 'Downhill 1v1'), function () { go(SCREENS.touge()); }, { icon: 'mountain' }),
+          item(L('タイムアタック', 'Time Attack'), L('ゴーストと勝負', 'Beat your ghost'), function () { go(SCREENS.trackPick('time')); }, { icon: 'stopwatch' }),
+          item(L('チャレンジ', 'Challenges'), L('脱落戦・追跡など', 'Elimination, chase…'), function () { go(SCREENS.challenges()); }, { icon: 'flame' }),
+          item(L('ミニゲーム', 'Mini Games'), L('ジムカーナ・ゼロヨン', 'Gymkhana, drag'), function () { go(SCREENS.minis()); }, { icon: 'target' }),
+          item(L('カジュアル', 'Casual'), L('コイン・加速パネルあり', 'Coins & boost pads'), function () { go(SCREENS.casual()); }, { icon: 'balloon' }),
+          item(L('ガレージ', 'Garage'), s.owned.length + L(' 台所有', ' owned'), function () { go(SCREENS.garage()); }, { icon: 'wrench' }),
+          item(L('実績', 'Achievements'), Object.keys(s.ach || {}).length + ' / ' + R.ACHIEVEMENTS.length, function () { go(SCREENS.achievements()); }, { icon: 'medal' }),
+          item(L('記録', 'Records'), '', function () { go(SCREENS.records()); }, { icon: 'chart' }),
+          item(L('アルバム', 'Album'), L('曲を聴く', 'Listen to the music'), function () { go(SCREENS.album()); }, { icon: 'sound' }),
+          item(L('設定・遊び方', 'Settings & Help'), '', function () { go(SCREENS.settings()); }, { icon: 'gear' }),
+          item(L('管理者モード', 'Admin mode'), R.admin && R.admin.on ? 'ON' : L('スキップ・数値の変更（保存なし）', 'Skip & tweak (not saved)'), function () { go(SCREENS.admin()); }, { icon: 'tool' })
         ];
         box.appendChild(list(items, 2));
         box.appendChild(hint());
@@ -892,7 +894,7 @@
             st.side.forEach(function (ev, i) {
               var open = sideOpen(s, st, ev), done = sideDone(s, ev), who = R.CHARS[ev.char] ? t(R.CHARS[ev.char].name) : '';
               var need = findEvent(ev.after);
-              items.push(item((done ? '✔ ' : open ? '★ ' : '🔒 ') + t(ev.title),
+              items.push(item((done ? '[済] ' : open ? '★ ' : '[未] ') + t(ev.title),
                               (who ? who + L(' の話　', "'s story  ") : '') + (ev.talk ? L('会話', 'Scene') : trackName(ev.track)) + '　' + (open ? goalText(ev.goal, ev.track) : L('「', 'after "') + (need ? t(need.ev.title) : '') + L('」のあとで開放', '"')),
                               function () { storyEvent(st.id, i, true, true); }, { dis: !open, right: yen(ev.reward) }));
             });
@@ -909,7 +911,7 @@
           }
           p.appendChild(head);
           if (st.endings) st.endings.forEach(function (e) {
-            if (((s.endings || {})[st.id] || {})[e.id]) items.push(item('★ ' + L('エンディングを見直す: ', 'Replay ending: ') + t(e.name), t(e.hint || ''), function () { scene([{ title: 'ENDING', sub: t(e.name) }].concat(e.scene || []), function () { refresh(); }, st.filter, { sid: st.id, replay: true }); }, { icon: '🎬' }));
+            if (((s.endings || {})[st.id] || {})[e.id]) items.push(item(L('エンディングを見直す: ', 'Replay ending: ') + t(e.name), t(e.hint || ''), function () { scene([{ bgm: 'ending' }, { title: 'ENDING', sub: t(e.name) }].concat(e.scene || []), function () { refresh(); }, st.filter, { sid: st.id, replay: true }); }, { icon: '🎬' }));
           });
           st.chapters.forEach(function (ch) {
             var evs = st.events.filter(function (e) { return e.ch === ch.id && evVisible(e, s, st.id); });
@@ -918,7 +920,7 @@
             evs.forEach(function (ev) {
               var idx = st.events.indexOf(ev), locked = idx > pr && !unl, cleared = idx < pr;
               if (idx === pr) firstOpen = items.filter(function (x) { return x.classList.contains('rx-f'); }).length;
-              items.push(item((cleared ? '✔ ' : locked ? '🔒 ' : '▶ ') + t(ev.title),
+              items.push(item((cleared ? '[済] ' : locked ? '[未] ' : '▶ ') + t(ev.title),
                               ev.talk ? L('会話・物語', 'Story scene') : trackName(ev.track) + '　' + t((R.MODES[ev.mode] || R.MODES.race).name) + '　' + goalText(ev.goal, ev.track),
                               function () { storyEvent(st.id, idx, true); }, { dis: locked, right: yen(ev.reward) }));
             });
@@ -967,12 +969,12 @@
         row.appendChild(info);
         p.appendChild(row);
         p.appendChild(list([
-          item(L('スタート', 'Start'), '', function () { runStory(sid, idx, side); }, { icon: '🏁', cls: 'accent' }),
-          item(L('会話をもう一度', 'Replay scene'), '', function () { if (ev.scene) scene(ev.scene, function () { refresh(); }, st.filter, { sid: sid, replay: isReplay(sid, idx, side) }); }, { icon: '💬', dis: !ev.scene }),
-          item(L('ガレージ', 'Garage'), '', function () { go(SCREENS.garage()); }, { icon: '🔧', dis: !!ev.car }),
-          item(L('管理者パネル', 'Admin panel'), R.admin && R.admin.on ? 'ON' : L('数値の変更・スキップ', 'Tweak / skip'), function () { go(SCREENS.admin()); }, { icon: '🛠' }),
-          R.admin && R.admin.on ? item(L('このバトルをスキップ', 'Skip this battle'), L('成功扱い（記録は残りません）', 'Counts as a win (no records)'), function () { skipStory(sid, idx, side); }, { icon: '⏭' }) : null,
-          item(L('戻る', 'Back'), '', function () { back(); }, { icon: '↩' })
+          item(L('スタート', 'Start'), '', function () { runStory(sid, idx, side); }, { icon: 'flag', cls: 'accent' }),
+          item(L('会話をもう一度', 'Replay scene'), '', function () { if (ev.scene) scene(ev.scene, function () { refresh(); }, st.filter, { sid: sid, replay: isReplay(sid, idx, side) }); }, { icon: 'chat', dis: !ev.scene }),
+          item(L('ガレージ', 'Garage'), '', function () { go(SCREENS.garage()); }, { icon: 'wrench', dis: !!ev.car }),
+          item(L('管理者パネル', 'Admin panel'), R.admin && R.admin.on ? 'ON' : L('数値の変更・スキップ', 'Tweak / skip'), function () { go(SCREENS.admin()); }, { icon: 'tool' }),
+          R.admin && R.admin.on ? item(L('このバトルをスキップ', 'Skip this battle'), L('成功扱い（記録は残りません）', 'Counts as a win (no records)'), function () { skipStory(sid, idx, side); }, { icon: 'skip' }) : null,
+          item(L('戻る', 'Back'), '', function () { back(); }, { icon: 'back' })
         ].filter(Boolean), 2));
         p.appendChild(hint());
         o.appendChild(p);
@@ -1038,7 +1040,7 @@
       ends.forEach(function (e) { if (!pick && evalExpr(e.when, f)) pick = e; });
       if (!pick) pick = ends[ends.length - 1];
       R.edit(function (s2) { s2.endings = s2.endings || {}; (s2.endings[st.id] = s2.endings[st.id] || {})[pick.id] = 1; });
-      var lines = [{ title: 'ENDING ' + (ends.indexOf(pick) + 1) + ' / ' + ends.length, sub: t(pick.name) }].concat(pick.scene || []);
+      var lines = [{ bgm: 'ending' }, { title: 'ENDING ' + (ends.indexOf(pick) + 1) + ' / ' + ends.length, sub: t(pick.name) }].concat(pick.scene || []);
       scene(lines, function () { credits(st, pick); }, st.filter, { sid: st.id, replay: true });
     }
 
@@ -1073,7 +1075,7 @@
         }
       })();
       function setBg(track, weather) {
-        try { R.drawPreview(bg, track, weather || null, false, true); } catch (e) { /* ignore */ }
+        try { if (!(R.drawScene && R.SCENES && R.SCENES[track] && R.drawScene(bg, track))) R.drawPreview(bg, track, weather || null, false, true); } catch (e) { /* ignore */ }
         root.classList.remove('pan'); void root.offsetWidth; root.classList.add('pan');
       }
       setBg('tenryu');
@@ -1096,10 +1098,37 @@
           if (shown >= full.length) { clearInterval(timer); if (cb) cb(); }
         }, 32);
       }
+      var curText = '';
+      // 台詞の言い回しから、表情をもう一段こまかくする（台本に emo:laugh などと書いても使える）
+      function refineEmo(emo, tx) {
+        tx = tx || '';
+        if (!emo || ['laugh', 'worry', 'blush', 'cry', 'think', 'sleepy', 'wink', 'smug', 'determined', 'panic', 'tired', 'gentle'].indexOf(emo) >= 0) return emo;
+        var h = 0; for (var q = 0; q < tx.length; q++) h = (h * 31 + tx.charCodeAt(q)) >>> 0;
+        if (emo === 'smile') {
+          if (/(はは|ははっ|あはは|やった|最高|笑)/.test(tx) || /！！/.test(tx)) return 'laugh';
+          if (/(ありがとう|うれしい|嬉しい|照れ|恥ずかし|えへ)/.test(tx)) return h % 2 ? 'blush' : 'gentle';
+          if (/(眠|おやすみ|ふわ)/.test(tx)) return 'sleepy';
+          if (/(任せ|いたずら|ふふ|なんてね)/.test(tx)) return 'wink';
+          if (/(。|…)$/.test(tx) && h % 3 === 0) return 'gentle';
+        } else if (emo === 'sad') {
+          if (/(泣|涙|ごめん|うう|ううっ)/.test(tx)) return 'cry';
+          if (/(……|心配|大丈夫か|どうしよう)/.test(tx)) return h % 2 ? 'worry' : 'sad';
+          if (/(疲|つかれ)/.test(tx)) return 'tired';
+        } else if (emo === 'shock') {
+          if (/(え！|えっ|うわ|ええ|まさか)/.test(tx) && /！/.test(tx)) return 'panic';
+        } else if (emo === 'cool') {
+          if (/(ふん|フン|ふっ|当然|だろう|ドヤ)/.test(tx)) return 'smug';
+          if (/(？|か。|だろうか)/.test(tx)) return 'think';
+          if (/(必ず|勝つ|行く|やる|絶対|負けない|走る)/.test(tx)) return 'determined';
+        } else if (emo === 'angry') {
+          if (/(まって|待って|ちが|違う)/.test(tx)) return 'panic';
+        }
+        return emo;
+      }
       function portrait(cvs, who, emo) {
         var ch = R.CHARS[who] || R.CHARS.mina;
         cvs.getContext('2d').clearRect(0, 0, 192, 192);
-        R.drawPortrait(cvs, ch.face, emo);
+        R.drawPortrait(cvs, ch.face, refineEmo(emo, curText));
       }
       var onL = null, onR = null;
       function showLine() {
@@ -1182,6 +1211,7 @@
         var cvs = left ? faceL : faceR;
         if ((left ? onL : onR) !== who) { cvs.classList.remove('in'); void cvs.offsetWidth; cvs.classList.add('in'); }
         if (left) onL = who; else onR = who;
+        curText = typeof ln[1] === 'string' ? ln[1] : (ln[1] && (ln[1].ja || ln[1].en)) || '';
         portrait(cvs, who, fx.emo);
         faceL.classList.toggle('dim', !left); faceR.classList.toggle('dim', left);
         faceL.classList.toggle('empty', !onL); faceR.classList.toggle('empty', !onR);
@@ -1236,14 +1266,14 @@
       var start = 'hm_eki', dest = null, pickMode = 'start';
       var view = { cx: -2500, cz: -2500, scale: 0.034 };
       return { build: function (o) {
-        var p = panel(job ? R.JOBS[job].icon + ' ' + t(R.JOBS[job].name) : L('オープンワールド（浜松市・実在の道路）', 'Open World — real Hamamatsu roads'),
+        var p = panel(job ? t(R.JOBS[job].name) : L('オープンワールド（浜松市・実在の道路）', 'Open World — real Hamamatsu roads'),
                       job ? t(R.JOBS[job].desc) : L('浜松市全域の実在の道路・交差点・信号を走る（OpenStreetMap・国土地理院のデータ）', 'Drive every real road, junction and signal of Hamamatsu (OpenStreetMap / GSI data)'));
         o.appendChild(p);
         var wait = el('div', 'rx-s', L('地図を読み込み中…', 'Loading the map...'));
         p.appendChild(wait);
         R.Map.load(function (ok) {
           wait.remove();
-          if (!ok) { p.appendChild(el('div', 'rx-s', L('地図データを読み込めませんでした。', 'Could not load the map data.'))); p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })])); return; }
+          if (!ok) { p.appendChild(el('div', 'rx-s', L('地図データを読み込めませんでした。', 'Could not load the map data.'))); p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })])); return; }
           var PL = R.worldPlaces();
           var row = el('div', 'rx-row');
           var mc = el('canvas', 'rx-map'); mc.width = 900; mc.height = 560;
@@ -1298,8 +1328,8 @@
             if (view.scale === 0.009) { view.cx = 3000; view.cz = -27000; } else if (PL[start]) { view.cx = PL[start].x; view.cz = PL[start].z; }
             drawBig();
           }));
-          info.appendChild(item(L('出発する', 'Go'), '', function () { runWorld(job, start, dest); }, { icon: '🚗', cls: 'accent' }));
-          info.appendChild(item(L('戻る', 'Back'), '', function () { back(); }, { icon: '↩' }));
+          info.appendChild(item(L('出発する', 'Go'), '', function () { runWorld(job, start, dest); }, { icon: 'car', cls: 'accent' }));
+          info.appendChild(item(L('戻る', 'Back'), '', function () { back(); }, { icon: 'back' }));
           row.appendChild(info);
           p.appendChild(row);
           p.appendChild(hint());
@@ -1315,7 +1345,7 @@
         p.appendChild(list(Object.keys(R.JOBS).map(function (k) {
           var j = R.JOBS[k];
           return item(t(j.name), t(j.desc), function () { go(SCREENS.world(k)); }, { icon: j.icon });
-        }).concat([item(L('戻る', 'Back'), '', back, { icon: '↩' })])));
+        }).concat([item(L('戻る', 'Back'), '', back, { icon: 'back' })])));
         p.appendChild(hint());
         o.appendChild(p);
       } };
@@ -1338,8 +1368,8 @@
         p.appendChild(list(R.CUPS.map(function (c) {
           var un = R.cupUnlocked(s, c), m = s.cups[c.id];
           return item(t(c.name), c.tracks.map(trackName).join(' / '), function () { go(SCREENS.cup(c.id)); },
-                      { icon: un ? '🏆' : '🔒', dis: !un, right: m ? '🏅' + t(R.MEDALS[m]) : '' });
-        }).concat([item(L('戻る', 'Back'), '', back, { icon: '↩' })])));
+                      { icon: un ? 'trophy' : 'lock', dis: !un, right: m ? t(R.MEDALS[m]) : '' });
+        }).concat([item(L('戻る', 'Back'), '', back, { icon: 'back' })])));
         p.appendChild(hint());
         o.appendChild(p);
       } };
@@ -1354,8 +1384,8 @@
         });
         p.appendChild(row);
         p.appendChild(el('div', 'rx-s', L('ポイント: ', 'Points: ') + R.POINTS.join('-') + L('　優勝ボーナス ', '  winner bonus ') + yen(cup.bonus[0])));
-        p.appendChild(list([item(L('開幕！', 'Start the cup'), '', function () { runCup(Cup(cupId)); }, { icon: '🏁', cls: 'accent' }),
-                            item(L('戻る', 'Back'), '', back, { icon: '↩' })], 2));
+        p.appendChild(list([item(L('開幕！', 'Start the cup'), '', function () { runCup(Cup(cupId)); }, { icon: 'flag', cls: 'accent' }),
+                            item(L('戻る', 'Back'), '', back, { icon: 'back' })], 2));
         p.appendChild(hint());
         o.appendChild(p);
       } };
@@ -1381,12 +1411,12 @@
       app.mode = 'menu'; app.sess = null;
       over.classList.remove('hidden'); over.innerHTML = '';
       var p = panel(t(st.cup.name) + L(' 最終結果', ' — final'), '');
-      p.appendChild(el('div', 'rx-big', f.pos === 1 ? '🏆 ' + L('総合優勝！', 'CHAMPION!') : f.pos <= 3 ? '🏅 ' + L('総合 ' + f.pos + ' 位', 'Overall P' + f.pos) : L('総合 ' + f.pos + ' 位', 'Overall P' + f.pos)));
+      p.appendChild(el('div', 'rx-big', f.pos === 1 ? L('総合優勝！', 'CHAMPION!') : f.pos <= 3 ? L('総合 ' + f.pos + ' 位', 'Overall P' + f.pos) : L('総合 ' + f.pos + ' 位', 'Overall P' + f.pos)));
       var tb = el('div', 'rx-table');
       st.table().forEach(function (e, i) { var d = el('div', 'rx-tr' + (e.n === 'YOU' ? ' me' : '')); d.appendChild(el('span', '', (i + 1) + '. ' + (e.n === 'YOU' ? L('あなた', 'YOU') : e.n))); d.appendChild(el('span', '', e.p + ' pt')); tb.appendChild(d); });
       p.appendChild(tb);
       if (f.bonus) p.appendChild(el('div', 'rx-s', L('ボーナス +', 'Bonus +') + yen(f.bonus)));
-      p.appendChild(list([item(L('グランプリへ', 'Back to Grand Prix'), '', function () { app.stack = app.stack.slice(0, 2); show(app.stack[1]); }, { icon: '↩' })]));
+      p.appendChild(list([item(L('グランプリへ', 'Back to Grand Prix'), '', function () { app.stack = app.stack.slice(0, 2); show(app.stack[1]); }, { icon: 'back' })]));
       o_focus();
       function o_focus() { over.appendChild(p); app.sel = 0; highlight(); }
       if (f.pos === 1) sfx('win');
@@ -1433,8 +1463,8 @@
         col.appendChild(optRow(L('天気', 'Weather'), function () { return quickOpt.weather === 'auto' ? L('コース標準', 'Track default') : t(R.WEATHERS[quickOpt.weather]); }, function (d) { quickOpt.weather = W2[(W2.indexOf(quickOpt.weather) + d + W2.length) % W2.length]; drawPv(); }));
         col.appendChild(optRow(L('ミラー（左右反転）', 'Mirror'), function () { return quickOpt.mirror ? 'ON' : 'OFF'; }, function () { quickOpt.mirror = !quickOpt.mirror; drawPv(); }));
         col.appendChild(optRow(L('ライバル', 'Rivals'), function () { return quickOpt.rivals + L(' 台', ''); }, function (d) { quickOpt.rivals = clamp(quickOpt.rivals + d, 1, 7); }));
-        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('ガレージで変える', 'Change in garage'), function () { go(SCREENS.garage()); }, { icon: '🔧' }));
-        col.appendChild(item(L('スタート', 'Start'), '', function () { runQuick(casual); }, { icon: '🏁', cls: 'accent' }));
+        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('ガレージで変える', 'Change in garage'), function () { go(SCREENS.garage()); }, { icon: 'wrench' }));
+        col.appendChild(item(L('スタート', 'Start'), '', function () { runQuick(casual); }, { icon: 'flag', cls: 'accent' }));
         row.appendChild(col);
         p.appendChild(row);
         p.appendChild(hint());
@@ -1468,9 +1498,9 @@
         col.appendChild(optRow(L('相手', 'Rival'), function () { var r = R.TOUGE_DRIVERS[tougeOpt.rival]; return r.name + '（' + t(R.car({ fc: 'fc', fd: 'fd', r32: 'r32', s13: 's13', evo: 'evo', gc8: 'gc8' }[r.body]).name) + '）'; },
                                 function (d) { tougeOpt.rival = (tougeOpt.rival + d + R.TOUGE_DRIVERS.length) % R.TOUGE_DRIVERS.length; }));
         col.appendChild(el('div', 'rx-s', L('峠の勝利数 ', 'Touge wins ') + (s.stats.touge || 0) + L('　ベスト ', '  best ') + fmt(s.laps[tougeOpt.track])));
-        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('おすすめ: AE86・FC・FD・ZN8', 'Try AE86, FC, FD, ZN8'), function () { go(SCREENS.garage()); }, { icon: '🔧' }));
-        col.appendChild(item(L('バトル開始', 'Battle!'), '', function () { runTouge(); }, { icon: '⛰', cls: 'accent' }));
-        col.appendChild(item(L('タイムアタック（この峠）', 'Time attack this pass'), '', function () { runSingle('time', tougeOpt.track); }, { icon: '⏱' }));
+        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('おすすめ: AE86・FC・FD・ZN8', 'Try AE86, FC, FD, ZN8'), function () { go(SCREENS.garage()); }, { icon: 'wrench' }));
+        col.appendChild(item(L('バトル開始', 'Battle!'), '', function () { runTouge(); }, { icon: 'mountain', cls: 'accent' }));
+        col.appendChild(item(L('タイムアタック（この峠）', 'Time attack this pass'), '', function () { runSingle('time', tougeOpt.track); }, { icon: 'stopwatch' }));
         row.appendChild(col);
         p.appendChild(row);
         p.appendChild(hint());
@@ -1528,9 +1558,9 @@
         var items = ['elim', 'duel', 'sp', 'arcade', 'chase', 'traffic'].map(function (m) {
           return item(t(R.MODES[m].name), t(R.MODES[m].desc), function () {
             if (m === 'duel') go(SCREENS.duel()); else go(SCREENS.trackPick(m));
-          }, { icon: { elim: '💀', duel: '⚔', sp: '🌙', arcade: '⏲', chase: '🚓', traffic: '🛣' }[m] });
+          }, { icon: { elim: 'skull', duel: 'swords', sp: 'moon', arcade: 'timer', chase: 'police', traffic: 'road' }[m] });
         });
-        items.push(item(L('戻る', 'Back'), '', back, { icon: '↩' }));
+        items.push(item(L('戻る', 'Back'), '', back, { icon: 'back' }));
         p.appendChild(list(items));
         p.appendChild(hint());
         o.appendChild(p);
@@ -1542,10 +1572,10 @@
         var p = panel(L('デュエル — 相手を選ぶ', 'Duel — pick a rival'), L('ストーリーで倒したボスと再戦できます', 'Rematch bosses you beat in the story'));
         var items = Object.keys(R.BOSSES).filter(function (k) { return k !== 'phantom'; }).map(function (k) {
           var ok = !!s.bosses[k];
-          return item(R.BOSSES[k].name, ok ? L('撃破済み', 'defeated') : L('ストーリーで倒すと開放', 'beat in story to unlock'), function () { go(SCREENS.trackPick('duel', { boss: k })); }, { icon: ok ? '⚔' : '🔒', dis: !ok });
+          return item(R.BOSSES[k].name, ok ? L('撃破済み', 'defeated') : L('ストーリーで倒すと開放', 'beat in story to unlock'), function () { go(SCREENS.trackPick('duel', { boss: k })); }, { icon: ok ? 'swords' : 'lock', dis: !ok });
         });
-        items.unshift(item('MONO', L('フォーミュラの腕利き（いつでも）', 'Formula ace (always available)'), function () { go(SCREENS.trackPick('duel')); }, { icon: '⚔' }));
-        items.push(item(L('戻る', 'Back'), '', back, { icon: '↩' }));
+        items.unshift(item('MONO', L('フォーミュラの腕利き（いつでも）', 'Formula ace (always available)'), function () { go(SCREENS.trackPick('duel')); }, { icon: 'swords' }));
+        items.push(item(L('戻る', 'Back'), '', back, { icon: 'back' }));
         p.appendChild(list(items, 2));
         p.appendChild(hint());
         o.appendChild(p);
@@ -1560,9 +1590,9 @@
         var items = Object.keys(R.MINIS).map(function (k) {
           var b = s.mini[k];
           return item(t(R.MINIS[k].name), t(R.MINIS[k].desc), function () { runMini(k); },
-                      { icon: { gymkhana: '🔶', drag: '🚦', brake: '🛑' }[k], right: b !== undefined ? (k === 'brake' ? b + L('点', 'pt') : fmt(b)) : '' });
+                      { icon: { gymkhana: 'diamond', drag: 'signal', brake: 'stop' }[k], right: b !== undefined ? (k === 'brake' ? b + L('点', 'pt') : fmt(b)) : '' });
         });
-        items.push(item(L('戻る', 'Back'), '', back, { icon: '↩' }));
+        items.push(item(L('戻る', 'Back'), '', back, { icon: 'back' }));
         p.appendChild(list(items));
         p.appendChild(hint());
         o.appendChild(p);
@@ -1573,9 +1603,9 @@
         var s = R.load();
         var p = panel(L('カジュアル', 'Casual'), L('本格志向ではないお楽しみ枠。ここだけコインと加速パネルが出ます', 'Just for fun — the only place with coins and boost pads'));
         p.appendChild(list([
-          item(t(R.CASUAL.party.name), t(R.CASUAL.party.desc), function () { go(SCREENS.quick(true)); }, { icon: '🎉' }),
-          item(t(R.CASUAL.coins.name), t(R.CASUAL.coins.desc), function () { runMini('coins'); }, { icon: '🪙', right: s.mini.coins !== undefined ? s.mini.coins + L(' 枚', '') : '' }),
-          item(L('戻る', 'Back'), '', back, { icon: '↩' })
+          item(t(R.CASUAL.party.name), t(R.CASUAL.party.desc), function () { go(SCREENS.quick(true)); }, { icon: 'party' }),
+          item(t(R.CASUAL.coins.name), t(R.CASUAL.coins.desc), function () { runMini('coins'); }, { icon: 'coin', right: s.mini.coins !== undefined ? s.mini.coins + L(' 枚', '') : '' }),
+          item(L('戻る', 'Back'), '', back, { icon: 'back' })
         ]));
         p.appendChild(hint());
         o.appendChild(p);
@@ -1619,7 +1649,7 @@
             })();
           });
           if (own) {
-            act(s2.car === id ? L('✔ 乗車中', '✔ In use') : L('この車に乗る', 'Drive this'), function () { R.edit(function (x) { x.car = id; }); sfx('coin'); refresh(); }, s2.car === id);
+            act(s2.car === id ? L('乗車中', 'In use') : L('この車に乗る', 'Drive this'), function () { R.edit(function (x) { x.car = id; }); sfx('coin'); refresh(); }, s2.car === id);
             act(L('色を変える', 'Repaint'), function () { R.edit(function (x) { var i = x.paint[id] === undefined ? car.paint : x.paint[id]; x.paint[id] = (i + 1) % R.PAINTS.length; }); sfx('click'); showCar(id); });
             R.UPGRADES.forEach(function (u) {
               var lv = (s2.upg[id] || {})[u.id] || 0, cost = lv < 3 ? R.upgCost(car, lv) : 0;
@@ -1629,7 +1659,7 @@
               }, lv >= 3 || s2.money < cost);
             });
           } else if (locked) {
-            act(L('🔒 ストーリー・アルバイトで入手', '🔒 Earned through story / jobs'), function () {}, true);
+            act(L('ストーリー・アルバイトで入手', 'Earned through story / jobs'), function () {}, true);
           } else {
             act(L('購入 ', 'Buy ') + yen(car.price), function () {
               var ok = R.edit(function (x) { if (x.money < car.price) return false; x.money -= car.price; x.owned.push(id); x.car = id; return true; });
@@ -1655,7 +1685,7 @@
           if (car.id === garageSel) selIdx = i;
           lst.appendChild(item((s.car === car.id ? '▶ ' : '') + t(car.name), '[' + car.cls + '] ' + (own ? L('所有', 'owned') : locked ? L('未開放', 'locked') : yen(car.price)),
                                function () { showCar(car.id); var f = detail.querySelector('.rx-btn:not([disabled])'); if (f) f.focus(); },
-                               { icon: own ? '🚗' : locked ? '🔒' : '🏷', focus: function () { showCar(car.id); } }));
+                               { icon: own ? 'car' : locked ? 'lock' : 'tag', focus: function () { showCar(car.id); } }));
         });
         row.appendChild(lst); row.appendChild(detail);
         p.appendChild(row);
@@ -1692,9 +1722,9 @@
          [L('今日', 'Today'), d.last === key ? L('達成済み', 'Done') : L('未達成（3 位以内でボーナス）', 'Not yet (top 3 for bonus)')]
         ].forEach(function (kv) { var r2 = el('div', 'rx-tr'); r2.appendChild(el('span', '', kv[0])); r2.appendChild(el('span', '', kv[1])); tb.appendChild(r2); });
         col.appendChild(tb);
-        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('ガレージで変える', 'Change in garage'), function () { go(SCREENS.garage()); }, { icon: '🔧' }));
-        col.appendChild(item(L('スタート', 'Start'), '', function () { runDaily(); }, { icon: '🏁', cls: 'accent' }));
-        col.appendChild(item(L('戻る', 'Back'), '', back, { icon: '↩' }));
+        col.appendChild(item(L('車: ', 'Car: ') + t(R.car(s.car).name), L('ガレージで変える', 'Change in garage'), function () { go(SCREENS.garage()); }, { icon: 'wrench' }));
+        col.appendChild(item(L('スタート', 'Start'), '', function () { runDaily(); }, { icon: 'flag', cls: 'accent' }));
+        col.appendChild(item(L('戻る', 'Back'), '', back, { icon: 'back' }));
         row.appendChild(col);
         p.appendChild(row);
         p.appendChild(hint());
@@ -1722,14 +1752,52 @@
         var tb = el('div', 'rx-table');
         R.ACHIEVEMENTS.forEach(function (a) {
           var on = !!s.ach[a.id], r2 = el('div', 'rx-tr');
-          r2.appendChild(el('span', '', (on ? a.icon : '🔒') + ' ' + t(a.name) + (on ? '' : '')));
-          r2.appendChild(el('span', '', t(a.desc) + (a.reward ? '　' + (on ? '✔ ' : '+') + yen(a.reward) : (on ? '　✔' : ''))));
+          var r2n = el('span', ''); r2n.appendChild(R.iconNode(on ? a.icon : 'lock', 18)); r2n.appendChild(document.createTextNode(' ' + t(a.name))); r2.appendChild(r2n);
+          r2.appendChild(el('span', '', t(a.desc) + (a.reward ? '　' + (on ? '済　' : '+') + yen(a.reward) : (on ? '　済' : ''))));
           if (!on) r2.style.opacity = '.6';
           tb.appendChild(r2);
         });
         p.appendChild(tb);
-        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })]));
         o.appendChild(p);
+      } };
+    };
+
+    SCREENS.album = function () {
+      return { isAlbum: true, build: function (o) {
+        var M = R.Music, A = M && M.album;
+        var p = panel(L('アルバム', 'Album'), L('曲を選ぶと流れます。一曲が終わると次の曲へ進みます。', 'Pick a song. It moves on to the next one when it ends.'));
+        if (!A) { p.appendChild(el('div', 'rx-s', L('音楽が使えません。', 'Music is unavailable.'))); p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })])); o.appendChild(p); return; }
+        var s0 = R.load(), muted = (s0.bgm !== undefined && s0.bgm <= 0) || TB.store.get('sound', '1') !== '1';
+        if (muted) p.appendChild(el('div', 'rx-s', L('いまは音が切れています（設定の「効果音」と「BGM の音量」を上げてください）。', 'Sound is off. Turn on Sound and raise the BGM volume in Settings.')));
+        var now = el('div', 'rx-big', '');
+        p.appendChild(now);
+        var ctrl = el('div', 'rx-row');
+        function refreshNow() {
+          var t = A.tracks[A.idx];
+          now.textContent = A.active ? L('再生中: ', 'Now playing: ') + t.name : L('停止中', 'Stopped');
+          Array.prototype.forEach.call(rows, function (r, i) { r.classList.toggle('playing', A.active && i === A.idx); });
+        }
+        var rows = [];
+        var lst = el('div', 'rx-list');
+        A.tracks.forEach(function (tr, i) {
+          var mm = Math.floor(tr.secs / 60), ss = String(tr.secs % 60).padStart(2, '0');
+          var it = item((i + 1) + '. ' + tr.name, tr.desc, function () { A.play(i); refreshNow(); }, { icon: 'sound', right: mm + ':' + ss });
+          rows.push(it); lst.appendChild(it);
+        });
+        p.appendChild(lst);
+        var rep = { all: L('全曲をくり返す', 'Repeat all'), one: L('この曲をくり返す', 'Repeat one'), none: L('くり返さない', 'No repeat') };
+        var bar = list([
+          item(L('前の曲', 'Previous'), '', function () { A.prev(); refreshNow(); }, { icon: 'back' }),
+          item(L('停止', 'Stop'), '', function () { A.stop(); refreshNow(); }, { icon: 'stop' }),
+          item(L('次の曲', 'Next'), '', function () { A.next(); refreshNow(); }, { icon: 'skip' }),
+          item(L('くり返し: ', 'Repeat: ') + rep[A.repeat], '', function () { A.setRepeat(A.repeat === 'all' ? 'one' : A.repeat === 'one' ? 'none' : 'all'); refresh(); }, { icon: 'loop' }),
+          item(L('戻る', 'Back'), '', function () { A.stop(); back(); }, { icon: 'back' })
+        ], 5);
+        p.appendChild(bar);
+        o.appendChild(p);
+        A.onChange = function () { if (app.curScreen && app.curScreen.isAlbum && !app.closed) refreshNow(); };
+        refreshNow();
       } };
     };
 
@@ -1750,8 +1818,8 @@
         R.ALL_TRACKS.forEach(function (id) { var d = el('div', 'rx-tr'); d.appendChild(el('span', '', trackName(id))); d.appendChild(el('span', '', fmt(s.laps[id]))); tb2.appendChild(d); });
         p.appendChild(tb2);
         p.appendChild(el('div', 'rx-sec', L('カップ', 'Cups')));
-        p.appendChild(el('div', 'rx-s', R.CUPS.map(function (c) { return t(c.name) + ' ' + (s.cups[c.id] ? '🏅' + t(R.MEDALS[s.cups[c.id]]) : '—'); }).join('　')));
-        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
+        p.appendChild(el('div', 'rx-s', R.CUPS.map(function (c) { return t(c.name) + ' ' + (s.cups[c.id] ? t(R.MEDALS[s.cups[c.id]]) : '—'); }).join('　')));
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })]));
         o.appendChild(p);
       } };
     };
@@ -1781,13 +1849,13 @@
       var W2 = ['default'].concat(Object.keys(R.WEATHERS));
       p.appendChild(optRow(L('天気（次のレースから）', 'Weather (next race)'), function () { return v.weather === 'default' ? L('標準', 'default') : t(R.WEATHERS[v.weather]); }, function (d) { v.weather = W2[clamp(W2.indexOf(v.weather) + d, 0, W2.length - 1)]; }));
       flag(L('すべての話を開放（ストーリー）', 'Unlock every story scene'), 'unlockAll');
-      p.appendChild(item(L('初期値に戻す', 'Reset to defaults'), L('すべての項目をもとの値に（管理者モードも OFF）', 'Every value back to default (admin off)'), function () { A.v = R.adminDefaults(); A.on = false; rebuild(); }, { icon: '↺' }));
+      p.appendChild(item(L('初期値に戻す', 'Reset to defaults'), L('すべての項目をもとの値に（管理者モードも OFF）', 'Every value back to default (admin off)'), function () { A.v = R.adminDefaults(); A.on = false; rebuild(); }, { icon: 'redo' }));
     }
     SCREENS.admin = function () {
       return { build: function (o) {
         var p = panel(L('管理者モード', 'Admin mode'), L('スキップ・数値の変更（保存されません）', 'Skip and tweak values (not saved)'));
         buildAdmin(p, function () { refresh(); });
-        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })]));
         p.appendChild(hint());
         o.appendChild(p);
       } };
@@ -1797,7 +1865,7 @@
       over.classList.remove('hidden'); over.innerHTML = '';
       var p = panel(L('管理者パネル', 'Admin panel'), L('保存されません', 'Not saved'));
       buildAdmin(p, adminOverlay);
-      p.appendChild(list([item(L('レースに戻る', 'Back to the race'), '', pause, { icon: '↩' })]));
+      p.appendChild(list([item(L('レースに戻る', 'Back to the race'), '', pause, { icon: 'back' })]));
       over.appendChild(p);
       app.sel = 0; highlight();
       app.keyHook = function (k) { if (k === 'Escape' || k === 'p' || k === 'P' || k === 'o' || k === 'O' || k === 'F2') { pause(); return true; } return false; };
@@ -1825,7 +1893,7 @@
          L('雨・雪では滑ります。4WD（オフロード対応）の車は影響が小さめ。', 'Rain and snow reduce grip. AWD cars suffer less.'),
          L('コインや加速パネルは「カジュアル」だけ。ほかのモードは本格仕様です。', 'Coins and boost pads appear only in Casual. Everything else is serious.')].forEach(function (x) { help.appendChild(el('div', '', '・' + x)); });
         p.appendChild(help);
-        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: '↩' })]));
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })]));
         o.appendChild(p);
       } };
     };
@@ -1931,7 +1999,7 @@
       if (opts.extra) { p.appendChild(el('div', 'rx-sec', L('選手権ポイント', 'Standings'))); opts.extra().forEach(function (ln) { p.appendChild(el('div', 'rx-line dim', ln)); }); }
       var btns = opts.buttons ? opts.buttons(sum, r) : [{ label: L('もう一度', 'Race again'), on: function () { run(opts); } }];
       if (!opts.buttons || !btns.some(function (b) { return b.menu; })) btns.push({ label: L('メニューへ', 'Menu'), menu: true, on: toMenu });
-      p.appendChild(list(btns.map(function (b) { return item(b.label, '', b.on, { icon: b.menu ? '↩' : '▶' }); }), Math.min(3, btns.length)));
+      p.appendChild(list(btns.map(function (b) { return item(b.label, '', b.on, { icon: b.menu ? 'back' : 'play' }); }), Math.min(3, btns.length)));
       over.appendChild(p);
       app.sel = 0; highlight();
     }
@@ -1949,15 +2017,15 @@
       var p = panel(L('一時停止', 'Paused'), '');
       var w = app.runOpts.world;
       var items = [
-        item(L('つづける', 'Resume'), '', resume, { icon: '▶' }),
-        !w ? item(L('やり直す', 'Restart'), '', function () { run(app.runOpts); }, { icon: '↻' }) : null,
-        item(L('管理者パネル', 'Admin panel'), L('数値の変更（o キー）', 'Tweak values (o key)'), adminOverlay, { icon: '🛠' }),
+        item(L('つづける', 'Resume'), '', resume, { icon: 'play' }),
+        !w ? item(L('やり直す', 'Restart'), '', function () { run(app.runOpts); }, { icon: 'redo' }) : null,
+        item(L('管理者パネル', 'Admin panel'), L('数値の変更（o キー）', 'Tweak values (o key)'), adminOverlay, { icon: 'tool' }),
         app.runOpts.skip && R.admin && R.admin.on ? item(L('このバトルをスキップ', 'Skip this battle'), L('成功扱い', 'Counts as a win'), function () {
           var o = app.runOpts, r = o.skip(), sum = o.onResult(r);
           if (app.sess) { app.sess.stop(); app.sess = null; }
           detach3D(); startDemo(); padBox.innerHTML = ''; app.paused = false;
           results(sum, r, o);
-        }, { icon: '⏭' }) : null,
+        }, { icon: 'skip' }) : null,
         item(w ? L('ドライブを終える', 'End the drive') : L('やめる', 'Quit'), '', function () {
           if (w) worldEnd(w); else toMenu();
         }, { icon: '■' })
@@ -1976,7 +2044,7 @@
       over.classList.remove('hidden'); over.innerHTML = '';
       var p = panel(L('ドライブ終了', 'Drive over'), '');
       w.summary().forEach(function (ln) { p.appendChild(el('div', 'rx-line', ln)); });
-      p.appendChild(list([item(L('メニューへ', 'Menu'), '', function () { show(app.stack[app.stack.length - 1]); }, { icon: '↩' })]));
+      p.appendChild(list([item(L('メニューへ', 'Menu'), '', function () { show(app.stack[app.stack.length - 1]); }, { icon: 'back' })]));
       over.appendChild(p);
       app.sel = 0; highlight(); app.keyHook = null;
     }

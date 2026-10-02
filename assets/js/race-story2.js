@@ -91,7 +91,7 @@
     S({ id: 's2_t1', ch: '0', title: '三か月前の夜', talk: true, track: 'city', goal: { type: 'talk' }, reward: 300,
       scene: [
         { title: '湾岸 1989', sub: '序章　修の Z' },
-        { bg: 'city' },
+        { bg: 'bayroad' },
         { narr: '1989 年、秋。年号が「平成」に変わったその年、日本は史上最高に浮かれていた。' },
         { narr: '四月には消費税が始まり、十二月には株価が三万八千円を超える。土地は毎日値上がりし、夜の街は朝まで光っていた。' },
         { narr: '——その光の外側で、ひとりの看護師が、三か月前の夜のことを、まだ一日も忘れられずにいた。' },
@@ -217,7 +217,8 @@
 
     S({ id: 's2_t3', ch: '1', title: '八重樫モータース', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 400,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'night' },
+        { bg: 'garage_in' },
         { narr: '京浜運河ぞいの高架下。看板の文字が半分剥げた、「八重樫モータース」。' },
         { narr: 'シャッターの隙間から、工具の金属音と、ラジオの演歌が漏れていた。' },
         ['yaegashi', 'あんたが、修の妹かい。……上がんな。散らかってるけど、座る場所くらいはある。', 'right emo:cool'],
@@ -284,7 +285,7 @@
 
     S({ id: 's2_t4', ch: '1', title: '夜勤の朝', talk: true, track: 'city', goal: { type: 'talk' }, reward: 400,
       scene: [
-        { bg: 'city' },
+        { bg: 'rooftop' },
         { narr: '午前六時。夜勤明けの救命救急センター。窓の外が、ようやく薄青く明るくなっていく。' },
         ['hasegawa', '神崎さん、あなた、また目の下にクマ。夜勤のあとは、ちゃんと寝てるの？', 'right emo:cool'],
         ['touko_n', '寝てます。……三時間くらいは。', 'emo:smile'],
@@ -390,6 +391,8 @@
 
     S({ id: 's2_t6', ch: '2', title: '榛名の地蔵', talk: true, track: 'forest', goal: { type: 'talk' }, reward: 500,
       scene: [
+        { bgm: 'sad' },
+        { bg: 'shrine' },
         { bg: 'forest', weather: 'fog' },
         { narr: '群馬、榛名山。標高が上がるにつれて、ヘッドライトの先が白く溶けていく。' },
         ['mari', 'ここのヘアピンの立ち上がりに、石の地蔵があってさ。修は、毎回手を合わせてから走ってた。', 'right emo:smile'],
@@ -437,7 +440,8 @@
 
     S({ id: 's2_t7', ch: '2', title: '兄の銀行', talk: true, track: 'city', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { bg: 'city' },
+        { bgm: 'sad' },
+        { bg: 'hospital' },
         { narr: '丸の内。東亜信用銀行、本店ビル。ガラス張りのロビーに、トウコは喪服ではなく、一番上等なスーツで立っていた。' },
         ['touko', '神崎修の、妹です。兄の遺品を、受け取りに伺いました。', 'emo:cool'],
         { narr: '受付の女性は、一瞬、目を泳がせた。そして内線電話の受話器を取り、声をひそめた。' },

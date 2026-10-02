@@ -138,20 +138,20 @@
   /* ---------- じゃんけん ---------- */
   G.rps = function () {
     var f = frame(L('じゃんけん', 'Rock paper scissors'), 380), box = f.box;
-    var H = [{ k: 'r', a: '✊', ja: 'グー', en: 'rock', beats: 's' }, { k: 's', a: '✌', ja: 'チョキ', en: 'scissors', beats: 'p' }, { k: 'p', a: '✋', ja: 'パー', en: 'paper', beats: 'r' }];
+    var H = [{ k: 'r', a: '', ja: 'グー', en: 'rock', beats: 's' }, { k: 's', a: '', ja: 'チョキ', en: 'scissors', beats: 'p' }, { k: 'p', a: '', ja: 'パー', en: 'paper', beats: 'r' }];
     var t = { w: 0, l: 0, d: 0 }, msg = L('手を選んでね。', 'Pick a hand.');
     function render() {
       box.textContent = '';
       bar(box, msg).className = 'gg-msg accent';
       var row = el('div', 'grow');
       H.forEach(function (h) {
-        row.appendChild(btn(h.a + ' ' + L(h.ja, h.en), 'gbtn gg-hand', function () {
+        row.appendChild(btn(L(h.ja, h.en), 'gbtn gg-hand', function () {
           var c = pick(H);
           var res;
           if (c.k === h.k) { t.d++; res = L('あいこ', 'Draw'); sfx('lock'); }
           else if (h.beats === c.k) { t.w++; res = L('あなたの勝ち！', 'You win!'); sfx('coin'); }
           else { t.l++; res = L('あなたの負け', 'You lose'); sfx('bad'); }
-          msg = L('あなた ' + h.a + ' / CPU ' + c.a + '　→　' + res, 'you ' + h.a + ' / cpu ' + c.a + ' → ' + res);
+          msg = L('あなた ' + L(h.ja, h.en) + ' / CPU ' + L(c.ja, c.en) + '　→　' + res, 'you ' + h.en + ' / cpu ' + c.en + ' → ' + res);
           render();
         }));
       });

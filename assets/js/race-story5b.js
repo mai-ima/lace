@@ -9,8 +9,9 @@
     /* ===================== 第二章 ===================== */
     S({ id: 's5_t7', ch: '2', title: '合宿の朝', talk: true, track: 'isetec', goal: { type: 'talk' }, reward: 600,
       scene: [
+        { bgm: 'school' },
         { title: '第二章', sub: '夏合宿' },
-        { bg: 'coast' },
+        { bg: 'seaside' },
         { narr: '七月下旬。夏休みの初日。カート部は、貸切バスで、湖畔の合宿所へ向かった。窓の外に、青い湖と、入道雲が広がる。' },
         ['yuta', 'うおお、湖だ！ 泳げるっすか！？ 泳げるっすよね、先輩！？', 'right emo:smile shake'],
         ['koki', '泳ぐのは、練習のあとだ。朝六時、ストレッチ。七時、朝食。八時から、走行練習。', 'emo:smile'],
@@ -36,7 +37,7 @@
 
     S({ id: 's5_4', ch: '2', title: '合宿サバイバル', track: 'isetec', mode: 'elim', rivals: 5, pace: 0.86, car: 'kart_s2', goal: { type: 'survive' }, reward: 2500,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '合宿三日目。最後の夜練前に、部内の「サバイバルレース」が、開かれた。一周ごとに、最下位が、脱落する。' },
         ['koki', '最後まで残った奴が、今夜の花火を、最初に打ち上げる権利を得る！', 'right emo:smile shake'],
         ['yuta', '花火！？ やる気、出るっす！', 'emo:smile']
@@ -54,7 +55,8 @@
 
     S({ id: 's5_t8', ch: '2', title: '先輩の手首', talk: true, track: 'isetec', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'sad' },
+        { bg: 'paddock' },
         { narr: '合宿四日目の、早朝。まだ、薄暗い、校庭。ハルカは、水を飲みに、ピットに向かった。' },
         { narr: 'ピットの片隅。コウキが、一人、背中を丸めて、座っていた。右手首に、湿布。包帯。' },
         ['haruka', '……先輩？', 'emo:shock'],
@@ -85,7 +87,7 @@
 
     S({ id: 's5_t9', ch: '2', title: '桜ヶ丘の来訪', talk: true, track: 'fujisp', goal: { type: 'talk' }, reward: 700,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '合宿五日目。午後二時。合宿所の駐車場に、白い大型トラックが、ゆっくりと入ってきた。荷台には、カートが、整然と並べられている。' },
         ['yuta', 'うわ……あれが、桜ヶ丘の、トランスポーター。うちの、ボロバスと、全然、違うっす。', 'right emo:shock'],
         { narr: 'トラックの荷台から、揃いの黒いツナギを着た、二十人の部員が、一斉に降りてきた。足並みが、整っている。軍隊のようだった。' },
@@ -131,7 +133,8 @@
 
     S({ id: 's5_t10', ch: '2', title: 'コンビニの夜', talk: true, track: 'fujisp', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'coast' },
+        { bgm: 'night' },
+        { bg: 'bayroad' },
         { narr: 'その夜。合宿所から徒歩十分の、小さなコンビニ。ハルカは、みんなの分のアイスを、買いに来ていた。' },
         { narr: '店の外の、街灯の下のベンチに、一人の少年が、座っていた。白い光の中で、黒いツナギが、浮かび上がっている。' },
         ['haruka', '……藤堂さん？', 'emo:shock'],
@@ -162,8 +165,9 @@
     /* ===================== 第三章 ===================== */
     S({ id: 's5_t11', ch: '3', title: '文化祭の準備', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 800,
       scene: [
+        { bgm: 'school' },
         { title: '第三章', sub: '文化祭と期末テスト' },
-        { bg: 'city' },
+        { bg: 'classroom' },
         { narr: '九月。夏休みが終わり、潮見台学園は、文化祭の準備の、熱気に包まれていた。廊下には、ベニヤ板と、ペンキの匂い。' },
         ['konatsu', 'ハルカ、聞いて！ うちの三年二組の出し物、「カート体験コース」に決まったの！ カート部と、コラボ！', 'right emo:smile shake'],
         ['haruka', 'ええっ！？ そんなの、いつ決まったの！？', 'emo:shock'],
@@ -192,7 +196,7 @@
 
     S({ id: 's5_6', ch: '3', title: '文化祭の体験コース', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s2', goal: { type: 'lap', factor: 0.55 }, reward: 2500,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['minato', '本番前の、最終確認。……星野さん、お手本の、一周を、走ってほしい。ゆっくり、丁寧に、安全に。', 'right emo:cool'],
         ['haruka', '了解。……見てる人に、「カートって、楽しい」って、伝えたいな。', 'emo:smile']
       ],
@@ -207,7 +211,8 @@
 
     S({ id: 's5_t12', ch: '3', title: '文化祭の日', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
       scene: [
-        { bg: 'city' },
+        { bgm: 'festival' },
+        { bg: 'festival' },
         { narr: '文化祭、当日。校門には、色とりどりの旗。校庭には、屋台の煙。模擬店、お化け屋敷、バンドの演奏、ダンスパフォーマンス。' },
         { narr: '校庭の奥、赤い屋根の整備小屋の前には、長い行列ができていた。「カート体験コース　待ち時間：四十分」。' },
         ['yuta', '先輩ー！ 行列、やばいっす！ 小学生が、百人、並んでます！', 'right emo:shock'],
@@ -235,7 +240,8 @@
 
     S({ id: 's5_t13', ch: '3', title: '期末テスト', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
       scene: [
-        { bg: 'city' },
+        { bgm: 'sad' },
+        { bg: 'classroom' },
         { narr: '十月上旬。期末テストの、前日。放課後の、図書室。窓際の席に、ハルカとミナトとコナツが、教科書を広げて、向かい合っていた。' },
         ['konatsu', 'うう、数学、まったく、分からない……。ミナト君、助けて……。', 'right emo:sad'],
         ['minato', '二次関数は、グラフを描けば、いいだけ。ほら、頂点と、軸を、先に決めて。', 'emo:cool'],
@@ -267,7 +273,7 @@
     S({ id: 's5_7', ch: '3', title: '県大会・予選', track: 'isetec', mode: 'race', laps: 4, rivals: 7, pace: 0.88, car: 'kart_s2', goal: { type: 'place', n: 3 }, reward: 4000,
       scene: [
         { bgm: 'tension' },
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '十月第二日曜日。県大会、予選。会場は、県内最大の、カートコース。観客席には、各校の応援団、保護者、地元の人々。' },
         ['announcer', '——ジュニアクラス、予選、第一組。出場者は、グリッドに、整列してください。', 'right emo:cool'],
         ['koki', '右手首、固定してる。……大丈夫、今日は、持つ。', 'emo:cool'],
@@ -287,7 +293,8 @@
 
     S({ id: 's5_t14', ch: '3', title: '決勝前夜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 1000,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'night' },
+        { bg: 'bedroom' },
         { narr: '予選のあと、会場の脇の、ホテルの食堂。部員たちが、お疲れ様会を、開いていた。長テーブルに、唐揚げと、焼きそばと、大皿のサラダ。' },
         ['yuta', '先輩ー、このポテト、うまいっす！ 俺、おかわり、行ってくるっす！', 'right emo:smile'],
         ['koki', 'ユウタ、食い過ぎるなよ！ 明日の、ブレーキ操作に、響くぞ！', 'emo:smile'],
@@ -316,7 +323,7 @@
     S({ id: 's5_8', ch: '3', title: '県大会・決勝', boss: 'ren', track: 'fujisp', mode: 'duel', laps: 4, pace: 1.02, car: 'kart_s2', goal: { type: 'win' }, reward: 6000,
       scene: [
         { bgm: 'tension' },
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '決勝。スタンドは、満員だった。応援団の太鼓。吹奏楽の音。旗が、風に揺れている。' },
         ['ren', '……星野さん。今日は、勝負です。手加減は、しません。', 'right emo:cool'],
         ['haruka', 'はい。……私も、全力で、いきます。', 'emo:cool lines'],

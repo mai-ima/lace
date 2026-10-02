@@ -13,8 +13,9 @@
     /* ===================== 第四章 ===================== */
     S({ id: 's3_t14', ch: '4', title: 'リョウの秘密', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 1000,
       scene: [
+        { bgm: 'sad' },
         { title: '第四章', sub: 'リョウの目' },
-        { bg: 'forest' },
+        { bg: 'bedroom' },
         { narr: '夜のヤマト・チューニング。閉店後の、静かな工場。蛍光灯の一本だけが、ぼんやりと灯っている。' },
         { narr: 'カズマは、工具を借りに、裏口から入った。薄暗い通路の奥で、がしゃん、と金属の落ちる音がした。' },
         ['kazuma', 'リョウさん？ ……大丈夫ですか！', 'emo:shock'],
@@ -207,7 +208,8 @@
 
     S({ id: 's3_t18', ch: '5', title: '山頂の朝', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 1500,
       scene: [
-        { bg: 'forest' },
+        { bgm: 'ending' },
+        { bg: 'rooftop' },
         { narr: '榛名山の、山頂駐車場。東の空が、うっすらと白んできた。レースを終えた車が、一台、また一台と、静かに集まってくる。' },
         { when: 'route==2 && !sign', lines: [
           { narr: 'しかし、その輪の中に、リョウの姿は、なかった。' },

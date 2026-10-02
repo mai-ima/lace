@@ -75,7 +75,8 @@
     S({ id: 's5_t1', ch: '0', title: '校門の桜', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 300,
       scene: [
         { title: 'グリッドの向こうの夏', sub: '序章　潮見台の春' },
-        { bg: 'coast' },
+        { bgm: 'school' },
+        { bg: 'school' },
         { narr: '静岡県、浜名湖のほとり。海風に、潮の匂いが混ざる春の朝。中高一貫校、潮見台学園の坂道に、桜の花びらが降っていた。' },
         { narr: '制服の上に、少し大きめのカーディガンを羽織った少女が、坂の途中で、立ち止まっていた。' },
         ['haruka', '……やっぱり、見える。校舎の裏の、あの、赤い屋根。', 'emo:smile'],
@@ -97,7 +98,7 @@
 
     S({ id: 's5_t2', ch: '0', title: '赤い屋根の整備小屋', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 400,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '放課後。校舎の裏手、桜並木の抜けた先に、手作りの、ミニサーキットが広がっていた。全長、約六百メートル。コースの両側には、タイヤの壁。' },
         ['haruka', 'すごい……。学校の中に、本物の、サーキットが。', 'emo:shock'],
         ['konatsu', 'うちの学園の創立者が、昔、レーサーだったんだって。それで、裏山の一部を、コースにしたらしいよ。', 'right emo:smile'],
@@ -127,7 +128,7 @@
 
     S({ id: 's5_1', ch: '0', title: '初めてのアクセル', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s1', goal: { type: 'lap', factor: 0.4 }, reward: 600,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '貸与のヘルメットは、少し大きかった。ベルトを締めると、カートの座面が、地面すれすれの低さに、感じられた。' },
         ['akane', 'ペダルは、右が加速、左がブレーキ。ハンドルは、思ったより、重い。最初の一周は、ゆっくりでいい。', 'right emo:cool'],
         ['haruka', 'は、はい。……お願いします。', 'emo:cool'],
@@ -149,8 +150,9 @@
     /* ===================== 第一章 ===================== */
     S({ id: 's5_t3', ch: '1', title: '祖父の許し', talk: true, track: 'coast', goal: { type: 'talk' }, reward: 500,
       scene: [
+        { bgm: 'sad' },
         { title: '第一章', sub: '仮入部' },
-        { bg: 'coast' },
+        { bg: 'seaside' },
         { narr: '夕方。浜名湖のほとり、小さな造船所の脇の、古い一軒家。ハルカは、玄関の前で、靴紐を何度も結び直していた。' },
         ['haruka', '……おじいちゃん、ただいま。', 'emo:cool'],
         ['genji', '……おう、帰ったか。遅かったな。', 'right emo:cool'],
@@ -175,7 +177,7 @@
 
     S({ id: 's5_2', ch: '1', title: '新入部員歓迎レース', track: 'isetec', mode: 'race', laps: 3, rivals: 5, pace: 0.8, car: 'kart_s1', goal: { type: 'place', n: 3 }, reward: 1800,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '五月。カート部の、毎年恒例の「新入部員歓迎レース」。実際は、部員同士の、ただの紅白戦だ。' },
         ['koki', 'ルールは簡単！ 三周して、一番速かった奴が、今日の夕飯の、メニューを決める権利を得る！', 'right emo:smile shake'],
         ['yuta', '先輩、それ、毎年、カレーじゃないっすか！', 'emo:smile'],
@@ -194,7 +196,8 @@
 
     S({ id: 's5_t4', ch: '1', title: 'ミナトのノート', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'school' },
+        { bg: 'classroom' },
         { narr: '部活のあと。みんなが帰ったあとの、整備小屋。薄暗い電灯の下で、ミナトが、一人、ノートパソコンの画面と、にらめっこしていた。' },
         ['haruka', 'ミナト君、まだ、残ってたんだ。', 'emo:shock'],
         ['minato', '……ああ、星野さん。うん、ちょっと、データの整理。', 'right emo:smile'],
@@ -227,7 +230,7 @@
 
     S({ id: 's5_t5', ch: '1', title: '放課後のタイヤ交換', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         { narr: '土曜日。整備小屋の前の広場に、青いブルーシートが敷かれ、カートの部品が、ずらりと並べられた。' },
         ['koki', 'さて、今日の特別授業は「タイヤ交換」だ！ カートのタイヤは、車より、ずっと薄い。そして、ずっと、繊細だ！', 'right emo:smile'],
         ['yuta', '先輩、俺、それ、一回やったっすよ！ 逆さまに、付けたっす！', 'emo:smile'],
@@ -252,7 +255,7 @@
 
     S({ id: 's5_3', ch: '1', title: 'セッティング走行', track: 'circuit', mode: 'time', laps: 1, car: 'kart_s2', goal: { type: 'lap', factor: 0.52 }, reward: 2200,
       scene: [
-        { bg: 'circuit' },
+        { bg: 'paddock' },
         ['minato', '今日の課題は、ギア比と、タイヤの空気圧の、最適化。星野さん、三パターンを、順番に、走ってもらうよ。', 'right emo:cool'],
         ['haruka', '了解。……ミナト君のデータ、信じてるから。', 'emo:smile lines']
       ],
@@ -269,7 +272,8 @@
 
     S({ id: 's5_t6', ch: '1', title: '第一コーナーの恐怖', talk: true, track: 'circuit', goal: { type: 'talk' }, reward: 800,
       scene: [
-        { bg: 'circuit' },
+        { bgm: 'tension' },
+        { bg: 'paddock' },
         { narr: '六月。梅雨の、小雨の降る放課後。コースは、うっすらと濡れ、タイヤの跡が、黒く光っていた。' },
         { narr: 'ハルカは、スタートラインで、カートに乗ったまま、動けなかった。ヘルメットの中の呼吸が、荒い。' },
         ['akane', '……星野さん。どうしたの。', 'right emo:cool'],
