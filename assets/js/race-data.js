@@ -1116,6 +1116,10 @@
   function nAch(s) { return Object.keys(s.ach || {}).length; }
   function cupGolds(s) { var n = 0; for (var k in s.cups) if (s.cups[k] === 1) n++; return n; }
   function bestsCount(s) { return Object.keys(s.laps || {}).length; }
+  function storyDone(s, id) {
+    var st = (R.STORIES || []).filter(function (x) { return x.id === id; })[0];
+    return !!st && ((s.stories || {})[id] || 0) >= st.events.length;
+  }
   R.ACHIEVEMENTS = [
     { id: 'first', icon: '🏁', reward: 300, name: { ja: 'はじめの一歩', en: 'First Steps' }, desc: { ja: 'レースを 1 回走る', en: 'Run your first race' }, test: function (s) { return s.stats.races >= 1; } },
     { id: 'win1', icon: '🥇', reward: 500, name: { ja: '初優勝', en: 'First Victory' }, desc: { ja: 'レースで 1 位になる', en: 'Win a race' }, test: function (s) { return s.stats.wins >= 1; } },
@@ -1130,7 +1134,10 @@
     { id: 'cup1', icon: '🏅', reward: 2500, name: { ja: 'カップ制覇', en: 'Cup Winner' }, desc: { ja: 'いずれかのカップで金メダル', en: 'Take gold in any cup' }, test: function (s) { return cupGolds(s) >= 1; } },
     { id: 'cupall', icon: '🌟', reward: 12000, name: { ja: '全カップ制覇', en: 'Grand Slam' }, desc: { ja: 'すべてのカップで金メダル', en: 'Take gold in every cup' }, test: function (s) { return cupGolds(s) >= R.CUPS.length; } },
     { id: 'story3', icon: '📖', reward: 1000, name: { ja: '物語のはじまり', en: 'Story Begins' }, desc: { ja: 'ストーリーを 3 話クリア', en: 'Clear 3 story events' }, test: function (s) { return s.story >= 3; } },
-    { id: 'story24', icon: '👻', reward: 10000, name: { ja: '白い亡霊の最期', en: 'End of the Ghost' }, desc: { ja: '本編「天竜の白い亡霊」を完結', en: 'Finish the main story' }, test: function (s) { return s.story >= R.STORY.length; } },
+    { id: 'story24', icon: '👻', reward: 10000, name: { ja: '白い亡霊の最期', en: 'End of the Ghost' }, desc: { ja: '本編「天竜の白い亡霊」を完結', en: 'Finish the main story' }, test: function (s) { var f = R.STORY.map(function (e) { return e.id; }).indexOf('f2'); return s.story >= (f < 0 ? R.STORY.length : f + 1); } },
+    { id: 's2clear', icon: '🌃', reward: 6000, name: { ja: '湾岸の夜明け', en: 'Wangan Dawn' }, desc: { ja: 'ストーリー2「湾岸 1989」を完結', en: 'Finish Story 2' }, test: function (s) { return storyDone(s, 's2'); } },
+    { id: 's3clear', icon: '🏭', reward: 6000, name: { ja: 'やらまいか', en: 'Yaramaika' }, desc: { ja: 'ストーリー3「やらまいか 1964」を完結', en: 'Finish Story 3' }, test: function (s) { return storyDone(s, 's3'); } },
+    { id: 's4clear', icon: '⭐', reward: 6000, name: { ja: '星の井戸へ', en: 'To the Star Well' }, desc: { ja: 'ストーリー4「星の砂漠 1983」を完結', en: 'Finish Story 4' }, test: function (s) { return storyDone(s, 's4'); } },
     { id: 'cars5', icon: '🚗', reward: 1500, name: { ja: 'ガレージ持ち', en: 'Car Collector' }, desc: { ja: '車を 5 台持つ', en: 'Own 5 cars' }, test: function (s) { return s.owned.length >= 5; } },
     { id: 'cars15', icon: '🏎', reward: 6000, name: { ja: 'コレクター', en: 'Garage Full' }, desc: { ja: '車を 15 台持つ', en: 'Own 15 cars' }, test: function (s) { return s.owned.length >= 15; } },
     { id: 'rich', icon: '💰', reward: 0, name: { ja: '大金持ち', en: 'Big Spender' }, desc: { ja: '所持金 100,000 以上', en: 'Hold 100,000 credits' }, test: function (s) { return s.money >= 100000; } },
