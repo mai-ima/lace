@@ -1226,13 +1226,14 @@
           px(8, 10, 2, 2, ey); px(14, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 10, 1, 1, '#fff');
           px(7, 8, 3, 1, brow); px(14, 7, 3, 1, brow); px(10, 15, 3, 1, mouth); px(13, 14, 1, 1, mouth); break;
         case 'sleepy':  // うとうと
-          px(8, 11, 3, 1, ey); px(14, 11, 3, 1, ey); px(8, 8, 3, 1, brow); px(14, 8, 3, 1, brow); px(11, 15, 2, 2, mouth); px(18, 6, 2, 1, '#fff'); px(19, 5, 2, 1, '#fff'); break;
+          px(8, 11, 3, 1, ey); px(14, 11, 3, 1, ey); px(8, 9, 3, 1, brow); px(14, 9, 3, 1, brow); px(11, 15, 2, 1, mouth); px(18, 6, 2, 1, '#fff'); px(19, 5, 2, 1, '#fff'); break;
         case 'wink':    // ウインク
           px(8, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 11, 3, 1, ey); px(15, 10, 1, 1, ey);
           px(9, 14, 1, 1, mouth); px(14, 14, 1, 1, mouth); px(10, 15, 4, 1, mouth); px(15, 13, 2, 1, cheek); break;
-        case 'smug':    // ドヤ顔（半目と片側だけ上がる口）
-          px(8, 11, 3, 1, ey); px(14, 11, 3, 1, ey); px(8, 10, 3, 1, brow); px(14, 10, 3, 1, brow);
-          px(10, 15, 4, 1, mouth); px(14, 14, 2, 1, mouth); px(16, 13, 1, 1, mouth); break;
+        case 'smug':    // ドヤ顔（半目と、片側だけ上がる口）
+          px(8, 10, 3, 1, shade(f.skin, 0.62)); px(14, 10, 3, 1, shade(f.skin, 0.62)); px(9, 11, 1, 1, ey); px(15, 11, 1, 1, ey);
+          px(8, 9, 3, 1, brow); px(14, 8, 3, 1, brow);
+          px(10, 15, 3, 1, mouth); px(13, 14, 2, 1, mouth); px(15, 13, 1, 1, mouth); break;
         case 'determined': // 決意（まっすぐな目と、きゅっと結んだ口）
           px(8, 10, 2, 2, ey); px(14, 10, 2, 2, ey); px(8, 10, 1, 1, '#fff'); px(14, 10, 1, 1, '#fff');
           px(7, 9, 3, 1, brow); px(14, 9, 3, 1, brow); px(8, 8, 1, 1, brow); px(15, 8, 1, 1, brow); px(10, 15, 4, 1, mouth); px(10, 14, 4, 1, shade(f.skin, 0.8)); break;
@@ -2450,11 +2451,9 @@
           g.fillRect(sx, sy, st2 % 7 ? 1 : 2, st2 % 7 ? 1 : 2);
         }
       } else if (weather === 'clear' || weather === 'sand') {
-        g.fillStyle = 'rgba(255,255,255,.8)';
-        for (var cl = 0; cl < 5; cl++) {
-          var cx = ((cl * 170 + skyOff * 600 + t0 * 4) % (W + 120) + W + 120) % (W + 120) - 60;
-          g.beginPath(); g.ellipse(cx, H * 0.1 + (cl % 3) * H * 0.05, 34, 9, 0, 0, Math.PI * 2); g.fill();
-          g.beginPath(); g.ellipse(cx + 18, H * 0.1 + (cl % 3) * H * 0.05 - 5, 20, 8, 0, 0, Math.PI * 2); g.fill();
+        for (var cl = 0; cl < 7; cl++) {
+          var sp = 0.6 + (cl % 3) * 0.35, ccx = ((cl * 140 + skyOff * 600 * sp + t0 * 3 * sp) % (W + 200) + W + 200) % (W + 200) - 100;
+          drawCloud(g, ccx, H * 0.07 + (cl % 4) * H * 0.045, (0.7 + (cl % 3) * 0.3) * H / 360, weather === 'sand' ? 0.35 : 0.9);
         }
       }
       if (spec.lava) {
@@ -2482,18 +2481,34 @@
       }
     }
 
+    function drawCloud(g, x, y, k, a) {
+      var puffs = [[0, 0, 26], [22, -8, 22], [-24, 2, 20], [44, 4, 18], [-46, 8, 15], [10, 6, 24]];
+      g.save(); g.globalAlpha = a;
+      puffs.forEach(function (p) {
+        var px = x + p[0] * k, py = y + p[1] * k, r = p[2] * k * 0.8;
+        var gr = g.createRadialGradient(px - r * 0.2, py - r * 0.35, r * 0.2, px, py, r);
+        gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(226,236,248,.85)');
+        g.fillStyle = gr; g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.fill();
+      });
+      g.fillStyle = 'rgba(160,185,215,.22)'; g.beginPath(); g.ellipse(x, y + 12 * k, 60 * k, 5 * k, 0, 0, Math.PI * 2); g.fill();
+      g.restore();
+    }
     function drawRange(g, color, baseY, amp, off, seed) {
-      g.fillStyle = color;
-      g.beginPath();
-      g.moveTo(0, H);
-      for (var i = 0; i <= W; i += 8) {
+      var pts = [];
+      for (var i = 0; i <= W; i += 6) {
         var tt = (i + off) * 0.012 * 640 / W;
-        var y = baseY - (Math.sin(tt + seed) * 0.5 + Math.sin(tt * 2.3 + seed * 1.7) * 0.3 + 0.6) * amp;
-        g.lineTo(i, y);
+        // 大きな起伏に、小さな尾根をかさねる
+        var y = baseY - (Math.sin(tt + seed) * 0.5 + Math.sin(tt * 2.3 + seed * 1.7) * 0.3 + Math.sin(tt * 5.1 + seed * 0.7) * 0.12 + 0.72) * amp;
+        pts.push(i, y);
       }
-      g.lineTo(W, H);
-      g.closePath();
-      g.fill();
+      var gr = g.createLinearGradient(0, baseY - amp * 1.3, 0, baseY + amp * 0.3);
+      gr.addColorStop(0, mix(color, '#ffffff', 0.16)); gr.addColorStop(1, color);
+      g.fillStyle = gr;
+      g.beginPath(); g.moveTo(0, H);
+      for (var k = 0; k < pts.length; k += 2) g.lineTo(pts[k], pts[k + 1]);
+      g.lineTo(W, H); g.closePath(); g.fill();
+      g.strokeStyle = rgba(mix(color, '#ffffff', 0.4), 0.45); g.lineWidth = 1.2;
+      g.beginPath(); for (k = 0; k < pts.length; k += 2) { if (k) g.lineTo(pts[k], pts[k + 1]); else g.moveTo(pts[k], pts[k + 1]); } g.stroke();
     }
     function drawSkyline(g, color, baseY, off) {
       g.fillStyle = color;

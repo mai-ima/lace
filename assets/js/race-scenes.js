@@ -153,6 +153,44 @@
     [0, 1, 2, 3, 4, 5, 6, 7].map(function (i) { return '<rect x="' + (60 + i * 120) + '" y="296" width="6" height="64" fill="#556"/><circle cx="' + (63 + i * 120) + '" cy="294" r="9" fill="#ffe9a3"/><ellipse cx="' + (63 + i * 120) + '" cy="440" rx="12" ry="70" fill="#ffe9a3" opacity=".12"/>'; }).join('') +
     '<path d="M0 520Q480 400 960 520z" fill="#161c2c"/><path d="M0 500Q480 410 960 500" stroke="#e8e8e8" stroke-width="5" stroke-dasharray="40 40" fill="none"/>') };
 
+
+  /* ---------- 仕上げ: 人影・影・光・ビネット・粒子で奥行きと質感を足す ---------- */
+  function shadow(x, y, rx, ry, a) { return '<ellipse cx="' + x + '" cy="' + y + '" rx="' + rx + '" ry="' + (ry || rx * 0.18) + '" fill="#000" opacity="' + (a || 0.22) + '" filter="url(#soft)"/>'; }
+  function person(x, y, k, body, hair, skin) {   // 小さな人影（背中向き・正面どちらでも使える簡単な形）
+    k = k || 1; skin = skin || '#f2d2b8';
+    return '<g transform="translate(' + x + ' ' + y + ') scale(' + k + ')">' + shadow(0, 2, 16, 3, 0.25) +
+      '<path d="M-10 0 L-8 -34 Q0 -42 8 -34 L10 0z" fill="' + body + '"/><rect x="-9" y="-3" width="7" height="3" fill="#2a2a34"/><rect x="2" y="-3" width="7" height="3" fill="#2a2a34"/>' +
+      '<circle cx="0" cy="-46" r="9" fill="' + skin + '"/><path d="M-9 -47 Q0 -62 9 -47 Q4 -53 -9 -47z" fill="' + hair + '"/></g>';
+  }
+  function rays(x, y, w, h, c, a) { return '<path d="M' + x + ' ' + y + ' L' + (x + w) + ' ' + (y + h) + ' L' + (x + w + 90) + ' ' + (y + h) + ' L' + (x + 70) + ' ' + y + 'z" fill="' + c + '" opacity="' + (a || 0.16) + '" filter="url(#soft)"/>'; }
+  var EXTRA = {
+    school: function () { return shadow(120, 505, 90) + shadow(560, 510, 120) + person(300, 470, 1.1, '#2c4a7a', '#2a1c14') + person(350, 478, 1.05, '#7a2c4a', '#5a3a28') + person(620, 462, 0.9, '#2c4a7a', '#1a1a24') +
+      '<g opacity=".85"><rect x="40" y="440" width="120" height="6" fill="#555"/>' + [0, 1, 2, 3, 4].map(function (i) { return '<circle cx="' + (60 + i * 22) + '" cy="432" r="9" fill="none" stroke="#666" stroke-width="3"/>'; }).join('') + '</g>' +
+      '<path d="M0 340 Q240 300 520 325 T960 300" stroke="#fff" stroke-width="2" opacity=".18" fill="none"/>'; },
+    classroom: function () { return rays(650, 70, 190, 330, '#fff2b0', 0.22) + '<rect x="150" y="300" width="440" height="6" fill="#000" opacity=".12"/>' + person(430, 440, 1.2, '#355a8a', '#2a1c14') +
+      [0, 1, 2].map(function (i) { return '<rect x="' + (170 + i * 120) + '" y="318" width="70" height="8" fill="#e8d9a8" opacity=".6"/>'; }).join(''); },
+    teahouse: function () { return rays(120, 120, 120, 300, '#ffe9b0', 0.12) + person(300, 470, 1.2, '#5a3a2a', '#d0d0d0', '#e8c8a8') + '<ellipse cx="480" cy="300" rx="260" ry="150" fill="#ff9a2a" opacity=".07" filter="url(#soft)"/>' + shadow(480, 462, 190, 18, 0.3); },
+    garage_in: function () { return shadow(480, 410, 180, 14, 0.35) + rays(300, 120, 120, 300, '#fff6c8', 0.1) + '<path d="M0 380H960" stroke="#fff" stroke-width="2" opacity=".1"/>' + person(800, 430, 1.25, '#2f5a8a', '#2a1c14'); },
+    station: function () { return shadow(480, 440, 300, 16, 0.2) + person(300, 436, 1.1, '#2c3a5a', '#1a1a24') + person(340, 440, 1.0, '#8a3a4a', '#4a2a1a') + person(840, 436, 1.1, '#3a4a3a', '#2a1c14') + rays(560, 120, 160, 260, '#ffe0a0', 0.14); },
+    hospital: function () { return shadow(480, 470, 260, 18, 0.18) + person(460, 440, 0.8, '#e8f0ee', '#2a1c14') + '<rect x="0" y="300" width="960" height="3" fill="#fff" opacity=".25"/>'; },
+    rooftop: function () { return shadow(480, 462, 360, 20, 0.28) + person(300, 470, 1.35, '#2f4a7a', '#2a1c14') + person(350, 476, 1.3, '#7a3a5a', '#5a3a28') + rays(380, 250, 160, 230, '#ffe0a0', 0.1); },
+    shrine: function () { return rays(440, 40, 130, 440, '#fff6c8', 0.16) + shadow(480, 530, 160, 14, 0.25) + person(480, 470, 1.15, '#7a2c2c', '#2a1c14') +
+      [160, 760].map(function (x) { return '<rect x="' + (x - 8) + '" y="390" width="16" height="100" fill="#8c8c8c"/><path d="M' + (x - 22) + ' 392h44l-6-26h-32z" fill="#7a7a7a"/><circle cx="' + x + '" cy="372" r="6" fill="#ffd24a" opacity=".7"/>'; }).join(''); },
+    festival: function () { return person(240, 470, 1.2, '#2f6f9a', '#2a1c14') + person(300, 478, 1.15, '#c0392b', '#5a3a28') + person(700, 470, 1.2, '#d49a2a', '#1a1a24') + person(760, 476, 1.1, '#7a3a8a', '#2a1c14') +
+      '<ellipse cx="480" cy="300" rx="480" ry="120" fill="#ff9a5a" opacity=".06" filter="url(#soft)"/>' + [[160, 60], [420, 40], [700, 70]].map(function (p) { return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="60" fill="#ffd24a" opacity=".07" filter="url(#soft)"/>'; }).join(''); },
+    bedroom: function () { return rays(610, 80, 120, 330, '#9ab4ff', 0.08) + '<ellipse cx="640" cy="360" rx="150" ry="40" fill="#ffe9a8" opacity=".12" filter="url(#soft)"/>'; },
+    seaside: function () { return shadow(160, 452, 70, 6, 0.3) + person(700, 470, 1.3, '#2f4a7a', '#2a1c14') + person(750, 476, 1.25, '#c0394a', '#5a3a28') + '<path d="M0 438Q240 428 480 440T960 432V440H0z" fill="#fff" opacity=".18"/>'; },
+    paddock: function () { return shadow(270, 352, 180, 10, 0.25) + person(520, 400, 1.2, '#c9433a', '#2a1c14') + person(580, 404, 1.15, '#2f6a9a', '#5a3a28') + person(640, 398, 1.1, '#e8d34a', '#1a1a24') + '<path d="M0 380H960" stroke="#000" stroke-width="2" opacity=".12"/>'; },
+    bayroad: function () { return '<ellipse cx="480" cy="380" rx="480" ry="60" fill="#ff9a5a" opacity=".08" filter="url(#soft)"/>' + [0, 1, 2, 3, 4, 5, 6].map(function (i) { return '<rect x="' + (50 + i * 140) + '" y="372" width="60" height="3" fill="#ffd76a" opacity=".35"/>'; }).join(''); }
+  };
+  var OVERLAY = '<filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>' +
+    '<filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="5"/><feColorMatrix values="0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .22 0"/></filter>' +
+    '<radialGradient id="vg" cx="50%" cy="50%" r="75%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></radialGradient>' +
+    '<linearGradient id="tl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".12"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/></linearGradient>';
+  Object.keys(S).forEach(function (id) {
+    var ex = EXTRA[id] ? EXTRA[id]() : '';
+    S[id].svg = S[id].svg.replace('<defs>', '<defs>' + OVERLAY).replace('</svg>', ex + '<rect width="960" height="540" fill="url(#tl)"/><rect width="960" height="540" fill="url(#vg)"/><rect width="960" height="540" filter="url(#grain)" opacity=".5"/></svg>');
+  });
   var cache = {};
   R.drawScene = function (cv, id) {
     var sc = S[id];
