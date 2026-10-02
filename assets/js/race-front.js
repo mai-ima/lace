@@ -111,7 +111,58 @@
   }
 
   /* ---------- ストーリー（本編・ストーリー2・3、サブストーリー） ---------- */
-  function stories() { return R.STORIES || []; }
+  /* ---------- 「峠を使わない」設定（設定画面）。ONにすると峠の話が、サーキットの話に置き換わる ---------- */
+  var NO_TOUGE_ALT = { akimine: 'circuit', usui: 'fujisp', iroha: 'isetec', hakone: 'coast', ashinoko: 'forest', tenryu: 'harbor',
+                       r_haruna: 'r_tsukuba', r_usui: 'r_okayama', r_iroha: 'r_sugo', r_turnpike: 'r_motegi', r_tsubaki: 'r_autopolis', r_akagi: 'r_fuji', r_myogi: 'r_suzuka',
+                       hm_tenryu: 'circuit', hm_mikata: 'fujisp', hm_oku: 'isetec', hm_bypass: 'coast', hm_tomei: 'highway', hm_city: 'hamamatsu' };
+  var NO_TOUGE_WORDS = [[/峠とサーキット/g, 'サーキット'], [/峠道/g, 'コース'], [/峠の主/g, 'コースの主'], [/峠バトル/g, 'サーキットバトル'], [/ダウンヒル/g, 'レース'], [/山道/g, '道'], [/九十九折り/g, '連続カーブ'], [/ヒルクライム/g, 'タイムアタック'], [/峠/g, 'サーキット']];
+  function altTrack(id) {
+    if (typeof id !== 'string' || !R.TRACKS[id] || !R.TRACKS[id].touge) return id;
+    var a = NO_TOUGE_ALT[id];
+    return a && R.TRACKS[a] ? a : 'circuit';
+  }
+  function deTouge(v) {
+    if (typeof v === 'string') { NO_TOUGE_WORDS.forEach(function (w) { v = v.replace(w[0], w[1]); }); return v; }
+    if (Array.isArray(v)) return v.map(deTouge);
+    if (v && typeof v === 'object') { var o = {}; for (var k in v) o[k] = deTouge(v[k]); return o; }
+    return v;
+  }
+  function deToungeEvent(ev) {
+    var e = {}, k;
+    for (k in ev) e[k] = ev[k];
+    var oldTrack = ev.track, nt = altTrack(ev.track);
+    var was = nt !== oldTrack || ev.mode === 'touge';
+    if (!was && !ev.talk) { ['title', 'scene', 'post', 'radio'].forEach(function (f) { if (ev[f]) e[f] = deTouge(ev[f]); }); return e; }
+    if (!ev.talk) {
+      e.track = nt;
+      if (ev.mode === 'touge') { e.mode = 'duel'; e.laps = e.laps || 3; }
+    }
+    ['title', 'scene', 'post', 'radio'].forEach(function (f) { if (ev[f]) e[f] = deTouge(ev[f]); });
+    // 場面の背景も置き換える
+    if (e.scene) e.scene = e.scene.map(function (c) { return c && c.bg && R.TRACKS[c.bg] && R.TRACKS[c.bg].touge ? { bg: altTrack(c.bg) } : c; });
+    if (ev.talk) e.track = nt;
+    return e;
+  }
+  var derived = null, derivedFor = null, ntFlag = null;
+  function stories() {
+    var src = R.STORIES || [];
+    if (ntFlag === null) ntFlag = !!R.load().noTouge;
+    if (!ntFlag) return src;
+    if (derived && derivedFor === src.length) return derived;
+    derivedFor = src.length;
+    derived = src.map(function (st) {
+      var d = {}, k;
+      for (k in st) d[k] = st[k];
+      d.events = st.events.map(deToungeEvent);
+      if (st.side) d.side = st.side.map(deToungeEvent);
+      if (st.desc) d.desc = deTouge(st.desc);
+      if (st.place) d.place = deTouge(st.place);
+      return d;
+    });
+    return derived;
+  }
+  R.resetStoryView = function () { derived = null; };
+  R.storyView = function () { return stories(); };
   function storyOf(sid) { return stories().filter(function (x) { return x.id === sid; })[0] || stories()[0]; }
   function progOf(s, sid) { return sid === 's1' ? (s.story || 0) : ((s.stories || {})[sid] || 0); }
   function setProg(s, sid, n) {
@@ -1760,6 +1811,8 @@
           function (d) { R.edit(function (s) { var v = s.bgm === undefined ? 0.6 : s.bgm; s.bgm = Math.round(clamp(v + d * 0.1, 0, 1) * 10) / 10; }); if (R.Music) { R.Music.refresh(); if (!R.Music.current) R.Music.play('title'); } }));
         p.appendChild(optRow(L('描画', 'Renderer'), function () { return R.load().r3d ? L('3D（WebGL・試験版）', '3D (WebGL, beta)') : L('疑似 3D（標準）', 'Pseudo-3D (default)'); },
           function () { R.edit(function (s) { s.r3d = !s.r3d; }); }));
+        p.appendChild(optRow(L('ストーリーで峠を使う', 'Use mountain passes in stories'), function () { return R.load().noTouge ? L('使わない（サーキットに置き換え）', 'No (circuits instead)') : L('使う', 'Yes'); },
+          function () { R.edit(function (s) { s.noTouge = !s.noTouge; ntFlag = !!s.noTouge; }); R.resetStoryView(); }));
         p.appendChild(optRow(L('効果音', 'Sound'), function () { return TB.store.get('sound', '1') === '1' ? 'ON' : 'OFF'; }, function () { TB.Sfx.set(TB.store.get('sound', '1') !== '1'); }));
         var help = el('div', 'rx-help');
         [L('←→ ハンドル　↑ アクセル　↓ ブレーキ　スペース ニトロ（ゼロヨンではシフトアップ）', '←→ steer  ↑ gas  ↓ brake  space nitro (shift up in drag)'),

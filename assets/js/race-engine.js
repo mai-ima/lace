@@ -152,13 +152,17 @@
     if (!spec.fitCache || spec.fitCache.n !== n) {
       var hw = spec.geom && spec.geom.hw ? spec.geom.hw : (spec.touge || spec.narrow ? 1350 : 2000) / 154;
       var s0 = tot < 0 ? -1 : 1, best = null;
-      var tries = [[1.5, 4, s0], [1.5, 6, s0], [0.7, 4, s0], [3, 4, s0], [1.5, 4, -s0], [0.7, 6, -s0], [0, 4, s0], [0, 6, -s0], [3, 6, s0], [0.3, 8, s0]];
+      var tries = [[1.5, 1, s0], [1.5, 2, s0], [0.7, 2, s0], [1.5, 3, s0], [3, 3, s0], [1.5, 1, -s0], [1.5, 2, -s0], [0.7, 3, -s0], [1.5, 4, s0], [3, 4, s0], [0.7, 4, -s0], [0, 6, s0]];
+      // 条件を満たす補正の中で、道に足す「うねり」がいちばん少ないものを選ぶ（なめらかな道を保つ）
       for (var ti = 0; ti < tries.length; ti++) {
         var r = solve(tries[ti][0], tries[ti][1], tries[ti][2]);
         if (!r || r.err > 0.5) continue;
         r.clear = clearance(r.x, r.z, hw);
-        if (!best || r.clear > best.clear) best = r;
-        if (r.clear >= hw * 6) break;
+        var ww = weights(r.wexp), rough = 0, pv = 0;
+        for (i = 0; i < n; i++) { var dv = ww[i] * (corrected(r.th, r.H, ww, i) - c0[i]) / (ww[i] || 1); var cc = corrected(r.th, r.H, ww, i) - c0[i]; rough += Math.abs(cc - pv); pv = cc; }
+        r.rough = rough;
+        var ok = r.clear >= hw * 5;
+        if (!best || (ok && !best.ok) || (ok === best.ok && (ok ? r.rough < best.rough : r.clear > best.clear))) { best = r; best.ok = ok; }
       }
       spec.fitCache = { n: n, th: best ? best.th : null, wexp: best ? best.wexp : 1.5, H: best ? best.H : 4 };
     }
@@ -1985,8 +1989,8 @@
             if (gap < -SEG * 300) target *= 0.72;
             else if (gap < -SEG * 140) target *= 0.85;
             else if (gap > -SEG * 12) target *= 1.02;
-          } else if (gap > SEG * 60) target *= c.boss ? 1.18 : 1.12;
-          else if (gap > SEG * 25) target *= c.boss ? 1.1 : 1.06;
+          } else if (gap > SEG * 60) target *= c.boss ? 1.1 : 1.07;
+          else if (gap > SEG * 25) target *= c.boss ? 1.05 : 1.03;
           else if (gap < -SEG * 60) target *= c.boss ? 0.97 : 0.93;
         }
         // ニトロ
@@ -2016,12 +2020,12 @@
         var blockAb = c.ai === 'blocker' || c.ability === 'block' || c.ability === 'all';
         if (blockAb && !blocked && behind > 0 && behind < SEG * 10 && !P.finished) {
           c.blockT -= dt;
-          if (c.blockT < 0) c.blockT = Math.random() < (c.boss ? 0.7 : 0.45) ? 1.5 : -1.2;
-          if (c.blockT > 0) c.target = clamp(P.x, -0.8, 0.8);
+          if (c.blockT < 0) { c.blockT = Math.random() < (c.boss ? 0.5 : 0.3) ? 1.3 : -1.6; c.aimJit = (Math.random() - 0.5) * 0.5; }
+          if (c.blockT > 0) { c.aimX = (c.aimX === undefined ? P.x : c.aimX) + (P.x - (c.aimX === undefined ? P.x : c.aimX)) * Math.min(1, dt * 1.6); c.target = clamp(c.aimX + (c.aimJit || 0), -0.8, 0.8); }   // 狙いはプレイヤーの動きに遅れてついてくる
         }
         // 体当たり
         var ramAb = c.ai === 'aggressive' || c.ability === 'ram' || c.ability === 'all';
-        if (ramAb && Math.abs(behind) < SEG * 1.5 && Math.random() < (c.ability ? 0.9 : 0.35) * dt) c.target = clamp(P.x, -0.85, 0.85);
+        if (ramAb && Math.abs(behind) < SEG * 1.5 && Math.random() < (c.ability ? 0.45 : 0.15) * dt) c.target = clamp(P.x + (Math.random() - 0.5) * 0.5, -0.85, 0.85);
         // オイル
         if ((c.ability === 'oil' || c.ability === 'all') && state === 'race' && !P.finished) {
           c.oilT -= dt;
@@ -2038,7 +2042,7 @@
         }
         if (!blocked && !c.isTarget && Math.random() < 0.01) c.target = clamp(-cv(cs) * 0.12 + (Math.random() - 0.5) * 0.6, -0.8, 0.8);
         c.target = clamp(c.target, -0.85, 0.85);
-        c.offset += clamp(c.target - c.offset, -dt * (c.boss ? 1.1 : 0.9), dt * (c.boss ? 1.1 : 0.9));
+        c.offset += clamp(c.target - c.offset, -dt * (c.boss ? 0.8 : 0.65), dt * (c.boss ? 0.8 : 0.65));
 
         if (p2p) { if (!c.finished && c.total - PLAYER_Z >= goalDist) { c.finished = true; c.finishTime = raceT; c.max *= 0.5; } }
         else {

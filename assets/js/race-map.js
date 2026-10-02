@@ -409,8 +409,17 @@
   /** エンジンの区間へ（curve / 高さ / 世界座標 wp） */
   function pushSegs(b, r, y0, loop) {
     var n = r.n, segs = b.segs;
+    // 向きを前後 4 区間（約 10m）でならしてから差を取る。測量データの細かいガタつきが
+    // 「かくかくした道」にならないようにする（合計の曲がりは変わらない）。
+    var hs = new Float64Array(n + 1), kk = 4;
+    for (var q = 0; q <= n; q++) {
+      var s0 = 0, c0 = 0;
+      for (var d = -kk; d <= kk; d++) { var j = q + d; if (j < 0) j = 0; if (j > n) j = n; var wgt = kk + 1 - Math.abs(d); s0 += r.h[j] * wgt; c0 += wgt; }
+      hs[q] = s0 / c0;
+    }
+    hs[0] = r.h[0]; hs[n] = r.h[n];
     for (var i = 0; i < n; i++) {
-      var dh = r.h[i + 1] - r.h[i];
+      var dh = hs[i + 1] - hs[i];
       var c = -dh * CURVE_K;
       var cv = Math.max(-26, Math.min(26, c * 0.8));
       b.add(cv, (r.y[i + 1] - y0) * UNITS);
