@@ -239,6 +239,48 @@
 
   // 実在の峠・サーキットは曲がりが急で、自動運転ではライバルより遅くなりすぎる。ライバルの上限速度をコースごとにそろえる（測定値）
   var AI_TRACK_SCALE = {"r_suzuka": 0.87, "r_fuji": 0.84, "r_motegi": 0.84, "r_sugo": 0.84, "r_okayama": 0.81, "r_tsukuba": 0.72, "r_autopolis": 0.84, "r_haruna": 0.77, "r_usui": 0.58, "r_iroha": 0.62, "r_turnpike": 0.88, "r_tsubaki": 0.59, "r_akagi": 0.62, "r_myogi": 0.6, "hm_city": 0.88, "hm_bypass": 0.88, "hm_oku": 0.88, "hm_tenryu": 0.88, "hm_mikata": 0.88, "hm_tomei": 0.88};
+  /**
+   * 交差点で分かれる道を、出口ごとに側道として区間に書き込む。
+   * 出口の向き（ang: 左が正, ラジアン）どおりに、交差点の中心（jl）から道が伸びる。
+   * 直角に近いものは中心をはさんだ帯、浅い角度（Y 字）は進むほど離れていく帯になる。
+   */
+  function addBranches(segs, spec, jl) {
+    var brs = spec.branches || [], hwm = spec.geom && spec.geom.hw ? spec.geom.hw : 5.2, SEGM = 1.3, arms = { l: false, r: false };
+    brs.forEach(function (b) {
+      var side = b.ang > 0 ? -1 : 1, th = Math.min(Math.abs(b.ang), Math.PI - 0.12), bw = Math.max(5, hwm * 0.95), LMAX = 70;
+      var perp = Math.abs(th - Math.PI / 2) < 0.32;
+      if (perp) (side < 0 ? arms.l = true : arms.r = true);
+      for (var i = Math.max(0, jl - 70); i < Math.min(segs.length, jl + 110); i++) {
+        var a1 = (i - jl) * SEGM, a2 = a1 + SEGM, c1, c2;
+        if (perp) {   // 直角: 交差点の中心をはさむ帯
+          if (a2 < -bw / 2 || a1 > bw / 2) continue;
+          c1 = c2 = null;
+          var e = { side: side, i1: hwm, o1: LMAX, i2: hwm, o2: LMAX, nav: !!b.nav };
+          (segs[i].br = segs[i].br || []).push(e);
+          continue;
+        }
+        var t = Math.tan(th);
+        var fwd = th < Math.PI / 2;
+        if (fwd ? a2 < 0 : a1 > 0) continue;   // 前へ伸びる道は交差点から先、後ろへ戻る道は手前
+        c1 = Math.abs(a1 * t); c2 = Math.abs(a2 * t);
+        var o1 = Math.min(LMAX, c1 + bw / 2), o2 = Math.min(LMAX, c2 + bw / 2);
+        if (o2 <= hwm + 0.3 && o1 <= hwm + 0.3) continue;
+        (segs[i].br = segs[i].br || []).push({ side: side, i1: Math.max(hwm, Math.min(o1, c1 - bw / 2)), o1: o1, i2: Math.max(hwm, Math.min(o2, c2 - bw / 2)), o2: o2, nav: !!b.nav });
+      }
+    });
+    spec.crossBoth = arms.l && arms.r;
+    // 側道にかかる沿道の物（建物・木・電柱）は取り除く
+    for (var q = Math.max(0, jl - 70); q < Math.min(segs.length, jl + 110); q++) {
+      var sg = segs[q]; if (!sg.br) continue;
+      sg.sprites = sg.sprites.filter(function (sp) {
+        if (sp.kind === 'signal' || sp.kind === 'fork' || sp.kind === 'limitsign') return true;
+        var lat = sp.offset * hwm, ok = true;
+        sg.br.forEach(function (b) { if ((b.side < 0) === (lat < 0) && Math.abs(lat) > b.i1 - 3 && Math.abs(lat) < b.o1 + 3) ok = false; });
+        return ok;
+      });
+    }
+  }
+
   function buildTrack(id, mirror, weather) {
     var spec = typeof id === 'string' ? R.TRACKS[id] : id;
     id = spec.id || (typeof id === 'string' ? id : 'custom');
@@ -327,18 +369,25 @@
     if (spec.startMark && segs[10]) segs[10].sprites.push({ kind: spec.startMark, offset: spec.water === 'left' ? 3 : -3, seed: 5 });
     if (spec.banner && segs[5]) segs[5].sprites.push({ kind: 'banner', offset: 0, text: spec.banner });
     var nS = segs.length;
+    // 実在の道は、交差点の中心（jEnd）が基準。先読みの道（tail）の終わりではない
+    var nJ = spec.custom && spec.jEnd ? Math.min(nS, spec.jEnd) : nS;
     if (spec.fork && !spec.custom) segs[Math.max(0, nS - 70)].sprites.push({ kind: 'fork', offset: 0, texts: spec.fork });
-    if (spec.fork) segs[Math.max(0, nS - (spec.custom ? Math.min(90, Math.floor(nS * 0.55)) : 140))].sprites.push({ kind: 'fork', offset: 0, texts: spec.fork, blue: !!spec.custom });
+    if (spec.fork) segs[Math.max(0, nJ - (spec.custom ? Math.min(90, Math.floor(nJ * 0.55)) : 140))].sprites.push({ kind: 'fork', offset: 0, texts: spec.fork, blue: !!spec.custom });
     if (spec.junction) {
-      var jl = nS;
+      var jl = nJ;
       if (spec.custom) {
         // 実在の交差点: 区間の終わり = 交差点の中心
         var jw = Math.max(6, Math.round((spec.junction.w || 12) / 1.3));
         var stp = Math.max(2, jl - jw - 3);
         segs[stp].crosswalk = segs[stp + 1].crosswalk = true; segs[stp - 1].stopLine = true;
-        for (var jc = stp + 2; jc < jl; jc++) segs[jc].cross = true;
-        if (spec.junction.signal) segs[stp - 1].sprites.push({ kind: 'signal', offset: 1.18, city: true });
+        var brs = spec.branches || [];
+        if (!brs.length && !spec.mapEdge) for (var jc = stp + 2; jc < jl; jc++) segs[jc].cross = true;
+        if (spec.junction.signal) {
+          segs[stp - 1].sprites.push({ kind: 'signal', offset: 1.18, city: true });
+          if (jl - 2 > stp) segs[jl - 2].sprites.push({ kind: 'signal', offset: -1.18, city: true, far: true });   // 交差点の向こう側にも
+        }
         spec.stopSeg = stp - 1; spec.crossSeg = Math.min(jl - 2, stp + 2 + Math.floor(jw / 2));
+        addBranches(segs, spec, jl);
       } else {
         segs[jl - 41].crosswalk = segs[jl - 40].crosswalk = true;
         segs[jl - 40].stopLine = true;
@@ -1096,7 +1145,16 @@
         if (s > 24) {
           g.fillStyle = '#fff'; g.textAlign = 'center';
           g.font = 'bold ' + Math.max(7, Math.round(s * (sp.kind === 'fork' ? 0.09 : 0.1))) + 'px sans-serif';
-          if (sp.kind === 'fork') sp.texts.forEach(function (tx, j, arr) { g.fillText(tx, x - half2 + half2 * 2 * (j + 0.5) / arr.length, top2 + bh2 * 0.62); });
+          if (sp.kind === 'fork') {
+            var pk = sp.pick ? sp.pick() : -1;
+            sp.texts.forEach(function (tx, j, arr) {
+              var cxj = x - half2 + half2 * 2 * (j + 0.5) / arr.length;
+              if (j === pk) {   // いま選ばれている進路（ウインカー・ナビ）は光らせる
+                g.fillStyle = '#ffe14d'; g.fillRect(cxj - half2 / arr.length + s * 0.02, top2 + bh2 * 0.14, half2 * 2 / arr.length - s * 0.04, bh2 * 0.72);
+                g.fillStyle = '#10243f'; g.fillText(tx, cxj, top2 + bh2 * 0.62); g.fillStyle = '#fff';
+              } else g.fillText(tx, cxj, top2 + bh2 * 0.62);
+            });
+          }
           else g.fillText(sp.text, x, top2 + bh2 * 0.7);
         }
         break;
@@ -1391,7 +1449,7 @@
     /* --- 交差点の信号・交差車両・警察 --- */
     var sig = { phase: 'green', t: Math.random() * 14, cross: [], crossT: 0 };
     var cops = [], wantedT = 0, escapeT = 0, bustHits = 0, orbisDone = false, stopDone = false;
-    segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = function () { return sig.phase; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
+    segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = function () { return sig.phase; }; if (sp.kind === 'fork') sp.pick = function () { return cfg.exitDirs ? chooseExit() : -1; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
     function violation(kind) {
       if (mode !== 'world' || demo) return;
       var seen = cops.length > 0 || traffic.some(function (t) { return t.cop && Math.abs(t.total - pz()) < SEG * (kind === 'speed' ? 30 : 90); });
@@ -1421,7 +1479,7 @@
           if (sig.phase === 'red' && spec.junction.signal) { pop(L('信号無視！', 'RAN A RED LIGHT!'), '#ff5252'); violation('signal'); }
         }
         // 赤の間は交差する道路を車が横切る
-        if (spec.junction.signal && sig.phase === 'red') {
+        if (spec.junction.signal && sig.phase === 'red' && (!spec.mapEdge || spec.crossBoth)) {
           sig.crossT -= dt;
           if (sig.crossT <= 0) {
             var tt = R.TRAFFIC[Math.floor(Math.random() * R.TRAFFIC.length)];
@@ -1521,7 +1579,8 @@
     var prevRank = null, eliminated = [], flash = 0, lastHitName = '';
     var ghost = cfg.ghost || null, rec = { s: [], x: [] }, newGhost = null;
     var t0 = 0;
-    var eng = !demo && R.carAudio ? R.carAudio(car.body) : { update: function () {}, set: function () {}, stop: function () {}, mute: function () {}, event: function () {}, info: function () { return {}; } };
+    var keepAudio = false;
+    var eng = cfg.audio ? cfg.audio : !demo && R.carAudio ? R.carAudio(car.body) : { update: function () {}, set: function () {}, stop: function () {}, mute: function () {}, event: function () {}, info: function () { return {}; } };
     var passT = 0;
 
     function say(text, t) { msg.text = text; msg.t = t || 1.6; }
@@ -1543,8 +1602,13 @@
       if (P.blink < 0) { for (i = 0; i < d.length; i++) if (d[i] === 'left' || d[i] === 'uturn') { best = i; break; } }
       else if (P.blink > 0) { for (i = d.length - 1; i >= 0; i--) if (d[i] === 'right' || d[i] === 'uturn') { best = i; break; } }
       if (best < 0) {
+        if (P.blink === 0 && cfg.exitNav >= 0 && cfg.exitNav < d.length) return cfg.exitNav;   // ウインカーなしなら、ナビの道
         best = d.indexOf('straight');
-        if (best < 0) best = cfg.exitDefault !== undefined ? cfg.exitDefault : 0;
+        if (best < 0) {
+          // 直進が無いとき: 走っている位置（左寄り・右寄り）で選ぶ。真ん中ならもっとも真っすぐに近い道
+          if (P.blink === 0 && d.length >= 2 && Math.abs(P.x) > 0.3) best = P.x < 0 ? 0 : d.length - 1;
+          else best = cfg.exitDefault !== undefined ? cfg.exitDefault : 0;
+        }
         if (P.blink < 0) best = 0; else if (P.blink > 0) best = d.length - 1;
       }
       return best;
@@ -2563,6 +2627,17 @@
       if (s.cross) {   // 交差する道路
         g.fillStyle = s.cRoad; g.fillRect(0, y2 - 1, W, y1 - y2 + 1);
       }
+      if (s.br) {   // 交差点で分かれる道（出口ごと）
+        var bhw = spec.geom && spec.geom.hw ? spec.geom.hw : 5.2;
+        for (var bi = 0; bi < s.br.length; bi++) {
+          var B2 = s.br[bi], sd = B2.side;
+          var xi1 = x1 + sd * w1 * B2.i1 / bhw, xo1 = x1 + sd * w1 * B2.o1 / bhw, xi2 = x2 + sd * w2 * B2.i2 / bhw, xo2 = x2 + sd * w2 * B2.o2 / bhw;
+          poly(g, xi1, y1, xo1, y1, xo2, y2, xi2, y2, s.cRoad);
+          // 縁の白線とナビの道は少し明るく
+          poly(g, xo1 - sd * w1 * 0.05, y1, xo1, y1, xo2, y2, xo2 - sd * w2 * 0.05, y2, 'rgba(255,255,255,.5)');
+          if (B2.nav && s.alt) poly(g, xi1, y1, xo1, y1, xo2, y2, xi2, y2, 'rgba(92,207,160,.16)');
+        }
+      }
       if (spec.neon && s.index % 4 === 0) { g.fillStyle = 'rgba(0,229,255,.35)'; g.fillRect(0, y2, W, 1); }
       poly(g, x1 - w1 - r1, y1, x1 - w1, y1, x2 - w2, y2, x2 - w2 - r2, y2, s.cRumble);
       poly(g, x1 + w1 + r1, y1, x1 + w1, y1, x2 + w2, y2, x2 + w2 + r2, y2, s.cRumble);
@@ -2876,7 +2951,8 @@
         var ch2 = sess.exitChoice ? sess.exitChoice() : null;
         if (nv || (cfg.exitDirs && cfg.exitDirs.length > 1)) {
           var ny = H - 100, nw2 = nv ? (narrow ? 190 : 250) : 150;
-          panel(g, W - nw2 - 8, ny - 30, nw2, 46);
+          var hasEx = cfg.exitDirs && cfg.exitDirs.length > 1 && ch2 !== null;
+          panel(g, W - nw2 - 8, ny - 30, nw2, hasEx ? 62 : 46);
           if (nv) {
             text(g, nv.arrow, W - nw2 + 16, ny + 4, 30, nv.dir === 'goal' ? '#ffd93d' : '#5ccfa0', 'center');
             text(g, nv.text, W - nw2 + 36, ny - 12, 10, '#e8e8f0');
@@ -2885,6 +2961,9 @@
             var dN = cfg.exitDirs[ch2], aw = { left: '←', right: '→', straight: '↑', uturn: '↶' }[dN];
             var ok = !nv || nv.dir === dN || nv.dir === 'any' || nv.dir === 'goal';
             text(g, L('この先 ', 'Ahead ') + toJ + 'm  ' + L('進路 ', 'route ') + aw, nv ? W - nw2 + 36 : W - nw2 + 4, ny + (nv ? 6 : -2), 11, ok ? '#9fe8c8' : '#ff8a80');
+            var exn = cfg.exitNames && cfg.exitNames[ch2] ? cfg.exitNames[ch2] : '';
+            var auto = P.blink === 0 && cfg.exitNav >= 0 && ch2 === cfg.exitNav;
+            text(g, exn.slice(0, 14) + (auto ? L('（ナビ）', ' (nav)') : P.blink ? L('（ウインカー）', ' (signal)') : ''), W - nw2 + 4, ny + 22, 10, '#ffe14d');
           }
         }
         if (limitKmh) {
@@ -2960,7 +3039,9 @@
     sess.keys = keys;
     sess.state = function () { return state; };
     sess.result = function () { return result; };
-    sess.stop = function () { eng.stop(); if (sirenA) { sirenA.stop(); sirenA = null; } };
+    // 交差点で次の道へ移るとき、エンジン音を切らずに引き継ぐ（音の途切れをなくす）
+    sess.detachAudio = function () { keepAudio = true; return eng; };
+    sess.stop = function () { if (!keepAudio) eng.stop(); if (sirenA) { sirenA.stop(); sirenA = null; } };
     sess.track = T;
     sess.cfg = cfg;
     sess.key = function (k, down) {
@@ -3012,10 +3093,10 @@
   };
 
   /** スマホ用の押しっぱなしボタン */
-  R.makePad = function (sess) {
+  R.makePad = function (sess, world) {
     var pad = document.createElement('div');
-    pad.className = 'race-pad';
-    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right'], ['N₂O', ' ', 'nitro'], ['BRK', 'ArrowDown', 'down'], ['GAS', 'ArrowUp', 'up']].forEach(function (p) {
+    pad.className = 'race-pad' + (world ? ' world' : '');
+    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR']] : []).concat([['N₂O', ' ', 'nitro'], ['BRK', 'ArrowDown', 'down'], ['GAS', 'ArrowUp', 'up']]).forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = p[0]; b.className = 'rbtn ' + p[2];
       function on(e) { e.preventDefault(); (typeof sess === 'function' ? sess() : sess).key(p[1], true); }

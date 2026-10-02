@@ -397,7 +397,7 @@
     var PL = R.worldPlaces();
     var startId = PL[opts.start] ? opts.start : 'hm_eki';
     var node = PL[startId].node;
-    var h = -1, exits = [], hist = [], turn = 0, line = null, curSpec = null, dest = opts.dest || null;
+    var h = -1, exits = [], hist = [], turn = 0, line = null, curSpec = null, dest = opts.dest || null, navExitH = -1;
     var placeAt = {};
     Object.keys(PL).forEach(function (k) { placeAt[PL[k].node] = k; });
 
@@ -415,11 +415,17 @@
       var sig = toN.sig && exits.length > 1;
       var jn = exits.length > 1 || toN.out.length > 1 ? { signal: sig, w: 10 + (e.c <= 2 ? 8 : 0) } : null;
       var forks = exits.length > 1 ? exits.map(function (ex) { return dirArrow(ex.dir) + ' ' + exitLabel(ex); }) : null;
-      // 先の景色: ナビの道順 → なければ直進に近い道
-      var tail = -1, tn = targetNode();
-      if (tn >= 0 && tn !== M.to(h)) { var rt0 = M.route(M.to(h), tn); if (rt0 && rt0.hs.length) tail = rt0.hs[0]; }
-      if (tail < 0 && exits.length) tail = exits.reduce(function (a2, b2) { return Math.abs(b2.ang) < Math.abs(a2.ang) ? b2 : a2; }).h;
-      var sp = M.edgeSpec(h, { turn: turn, junction: jn, fork: forks, tail: tail });
+      // 先の景色（道が続いて見える方向）: 直進に近い道（約 35 度以内）を優先。なければナビの道、それもなければ、もっとも真っすぐに近い道
+      // 曲がる道は、先読みにせず「側道」として描く。道が勝手に曲がって見えないようにする
+      var tail = -1, tn = targetNode(), navH = -1;
+      if (tn >= 0 && tn !== M.to(h)) { var rt0 = M.route(M.to(h), tn); if (rt0 && rt0.hs.length) navH = rt0.hs[0]; }
+      var straightEx = exits.length ? exits.reduce(function (a2, b2) { return Math.abs(b2.ang) < Math.abs(a2.ang) ? b2 : a2; }) : null;
+      if (straightEx && Math.abs(straightEx.ang) < 0.62) tail = straightEx.h;
+      else if (navH >= 0) tail = navH;
+      else if (straightEx) tail = straightEx.h;
+      navExitH = navH;
+      var branches = exits.filter(function (ex) { return ex.h !== tail; }).map(function (ex) { return { ang: ex.ang, dir: ex.dir, name: exitLabel(ex), nav: ex.h === navH }; });
+      var sp = M.edgeSpec(h, { turn: turn, junction: jn, fork: forks, tail: tail, branches: branches });
       sp.limit = limitOf(e);
       line = null;
       curSpec = sp;
@@ -428,12 +434,12 @@
     function trafficFor(e) { return ({ 0: 9, 1: 8, 2: 7, 3: 5, 4: 3, 5: 2 })[e.c] || 2; }
     function cfgFor(start) {
       var sp = spec(), e = M.edgeOf(h), s = R.load();
-      var dflt = 0, best = 9;
-      exits.forEach(function (ex, i) { if (Math.abs(ex.ang) < best) { best = Math.abs(ex.ang); dflt = i; } });
+      var dflt = 0, best = 9, navI = -1;
+      exits.forEach(function (ex, i) { if (Math.abs(ex.ang) < best) { best = Math.abs(ex.ang); dflt = i; } if (ex.h === navExitH) navI = i; });
       return {
         track: sp, mode: 'world', laps: Infinity, weather: opts.weather || 'clear', field: [],
         traffic: trafficFor(e), car: playerCar(s, carId), levelMul: 1,
-        exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt,
+        exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitNames: exits.map(exitLabel),
         canBack: hist.length > 0, start: start,
         hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo,
         onViolation: violation, onBusted: busted, onEscape: escaped
@@ -1329,6 +1335,21 @@
             drawBig();
           }));
           info.appendChild(item(L('出発する', 'Go'), '', function () { runWorld(job, start, dest); }, { icon: 'car', cls: 'accent' }));
+          if (!job) {
+            // 同じ地図の上で、レースも始められる（出発地と目的地を結ぶ実在の道が、そのままコースになる）
+            info.appendChild(item(L('この道でレース', 'Race on this road'), L('出発地から目的地まで。クイックレースの設定で走る', 'From start to destination, with the Quick Race options'), function () {
+              if (!dest) { sfx('bad'); return; }
+              var a = PL[start], b = PL[dest];
+              R.makeRouteTrack(a.node, b.node, label(start), label(dest));
+              quickOpt.cat = 'route'; quickOpt.track = 'hm_route'; go(SCREENS.quick(false, 'route'));
+            }, { icon: 'flag', dis: !dest }));
+            info.appendChild(item(L('この道でタイムアタック', 'Time attack on this road'), '', function () {
+              if (!dest) { sfx('bad'); return; }
+              var a2 = PL[start], b2 = PL[dest];
+              R.makeRouteTrack(a2.node, b2.node, label(start), label(dest));
+              runSingle('time', 'hm_route');
+            }, { icon: 'stopwatch', dis: !dest }));
+          }
           info.appendChild(item(L('戻る', 'Back'), '', function () { back(); }, { icon: 'back' }));
           row.appendChild(info);
           p.appendChild(row);
@@ -1426,6 +1447,7 @@
     var quickOpt = { track: 'coast', laps: 2, level: null, weather: 'auto', mirror: false, rivals: 7 };
     var CATS = [
       { k: 'all', n: { ja: 'すべて', en: 'All' }, f: function () { return R.ALL_TRACKS; } },
+      { k: 'route', n: { ja: '地図で選んだ道', en: 'Your route' }, f: function () { return ['hm_route']; } },
       { k: 'circuit', n: { ja: '実在のサーキット', en: 'Real circuits' }, f: function () { return R.REAL_CIRCUITS; } },
       { k: 'touge', n: { ja: '実在の峠', en: 'Real mountain passes' }, f: function () { return R.REAL_TOUGE; } },
       { k: 'hm', n: { ja: '浜松の公道', en: 'Hamamatsu public roads' }, f: function () { return R.REAL_ROADS; } },
@@ -1939,7 +1961,7 @@
       prep(cfg, opts);
       app.sess = R.Session(cfg);
       app.sess.W = cv.width; app.sess.H = cv.height;
-      padBox.innerHTML = ''; padBox.appendChild(R.makePad(function () { return app.sess; }));
+      padBox.innerHTML = ''; padBox.appendChild(R.makePad(function () { return app.sess; }, !!(app.runOpts && app.runOpts.world)));
       if (R.ENABLE_3D && R.load().r3d) attach3D(); else detach3D();
     }
 
@@ -1980,6 +2002,7 @@
         setTimeout(function () {
           if (!app.sess || app.mode !== 'race') return;
           var keys = app.sess.keys, old = app.sess;
+          if (old.detachAudio && old.cfg.car && nx.car && old.cfg.car.body === nx.car.body) nx.audio = old.detachAudio();
           old.stop();
           prep(nx, opts);
           app.sess = R.Session(nx);

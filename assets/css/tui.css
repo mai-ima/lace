@@ -402,6 +402,8 @@ a:hover, a:focus-visible { color: var(--accent); }
     touch-action: none;
     user-select: none;
   }
+  .race-pad.world { grid-template-columns: repeat(4, 1fr); }
+  .rbtn.blinkL, .rbtn.blinkR { background: #4a3d12; font-size: .8em; }
   .rbtn:active { background: #2c3d58; }
   .rbtn.up { background: #1f5c46; }
   .rbtn.down { background: #5c1f28; }

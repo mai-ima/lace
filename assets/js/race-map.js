@@ -34,16 +34,37 @@
 
   /* ---------- 読み込み ---------- */
   var waiting = [];
+  function loadScript(src, ok, ng) {
+    var sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = ng || ok; document.head.appendChild(sc);
+  }
+  /** 国土地理院の建物（race-bld-data.js）を、建物の一覧に足す */
+  function initBld() {
+    var D = TB.RaceBldData; if (!D || M.bldExtra) return;
+    var bx = cum(dec(D.x)), bz = cum(dec(D.z)), bw = dec(D.w), bd = dec(D.d), ba = dec(D.a), bl = dec(D.l), bk = dec(D.k), B = M.bld, base = B.n;
+    for (var i = 0; i < D.n; i++) {
+      B.x.push(bx[i]); B.z.push(bz[i]); B.w.push(bw[i]); B.d.push(bd[i]); B.a.push(ba[i] * 2 * Math.PI / 180); B.l.push(bl[i]); B.k.push(bk[i]);
+      var key = Math.floor(bx[i] / 100) + ',' + Math.floor(bz[i] / 100);
+      (M.bgrid[key] = M.bgrid[key] || []).push(base + i);
+    }
+    B.n = base + D.n;
+    // 建物のある範囲（250m 格子）
+    var cx = cum(dec(D.cx)), cz = cum(dec(D.cz)); M.bcells = {};
+    for (i = 0; i < cx.length; i++) for (var dx = -1; dx <= 1; dx++) for (var dz = -1; dz <= 1; dz++) M.bcells[(cx[i] + dx) + ',' + (cz[i] + dz)] = 1;
+    M.bldExtra = D.n;
+  }
   M.load = function (cb) {
     if (M.ready) { cb(true); return; }
-    if (TB.RaceMapData) { init(); cb(true); return; }
     waiting.push(cb);
     if (waiting.length > 1) return;
-    var sc = document.createElement('script');
-    sc.src = 'assets/js/race-map-data.js';
-    sc.onload = function () { var ok = false; try { init(); ok = true; } catch (e) { if (window.console) console.error(e); } var w = waiting; waiting = []; w.forEach(function (f) { f(ok); }); };
-    sc.onerror = function () { var w = waiting; waiting = []; w.forEach(function (f) { f(false); }); };
-    document.head.appendChild(sc);
+    function done(ok) { var w = waiting; waiting = []; w.forEach(function (f) { f(ok); }); }
+    function afterMap() {
+      var ok = false;
+      try { init(); ok = true; } catch (e) { if (window.console) console.error(e); }
+      if (!ok) { done(false); return; }
+      function fin() { try { initBld(); } catch (e) { if (window.console) console.error(e); } M.ready = true; done(true); }
+      if (TB.RaceBldData) fin(); else loadScript('assets/js/race-bld-data.js', fin, fin);
+    }
+    if (TB.RaceMapData) afterMap(); else loadScript('assets/js/race-map-data.js', afterMap, function () { done(false); });
   };
 
   // 道路の種類: 0 高速 1 国道(幹線) 2 主要道 3 二級 4 一般 5〜8 ランプ
@@ -127,7 +148,6 @@
         if (!seen[kk]) { seen[kk] = 1; (M.egrid[kk] = M.egrid[kk] || []).push(E2.id); }
       }
     });
-    M.ready = true;
   }
 
   /* ---------- 地形 ---------- */
@@ -151,7 +171,7 @@
     if (!v) v = M.height(x, z) > 90 ? 6 : 4;
     return v;
   };
-  M.covered = function (x, z) { return M.bcov.some(function (c) { return Math.hypot(x - c[0], z - c[1]) < c[2]; }); };
+  M.covered = function (x, z) { return M.bcov.some(function (c) { return Math.hypot(x - c[0], z - c[1]) < c[2]; }) || !!(M.bcells && M.bcells[Math.floor(x / 250) + ',' + Math.floor(z / 250)]); };
 
   /* ---------- 半辺（向きのある道） ---------- */
   function edgeOf(h) { return M.edges[h >> 1]; }
@@ -625,7 +645,7 @@
       custom: true, noFinish: true, wpY0: y0,
       geom: { rw: Math.max(2000, Math.round(hwv * UNITS * 2)), cw: cw, lanes: Math.min(4, g.lanes), hw: hwv },
       twoWay: !e.one && !hwy, limit: limit, police: hwy ? 1 : (kind === 'city' ? 1 : 0), orbis: hwy && r.len > 1200,
-      banner: opt.banner, fork: opt.fork, junction: opt.junction || null, startMark: null, endMark: null,
+      banner: opt.banner, fork: opt.fork, junction: opt.junction || null, branches: opt.branches || [], startMark: null, endMark: null,
       mapEdge: h, mapLen: e.len, kind: kind, hwy: hwy, jEnd: jEnd, line: r,
       build: function (b) { pushSegs(b, r, y0); },
       after: function (segs) {

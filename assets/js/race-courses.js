@@ -143,10 +143,10 @@
   };
   function hmPolyline(o) {
     var M = R.Map, PL = R.worldPlaces(), pts = [], sts = [];
-    for (var k = 0; k + 1 < o.via.length; k++) {
-      var a = PL[o.via[k]], b = PL[o.via[k + 1]];
-      if (!a || !b) continue;
-      var rt = M.route(a.node, b.node, !o.hwy);
+    var ns = o.nodes || o.via.map(function (v) { return PL[v] ? PL[v].node : -1; });
+    for (var k = 0; k + 1 < ns.length; k++) {
+      if (ns[k] < 0 || ns[k + 1] < 0) continue;
+      var rt = M.route(ns[k], ns[k + 1], !o.hwy);
       if (!rt) continue;
       rt.hs.forEach(function (h) {
         var p = M.pts(h), e = M.edgeOf(h);
@@ -166,9 +166,8 @@
     for (var q = 1; q < pts.length / 3; q++) { L += Math.hypot(pts[q * 3] - pts[q * 3 - 3], pts[q * 3 + 1] - pts[q * 3 - 2]); if (L > maxLen && !o.loop) { cut = q + 1; break; } }
     return { p: new Float32Array(pts.slice(0, cut * 3)), st: new Uint8Array(sts.slice(0, cut - 1)) };
   }
-  Object.keys(HM).forEach(function (id) {
-    var o = HM[id];
-    R.TRACKS[id] = {
+  function hmSpec(o) {
+    return {
       name: o.name, desc: o.desc, diff: o.diff, laps: o.loop ? 3 : 1, weather: 'clear', deco: [], custom: true, real: true, needsMap: true,
       loop: !!o.loop, p2p: !o.loop, touge: !!o.touge, region: '浜松', hwy: !!o.hwy,
       pal: (R.Map.PALS || {})[o.hwy ? 'hwy' : o.touge ? 'mount' : 'city'] || PAL_TOUGE,
@@ -185,12 +184,31 @@
       },
       after: function (segs) { if (R.Map.ready && segs[0] && segs[0].wp) R.Map.decorate(segs, this.geom ? this.geom.hw : 4, { cls: this.hwy ? 0 : 2, hwy: this.hwy }); }
     };
+  }
+  Object.keys(HM).forEach(function (id) { R.TRACKS[id] = hmSpec(HM[id]); });
+
+  /* ---------- 地図で選んだ道（世界地図の 2 点をつなぐ実在の道をコースにする） ---------- */
+  var ROUTE_ID = 'hm_route';
+  R.makeRouteTrack = function (fromNode, toNode, fromName, toName) {
+    var nm = (fromName || '出発地') + ' → ' + (toName || '目的地');
+    R.TRACKS[ROUTE_ID] = hmSpec({
+      name: { ja: '地図で選んだ道（' + nm + '）', en: 'Your route (' + nm + ')' },
+      desc: { ja: '世界地図で選んだ 2 点を結ぶ、実在の道路。どのモードでも走れる。', en: 'The real road between the two points you picked on the world map.' },
+      diff: 3, nodes: [fromNode, toNode], maxLen: 12000
+    });
+    return R.TRACKS[ROUTE_ID];
+  };
+  // はじめは、浜松駅から中田島砂丘まで
+  R.TRACKS[ROUTE_ID] = hmSpec({
+    name: { ja: '地図で選んだ道（浜松駅 → 中田島砂丘）', en: 'Your route (Hamamatsu Sta. → Nakatajima Dunes)' },
+    desc: { ja: '世界地図で選んだ 2 点を結ぶ、実在の道路。どのモードでも走れる。', en: 'The real road between the two points you picked on the world map.' },
+    diff: 3, via: ['hm_eki', 'hm_dune'], maxLen: 12000
   });
 
   // 一覧に加える（実在コースは別の区分）
   R.REAL_CIRCUITS = ['r_suzuka', 'r_fuji', 'r_motegi', 'r_sugo', 'r_okayama', 'r_tsukuba', 'r_autopolis'].filter(function (id) { return R.TRACKS[id]; });
   R.REAL_TOUGE = ['r_haruna', 'r_usui', 'r_iroha', 'r_turnpike', 'r_tsubaki', 'r_akagi', 'r_myogi'].filter(function (id) { return R.TRACKS[id]; });
-  R.REAL_ROADS = Object.keys(HM);
+  R.REAL_ROADS = Object.keys(HM).concat([ROUTE_ID]);
   R.ORDER = R.ORDER.concat(R.REAL_CIRCUITS, R.REAL_ROADS);
   R.TOUGE = R.TOUGE.concat(R.REAL_TOUGE);
   R.ALL_TRACKS = R.ORDER.concat(R.TOUGE);
