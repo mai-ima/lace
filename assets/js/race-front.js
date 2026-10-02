@@ -1948,7 +1948,7 @@
       if (a === 'story') {
         var hit = parts[1] ? findEvent(parts[1]) : null, stp = parts[1] && !hit ? storyOf(parts[1]) : null;
         go(SCREENS.story(hit ? (hit.side ? 'side' : hit.st.id) : stp ? stp.id : null));
-        if (hit && (hit.side ? sideOpen(s, hit.st, hit.ev) : hit.idx <= progOf(s, hit.st.id))) go(SCREENS.brief(hit.st.id, hit.idx, hit.side));
+        if (hit && (hit.side ? sideOpen(s, hit.st, hit.ev) : hit.idx <= progOf(s, hit.st.id))) { if (hit.ev.talk) storyEvent(hit.st.id, hit.idx, true, hit.side); else go(SCREENS.brief(hit.st.id, hit.idx, hit.side)); }
       } else if (a === 'world') go(SCREENS.world(null));
       else if (a === 'job' || a === 'jobs') { go(SCREENS.jobs()); if (R.JOBS[parts[1]]) go(SCREENS.world(parts[1])); }
       else if (a === 'gp' || a === 'career') { go(SCREENS.gp()); var cup = R.CUPS.filter(function (c) { return c.id === parts[1]; })[0]; if (cup && R.cupUnlocked(s, cup)) go(SCREENS.cup(cup.id)); }

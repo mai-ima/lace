@@ -1,565 +1,306 @@
 /*
- * race-story3.js — ストーリー3「やらまいか 1964 ―浜松から世界へ―」（全面改修版）
+ * race-story3.js — ストーリー3「六連星（むつらぼし）― 峠の走り屋 2002 ―」  その 1 / 3
  *
- * 1964 年（昭和 39 年）、東京オリンピックの年。静岡県浜松市。
- * オートバイと織機の工場がひしめく「ものづくりの町」で、
- * 小さな町工場「坂下発動機」の見習い・早瀬イチロー（19）は、
- * 亡き父が遺した幻のエンジンと、仲間たちの手作りの車で、鈴鹿の日本グランプリに挑む。
- * 遠州弁の「やらまいか（やってみよう）」を合言葉に。
+ * 2002 年、群馬。榛名山のふもとの町の、小さなガソリンスタンドで働く青柳カズマ（20）。
+ * 亡き父の FC3S と、峠の仲間たち「ムツラボシ」。リーダーのリョウは、三年前の事故で親友を亡くしてから、走らない。
+ * 町は、峠の夜間封鎖を決めようとしている。走り屋たちの「最後の夜」と、それぞれの事情の物語。
  *
- * 筋立て
- *   ・坂下発動機は借金で潰れかけ。大手の北斗自動車は、父の設計「SK-4」ごと会社を買い取りたい。
- *   ・父・清造と、北斗の沢木は、戦時中同じ航空エンジンの研究所にいた旧友だった。
- *   ・鈴鹿の前夜に工場が燃える。町じゅうの町工場が、一晩で車を作り直す。
- *   ・日本グランプリで氷室（北斗のワークス）と競い、勝って、会社を守る。
+ * 秘密（ネタバレ）
+ *   ・リョウの目は、少しずつ見えなくなっている（網膜の病気）。夜の運転は、もう限界。
+ *   ・雷神のエース、ミサキは、三年前に亡くなったシュンの妹。リョウを恨んでいる。
+ *   ・事故の夜、シュンのブレーキは、リョウが警告した通りに限界だった。リョウは、止められなかった。
+ *
+ * フラグ
+ *   sign リョウの目の異変に早く気づいた / route 1=合法ルート・2=地下ルート / misaki ミサキに寄り添った
+ *   petition 住民説明会で声を上げた / dream プロを目指す / station 給油所を継ぐ
+ *
+ * 台本は 3 つのファイルに分かれている（race-story3.js → 3b → 3c）。
  */
 (function () {
   'use strict';
   var TB = window.TB, R = TB.Race, C = R.CHARS, B = R.BOSSES;
 
   /* ---------- 登場人物 ---------- */
-  C.ichiro = { name: 'イチロー', color: '#ffb74d',
-               face: { skin: '#e9c09a', hair: '#1a1a1a', style: 'short', eyes: '#2a1a10', acc: 'hachimaki', shirt: '#546e7a', bg: '#2b2418' } };
-  C.tome = { name: 'トメ社長', color: '#a1887f',
-             face: { skin: '#d8a882', hair: '#eeeeee', style: 'bun', eyes: '#2a1a10', acc: 'glasses', shirt: '#5d4037', bg: '#2a1f18' } };
-  C.natsu = { name: 'ナツ', color: '#f48fb1',
-              face: { skin: '#f3cfb0', hair: '#2b1b12', style: 'ponytail', eyes: '#3b2a20', acc: 'freckles', shirt: '#90a4ae', bg: '#2b2a36' } };
-  C.himuro = { name: '氷室', color: '#80deea',
-               face: { skin: '#f0d0b4', hair: '#101010', style: 'pompadour', eyes: '#1a2a3a', acc: 'shades', shirt: '#eceff1', bg: '#12202a' } };
-  C.jack = { name: 'ジャック', color: '#c5e1a5',
-             face: { skin: '#f7dccb', hair: '#f0d070', style: 'wavy', eyes: '#3a6a9a', acc: 'none', shirt: '#2e7d32', bg: '#16261a' } };
-  C.tetsu = { name: '鉄っつぁん', color: '#bcaaa4',
-              face: { skin: '#c9966f', hair: '#6d6d6d', style: 'buzz', eyes: '#222', acc: 'scar', shirt: '#3e4a52', bg: '#1a1d20' } };
-  C.okawa = { name: '実況・大川アナ', color: '#fff59d',
-              face: { skin: '#e8c3a2', hair: '#222', style: 'swept', eyes: '#222', acc: 'glasses', shirt: '#37474f', bg: '#262626' } };
-  C.sawaki = { name: '沢木', color: '#90caf9',
-               face: { skin: '#e8c8aa', hair: '#2b2b2b', style: 'swept', eyes: '#16283a', acc: 'mustache', shirt: '#eceff1', bg: '#13202e' } };
-  C.seizo = { name: '清造（イチローの父）', color: '#ffcc80',
-              face: { skin: '#dcae8c', hair: '#222', style: 'short', eyes: '#2a1a10', acc: 'hachimaki', shirt: '#6d6d6d', bg: '#2b2418' } };
-  C.mori = { name: '森支店長', color: '#b0bec5',
-             face: { skin: '#e8c8aa', hair: '#555', style: 'bald', eyes: '#222', acc: 'glasses', shirt: '#455a64', bg: '#222a30' } };
-  C.ichiro_old = { name: 'イチロー（2024 年）', color: '#ffb74d',
-                   face: { skin: '#dcae8c', hair: '#f5f5f5', style: 'short', eyes: '#2a1a10', acc: 'glasses', shirt: '#546e7a', bg: '#2b2418' } };
+  C.kazuma = { name: 'カズマ', color: '#ff9800',
+               face: { skin: '#e9c09a', hair: '#1a1a1a', style: 'short', eyes: '#2a1a10', acc: 'none', shirt: '#e65100', bg: '#2b1f14' } };
+  C.ryo = { name: 'リョウ', color: '#90caf9',
+            face: { skin: '#ecd0b4', hair: '#1a1f2e', style: 'swept', eyes: '#1a2a3a', acc: 'shades', shirt: '#263238', bg: '#101820' } };
+  C.misaki = { name: 'ミサキ', color: '#ce93d8',
+               face: { skin: '#f4d6c2', hair: '#2a1a2e', style: 'ponytail', eyes: '#3a1f4a', acc: 'goggles', shirt: '#4a148c', bg: '#1d1226' } };
+  C.gaku = { name: 'ガク', color: '#ffd54f',
+             face: { skin: '#e2b58f', hair: '#e0a030', style: 'spiky', eyes: '#222', acc: 'bandana', shirt: '#f57f17', bg: '#2a2010' } };
+  C.doc = { name: 'ドク', color: '#a5d6a7',
+            face: { skin: '#d4a373', hair: '#9e9e9e', style: 'buzz', eyes: '#2a1a10', acc: 'glasses', shirt: '#455a64', bg: '#1b2a1f' } };
+  C.kanae = { name: 'カナエ', color: '#80deea',
+              face: { skin: '#f6d6c0', hair: '#2a2a3a', style: 'cap', eyes: '#2a3a4a', acc: 'none', shirt: '#1a237e', bg: '#101a2e' } };
+  C.hinata = { name: 'ヒナタ', color: '#f8bbd0',
+               face: { skin: '#f6d9c4', hair: '#4a2a1a', style: 'ponytail', eyes: '#3a2a20', acc: 'freckles', shirt: '#ec407a', bg: '#2a1a22' } };
+  C.michiko = { name: '母（ミチコ）', color: '#bcaaa4',
+                face: { skin: '#eccaa8', hair: '#4e342e', style: 'bun', eyes: '#2a1a10', acc: 'none', shirt: '#6d4c41', bg: '#2a2018' } };
+  C.kuroda = { name: '黒田', color: '#ef9a9a',
+               face: { skin: '#e0b48f', hair: '#111', style: 'pompadour', eyes: '#111', acc: 'earring', shirt: '#b71c1c', bg: '#240c0c' } };
+  C.mayor = { name: '町長', color: '#b0bec5',
+              face: { skin: '#e8c8aa', hair: '#555', style: 'bald', eyes: '#222', acc: 'glasses', shirt: '#546e7a', bg: '#1a2024' } };
+  C.shun = { name: 'シュン（故人）', color: '#ffcc80',
+             face: { skin: '#f0d0b4', hair: '#2a1a2e', style: 'ponytail', eyes: '#3a1f4a', acc: 'helmet', shirt: '#4a148c', bg: '#1d1226' } };
+  C.chief = { name: '署長（カナエの父）', color: '#9fa8da',
+              face: { skin: '#dcae8c', hair: '#757575', style: 'buzz', eyes: '#222', acc: 'mustache', shirt: '#1a237e', bg: '#10152a' } };
 
   /* ---------- ボスと車 ---------- */
-  B.himuro = { name: 'HIMURO', color: '#eceff1', body: 'classic', ai: 'technician', skill: 1.02, boss: true, ability: 'block' };
-  B.sawaki = { name: 'SAWAKI', color: '#90caf9', body: 'classic', ai: 'aggressive', skill: 0.85, boss: true, ability: 'ram' };
-  B.jack = { name: 'JACK', color: '#2e7d32', body: 'classic', ai: 'speedster', skill: 1, boss: true, ability: 'burst' };
-  B.tetsu = { name: 'TETSU', color: '#8d6e63', body: 'trike', ai: 'technician', skill: 0.9, boss: true, ability: 'block' };
-  B.tome = { name: 'TOME', color: '#6d4c41', body: 'keitra', ai: 'technician', skill: 0.95, boss: true, ability: 'block' };
+  B.gaku = { name: 'GAKU', color: '#fbc02d', body: 'gc8', ai: 'aggressive', skill: 0.82, boss: true, ability: 'burst' };
+  B.misaki = { name: 'MISAKI', color: '#8e24aa', body: 'fd', ai: 'technician', skill: 1.0, boss: true, ability: 'block' };
+  B.ryo = { name: 'RYO', color: '#1565c0', body: 's13', ai: 'technician', skill: 1.02, boss: true, ability: 'block' };
+  B.kuroda = { name: 'KURODA', color: '#c62828', body: 'r32', ai: 'aggressive', skill: 1.0, boss: true, ability: 'ram' };
+  B.kanae = { name: 'KANAE', color: '#e3f2fd', body: 'police', ai: 'blocker', skill: 0.9, boss: true, ability: 'block' };
   [
-    { id: 'trike3', name: { ja: '三輪トラック（坂下発動機）', en: 'Three-wheeler truck' }, cls: 'D', price: 0, body: 'trike', paint: 7, unlock: true, era: 1964,
-      stats: { spd: 3, acc: 4, grp: 4, arm: 6, nit: 3 }, desc: { ja: '工場の配達用。曲がるときは体を傾けろ。', en: 'The factory delivery trike.' } },
-    { id: 'saka1', name: { ja: 'サカシタ号（手作り 1 号）', en: 'Sakashita No.1' }, cls: 'C', price: 0, body: 'kei', paint: 7, unlock: true, era: 1964,
-      stats: { spd: 5, acc: 6, grp: 6, arm: 4, nit: 5 }, desc: { ja: 'オートバイの 2 気筒エンジンを積んだ手作りの軽自動車。', en: 'A handmade car with a motorcycle twin.' } },
-    { id: 'saka2', name: { ja: 'サカシタ GP（1964 年型）', en: 'Sakashita GP (1964)' }, cls: 'A', price: 0, body: 'classic', paint: 1, unlock: true, era: 1964,
-      stats: { spd: 8, acc: 8, grp: 8, arm: 5, nit: 7 }, desc: { ja: 'ナツが設計した流線形のボディ。父の SK-4 を積む 4 気筒・4 キャブ。日本グランプリ仕様。', en: "Natsu's streamlined GP car with her father's SK-4." } }
+    { id: 'fc_a1', name: { ja: '父の FC3S（ノーマル）', en: "Dad's FC3S (stock)" }, cls: 'B', price: 0, body: 'fc', paint: 3, unlock: true, era: 2002,
+      stats: { spd: 6, acc: 6, grp: 7, arm: 4, nit: 4 }, desc: { ja: '父が遺した赤い FC3S。ロータリーの、ささやくような音。', en: "Dad's red FC3S." } },
+    { id: 'fc_a2', name: { ja: 'FC3S（ドクのチューン）', en: 'FC3S (Doc tune)' }, cls: 'B', price: 0, body: 'fc', paint: 3, unlock: true, era: 2002,
+      stats: { spd: 7, acc: 7, grp: 8, arm: 5, nit: 6 }, desc: { ja: 'ドクが夜なべで仕上げた足まわりと、ブーストアップ。', en: 'Doc retuned the chassis and boost.' } },
+    { id: 'fc_a3', name: { ja: 'FC3S（六連星・最終仕様）', en: 'FC3S (Mutsurabosh final)' }, cls: 'A', price: 0, body: 'fc', paint: 3, unlock: true, era: 2002,
+      stats: { spd: 8, acc: 8, grp: 9, arm: 5, nit: 7 }, desc: { ja: '仲間たち全員で組み上げた、最後の一台。', en: 'Built by the whole crew.' } }
   ].forEach(function (c) { if (!R.CARS.some(function (x) { return x.id === c.id; })) R.CARS.push(c); });
 
   function S(o) { return o; }
 
   var CH = [
-    { id: '0', name: '序章　やらまいか' },
-    { id: '1', name: '第一章　浜名湖の草レース' },
-    { id: '2', name: '第二章　峠を越えて' },
-    { id: '3', name: '第三章　鈴鹿へ' },
-    { id: '4', name: '第四章　日本グランプリ' },
-    { id: '5', name: '終章　世界へ（1966）' }
+    { id: '0', name: '序章　給油所の朝' },
+    { id: '1', name: '第一章　六連星' },
+    { id: '2', name: '第二章　雷神' },
+    { id: '3', name: '第三章　封鎖' },
+    { id: '4', name: '第四章　リョウの目' },
+    { id: '5', name: '最終章　最後の夜' }
   ];
 
-  var EV = [
+  var EV = [];
+  var SIDE = [];
+  R.S3 = { EV: EV, SIDE: SIDE, CH: CH, S: S };
+
+  EV.push(
     /* ===================== 序章 ===================== */
-    S({ id: 's3_1', ch: '0', title: '三輪トラックの配達', track: 'hm_mikata', mode: 'time', laps: 1, car: 'trike3', goal: { type: 'lap', factor: 0.45 }, reward: 500,
+    S({ id: 's3_t1', ch: '0', title: '給油所の朝', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 300,
       scene: [
-        { title: 'やらまいか 1964', sub: '序章　やらまいか' },
-        { bg: 'hamamatsu' },
-        { narr: '1964 年、春まだ浅い浜松。オリンピックの年というので、町じゅうが、そわそわと浮かれていた。' },
-        { narr: '駅前では織機の音。路地ではオートバイのエンジン音。この町では、子どもの子守唄も、ピストンの音だった。' },
-        ['tome', 'イチロー！ いつまで寝とるだ！ 午前中に、細江まで部品を届けるだに！', 'right emo:angry'],
-        ['ichiro', 'うわっ、社長！ 今行くって！ ……ふあ、まだ五時半ですよ……。', 'emo:shock'],
-        ['tome', '「まだ」じゃないよ。「もう」だ。この町の朝は、五時から始まっとる。', 'emo:cool'],
-        ['natsu', 'おはよう、イチロー。三輪、ちゃんとオイル入れといたよ。曲がるときは、体を内側に倒してね。', 'emo:smile'],
-        ['ichiro', 'ナツ、ありがとな。……よし、行ってくる。「やらまいか」だ！', 'emo:smile'],
-        ['tome', '町の人は、うちの部品を待っとる。一分でも遅れたら、その分だけ、誰かの機械が止まるだに。', 'emo:cool lines']
-      ],
-      radio: [
-        { at: 'start', who: 'tome', text: '三輪は重心が高い。コーナーでは、絶対に慌てないこと。' },
-        { at: 'damage', who: 'natsu', text: 'ちょっと！ 荷物、ぶつけてない！？' },
-        { at: 'final', who: 'ichiro', text: '見えた、細江の工場！ ……間に合った！' }
-      ],
-      post: [
-        ['ichiro', '納品、完了です！ ……ふう。今日も、無事に着いた。', 'emo:smile'],
-        { narr: '帰り道、浜松城の城下に、見慣れない黒塗りの車が止まっていた。ボンネットに、北斗自動車のエンブレム。' },
-        ['sawaki', '……坂下発動機の者かね。社長に、お会いしたい。', 'right emo:cool'],
-        ['ichiro', '社長？ ……あんた、誰ですか。', 'emo:shock']
+        { title: '六連星', sub: '序章　給油所の朝' },
+        { bg: 'forest' },
+        { narr: '2002 年、初夏。群馬県、榛名山のふもと。山の端が、うっすらと白んでくる午前五時。' },
+        { narr: '国道沿いの小さなガソリンスタンド「アオヤギ石油」の、錆びた庇の下で、一人の青年が、ホースを巻いていた。' },
+        ['kazuma', '……はあ。今日も、ハイオク二台だけか。', 'emo:sad'],
+        { narr: '青柳カズマ、二十歳。三年前に父を亡くしてから、母と妹と、この小さな店を回している。' },
+        ['michiko', 'カズマ、朝ご飯できたわよ。冷めないうちに食べなさい。', 'right emo:smile'],
+        ['kazuma', '今行く。……母さん、昨日の売り上げ、いくらだった？', 'emo:cool'],
+        ['michiko', '……心配しなくていいの。母さんが、ちゃんとやりくりしてるから。', 'emo:smile'],
+        { narr: '台所のテーブルには、ごはんと味噌汁と焼き魚。その脇に、封筒が一通、伏せて置かれていた。銀行の、ロゴ。' },
+        ['hinata', 'おにい、おはよ！ 朝練あるから、先に行くね。……あ、それ、まだ開けてないの。', 'emo:cool'],
+        ['kazuma', 'ヒナタ。お前、ちゃんと食ってけ。', 'emo:cool'],
+        ['hinata', 'パンかじりながら行く！ 吹奏楽部の朝練、遅れると、先輩こわいんだもん。', 'emo:smile shake'],
+        { narr: '制服の妹が、パンをくわえて、風のように出ていく。ドアの隙間から、フルートのケースが、きらりと光った。' },
+        ['michiko', '……ヒナタの音楽の先生がね、音大の受験を、勧めてくださってるのよ。', 'emo:smile'],
+        ['kazuma', '音大？ ……金、かかるだろ。', 'emo:sad'],
+        ['michiko', 'お金のことは、いいの。あの子の夢は、あの子の夢。母さんは、応援したいだけ。', 'emo:smile'],
+        { narr: '母は、笑っていた。その笑顔の下で、どれだけの計算が回っているのか、カズマには、わかっていた。' },
+        ['kazuma', '……母さん。俺、もっと働くよ。夜も、ここ、開けられるようにするから。', 'emo:cool'],
+        ['michiko', 'だめよ。あなたまで倒れたら、お父さんに怒られる。', 'emo:cool'],
+        { narr: 'そのとき、店先から、エンジンの低い音。バイクの音だった。' },
+        ['kanae', 'おはよう、カズマ。レギュラー、満タンでお願い。公務だから、領収書、切ってね。', 'emo:smile'],
+        { narr: '白バイにまたがった、女性警察官。ヘルメットのバイザーを上げると、見慣れた幼なじみの顔が現れた。' },
+        ['kazuma', 'カナエ！ 制服、似合わねえな。', 'emo:smile'],
+        ['kanae', 'うるさい。……ちゃんとした、交通課のお巡りさんなんだから。今日は、パトロールのついでに、顔を見に来ただけ。', 'emo:smile'],
+        ['kanae', 'あのさ。……夜、峠、行ってないよね？', 'emo:cool'],
+        { narr: 'カズマは、給油ノズルを持つ手を、ほんの少しだけ止めた。' },
+        ['kazuma', '……行ってねえよ。', 'emo:cool'],
+        ['kanae', 'ならいい。……最近、榛名の夜間走行の苦情が増えてるの。町議会で、封鎖の話が、本格的に出てる。', 'emo:cool'],
+        ['kazuma', '封鎖？ ……峠を？', 'emo:shock'],
+        ['kanae', 'まだ決まってない。でも、時間の問題。……お父さんが、もし生きてたら、きっと、反対してたと思うけど。', 'emo:sad'],
+        { narr: 'カナエは、領収書を受け取ると、静かに白バイを走らせていった。遠ざかるエンジン音の向こうに、榛名の稜線が、朝日で赤く染まっていた。' },
+        ['kazuma', '……封鎖、か。', 'emo:sad']
       ] }),
 
-    S({ id: 's3_2', ch: '0', title: '集金の夜', track: 'city', mode: 'arcade', laps: 3, traffic: 10, car: 'trike3', goal: { type: 'arcade' }, reward: 1200,
+    S({ id: 's3_t2', ch: '0', title: '父のロータリー', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 400,
       scene: [
-        { bg: 'city' },
-        { narr: 'その夜。坂下発動機の事務所で、トメ社長と、銀行の森支店長が向かい合っていた。' },
-        ['mori', 'トメさん。浜松信金としても、これ以上は待てません。返済は、五月までに全額。', 'right emo:cool'],
-        ['tome', '……五月。二百万円を、か。', 'emo:cool'],
-        ['mori', '北斗自動車が、工場ごと買い取りたいと言っています。悪い話では——', 'emo:cool'],
-        ['tome', '悪い話だよ。清造さんの工場を、他人に渡すわけにはいかん。', 'emo:angry'],
-        { narr: '部屋の外で聞いていたイチローは、拳を握りしめた。' },
-        ['ichiro', '社長。俺が、集金に回ります。いままで貸しっぱなしの売掛金を、夜のうちに全部集めてきます。', 'emo:cool'],
-        ['natsu', '三軒、まとめて回るなら、時間が勝負。……遠回りしないでね。', 'emo:smile'],
-        ['tome', '……頼んだよ、イチロー。でも、無理はするんじゃないよ。', 'emo:smile lines']
+        { bg: 'forest' },
+        { narr: 'その夜。営業を終えた給油所の裏。古い倉庫の奥に、ブルーシートをかぶった、一台の車が眠っていた。' },
+        { narr: 'カズマは、懐中電灯を片手に、そっとシートをめくった。赤い、小さな、スポーツカー。サバンナ RX-7、FC3S。' },
+        ['kazuma', '……父さん。久しぶり。', 'emo:sad'],
+        { narr: 'ボディには、薄い埃。それでも、父が毎週日曜に磨いていた、あの深い赤は、色褪せていなかった。' },
+        { narr: '運転席のドアを開ける。革のシートが、ぎしり、と鳴った。ダッシュボードの上に、色褪せた写真が一枚、貼られている。' },
+        { narr: '若き日の父と、母。そして、今よりずっと幼い、カズマとヒナタ。四人で、この FC の前に並んで、笑っていた。' },
+        ['kazuma', '……乗るのは、初めてだ。父さんは、「お前が二十歳になったら」って言ってたっけ。', 'emo:sad'],
+        { narr: 'グローブボックスの奥に、擦り切れたノートが一冊、押し込まれていた。表紙には、父の乱暴な字。「走行メモ」。' },
+        ['kazuma', '走行……メモ？ 父さん、走ってたのか。ただの給油所のおやじだと思ってたのに。', 'emo:shock'],
+        { narr: 'ページをめくる。コーナーの絵、ギアの位置、ブレーキの踏み始め。余白に、父の字で、短い一言が、あちこちに書き込まれていた。' },
+        ['kazuma', '「走りは、嘘をつかない」。……「怖いと感じたら、それが正しい」。……「速さより、帰り道」。', 'emo:smile'],
+        ['kazuma', '……「息子へ。この車で、人を傷つけるな。この車で、誰かを救え」。', 'emo:sad flash'],
+        { narr: '最後のページの、日付は、父が倒れた週のものだった。カズマは、ノートを、そっと胸に抱いた。' },
+        { narr: 'そのとき、倉庫のシャッターが、ごとん、と音を立てて、半分、持ち上がった。' },
+        ['doc', '……やっぱりな。あの車の主人が、帰ってきたか。', 'right emo:smile'],
+        ['kazuma', '！ ……あんたは。', 'emo:shock'],
+        ['doc', '篠田だ。みんなは、ドクと呼ぶ。この裏の山で、修理工場をやってる。……青柳の旦那さんの、昔馴染みさ。', 'emo:smile'],
+        ['doc', 'その FC、旦那さんが、夜、時々こっそり、俺の工場まで持ってきてたんだ。「俺が死んだら、息子に渡してくれ」って言い残してな。', 'emo:cool'],
+        ['kazuma', '……父さんが、そんなことを。', 'emo:shock'],
+        ['doc', '旦那さんは、走り屋だった。昔の話だ。……母さんにも、誰にも、言わなかったがな。', 'emo:cool'],
+        ['doc', 'さて。エンジンをかけてみな。ロータリーは、気難しいが、いい子だ。', 'emo:smile'],
+        { narr: 'キーを回す。セルモーターが、数回、咳き込む。そして——ばらららら、と、ロータリー特有の、乾いた、軽やかな音が、夜の倉庫に響いた。' },
+        ['kazuma', '……かかった。……父さんの、音だ。', 'emo:smile flash'],
+        { narr: 'エンジンの振動が、シートを通して、背中に伝わってくる。カズマは、ハンドルを、そっと握った。' }
+      ] }),
+
+    S({ id: 's3_1', ch: '0', title: '夜明け前の試運転', track: 'r_haruna', mode: 'time', laps: 1, car: 'fc_a1', goal: { type: 'lap', factor: 0.2 }, reward: 800,
+      scene: [
+        { bg: 'forest' },
+        ['doc', '榛名の裏から、一本。今夜は、ただ走れ。順位も、タイムも、気にするな。', 'right emo:smile'],
+        ['kazuma', 'ブレーキ、効くかな。三年も寝てたんだぜ、こいつ。', 'emo:cool'],
+        ['doc', '俺が全部、見ておいた。……車ってのは、人の話を聞く生き物だ。気持ちを込めれば、ちゃんと応える。', 'emo:smile']
       ],
       radio: [
-        { at: 'start', who: 'natsu', text: '制限時間は、お店が閉まるまで。チェックポイントごとに、少し延びるから！' },
-        { at: 'final', who: 'ichiro', text: '最後の一軒！ ……頼む、間に合ってくれ！' }
+        { at: 'start', who: 'doc', text: '最初のヘアピンは、手前で十分に減速。ロータリーは、トルクが細い。' },
+        { at: 'damage', who: 'doc', text: 'ガードレール擦ったか。……焦るなよ。' },
+        { at: 'final', who: 'kazuma', text: '……走れてる。父さんの車が、ちゃんと。' }
       ],
       post: [
-        ['ichiro', '集金、全部回ってきました。……でも、目標には、ぜんぜん足りません。', 'emo:sad'],
-        ['tome', '十分だよ。あんたが走り回ってくれたことが、うちの宝だ。', 'emo:smile'],
-        ['natsu', 'ねえ、イチロー。レースの賞金なら、一晩で二百万にもなる。……考えたこと、ある？', 'emo:cool'],
-        { ask: 'ナツの提案に、イチローは？', choice: [
-          { t: '「俺が、レースに？ ……やってみたい」', lines: [
-            ['ichiro', '俺が、レースに……？ ……正直、ちょっとだけ、ワクワクしてる。', 'emo:smile'],
-            ['natsu', 'でしょ！ 顔に書いてあるもん。', 'emo:smile'] ] },
-          { t: '「冗談だろ。俺は配達員だ」', lines: [
-            ['ichiro', '冗談だろ。俺は、ただの配達員だ。', 'emo:sad'],
-            ['natsu', 'ただの配達員が、三輪トラックであんなに速いの？ ……嘘つき。', 'emo:cool'] ] }
-        ] },
-        ['ichiro', 'レース……？ 俺が？ ははっ、冗談だろ。', 'emo:shock']
+        ['kazuma', '……すげえ。曲がる。ハンドルが、手の延長みたいだ。', 'emo:smile'],
+        ['doc', '旦那さんの足が、まだ生きてるな。……カズマ、お前、才能あるぞ。', 'emo:smile'],
+        { narr: '山頂の駐車場。朝日が、稜線の上に顔を出した。その光の中、三台の車の影が、ゆっくりと近づいてきた。' }
       ] }),
 
     /* ===================== 第一章 ===================== */
-    S({ id: 's3_3', ch: '1', title: '湖畔の草レース', track: 'hm_oku', mode: 'race', laps: 1, rivals: 5, pace: 0.8, car: 'saka1', unlock: 'saka1', goal: { type: 'place', n: 3 }, reward: 2500,
+    S({ id: 's3_t3', ch: '1', title: '峠のドライブイン', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 500,
       scene: [
-        { title: '第一章', sub: '浜名湖の草レース' },
-        { bg: 'hamanako' },
-        { narr: '五月の日本グランプリまで、あと二か月。浜名湖畔で、町の青年団が開く草レースがあった。' },
-        ['natsu', 'これ見て。……「サカシタ号」。オートバイの二気筒を積んだ、わたしたちの手作りの車。', 'right emo:smile'],
-        ['ichiro', 'おお……本当に、できたのか！ ナツ、お前、天才か！', 'emo:shock'],
-        ['natsu', 'まだ試作だよ。ブレーキは弱いし、直進安定性も、いまひとつ。……だから走って、確かめるの。'],
-        ['tome', '賞金は、三位までに出る。工場の修理代にもなるでね。……気をつけて走るだに。', 'emo:cool'],
-        ['ichiro', '任せといてください！ 俺、運転なら誰にも負けません。三輪で、鍛えてますから。', 'emo:smile lines']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: 'エンジンは五千五百まで。それ以上は、回さないで！' },
-        { at: 'overtook', who: 'tome', text: 'やるじゃないか！ ガソリンも、無駄にするんじゃないよ！' },
-        { at: 'final', who: 'natsu', text: 'あと少し！ ゴールまで、ぜんぶ使って！' }
-      ],
-      post: [
-        ['natsu', '三位……！ やった、やったよ、イチロー！ ちゃんと走った！', 'emo:smile shake'],
-        ['ichiro', '手作りの車で、表彰台に乗っちまった……。信じられねえ。', 'emo:smile'],
-        { narr: '表彰台の隅で、黒塗りの車から降りてきた男が、静かに拍手をしていた。' },
-        ['sawaki', '面白い。……その車、もう少し見せてもらえませんか。', 'right emo:cool']
-      ] }),
-
-    S({ id: 's3_4', ch: '1', title: 'ワークスの影', boss: 'sawaki', track: 'hm_bypass', mode: 'duel', laps: 1, pace: 0.86, car: 'saka1', goal: { type: 'win' }, reward: 3000,
-      scene: [
-        { bg: 'hamamatsu' },
-        ['sawaki', '北斗自動車、技術部の沢木と言います。……坂下発動機を、うちに迎えたい。', 'right emo:cool'],
-        ['tome', 'お断りだって、先月言ったはずだが。', 'emo:angry'],
-        ['sawaki', '承知しています。ただ、その車を見て考えが変わった。……なぜ、二気筒でここまで走るのか、理解できない。', 'emo:cool'],
-        ['sawaki', '一本、走りませんか。私が勝てば、あなた方の設計図を、拝見したい。', 'emo:angry'],
-        ['ichiro', '設計図なんて、ありません。……あったとしても、あんたには見せない。', 'emo:angry lines'],
-        { vs: ['ichiro', 'sawaki'] }
-      ],
-      radio: [
-        { at: 'start', who: 'sawaki', text: '浜名バイパスは、高速で長い。……エンジンの耐久力が、そのまま出る。' },
-        { at: 'close', who: 'sawaki', text: '……なぜだ。なぜ、その排気量で追いつける。' },
-        { at: 'overtook', who: 'ichiro', text: '見たか、町工場の根性！' }
-      ],
-      post: [
-        ['sawaki', '……負けた。素人に、二気筒に。……認めるしかない。', 'emo:sad'],
-        ['sawaki', 'だが、一つだけ教えておく。その車の心臓は、「SK-4」の血を引いているな。', 'emo:cool'],
-        ['ichiro', '……SK-4？ 何の話ですか。', 'emo:shock'],
-        ['sawaki', '知らない、のか。清造さんは、何も話さなかったのか。', 'emo:shock flash'],
-        ['tome', '……もう、帰りな、沢木。', 'right emo:angry']
-      ] }),
-
-    S({ id: 's3_5', ch: '1', title: '父の設計図', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.42 }, reward: 2200,
-      scene: [
-        { bg: 'hamanako' },
-        { narr: 'その夜、イチローは眠れなかった。「SK-4」。聞き覚えのない名前が、頭の中で繰り返された。' },
-        ['ichiro', '社長。……俺、知りたいです。SK-4って、何ですか。父さんが、何を作ってたんですか。', 'emo:sad'],
-        ['tome', '……ずっと、黙ってたんだがね。ついておいで。', 'right emo:cool'],
-        { narr: '工場の奥、古い道具箱の底。油紙に包まれた、一冊の設計ノートがあった。' },
-        ['seizo', '（ノートの文字）「SK-4。四気筒、二本カム、四連キャブ。……いつか、日本の車が世界で走るとき、この心臓が、先頭を走るように。」', 'emo:smile'],
-        ['natsu', 'すごい……。図面のどのページにも、数字がびっしり。戦時中の航空エンジンの設計が、基になってる。', 'emo:shock'],
-        ['tome', '清造さんと沢木は、戦争中、同じ研究所にいた。二人とも、空を飛ぶエンジンを作ってたんだよ。', 'emo:cool'],
-        ['tome', '清造さんは、戦後それを「人を殺す道具に、二度とさせない」と言って、町に戻った。……沢木は、東京に残った。'],
-        ['ichiro', '父さんは、それでも、この設計を捨てなかったんですね。……俺が、この心臓で走らせます。', 'emo:cool lines'],
-        ['natsu', 'わたしが、車体を設計する。……イチロー、湖畔の道で、この設計の足回りを確かめて。', 'emo:smile']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: '父さんのノートの通り。コーナーでは、荷重を後ろへ。' },
-        { at: 'final', who: 'ichiro', text: '父さん……あんたの心臓、今、走ってるよ。' }
-      ],
-      post: [
-        ['natsu', '足回り、ばっちり！ ノートに書いてある通りの数字が、ほんとうに出てる！', 'emo:smile shake'],
-        ['ichiro', '父さん、ほんとに、すごい人だったんだな。', 'emo:smile'],
-        ['tome', 'あの人はね、「俺が死んでも、設計は生きる」って、いつも言ってたよ。', 'emo:smile']
-      ] }),
-
-    S({ id: 's3_6', ch: '1', title: '遠州灘のスプリント', track: 'hamamatsu', mode: 'race', laps: 3, rivals: 6, pace: 0.86, car: 'saka1', goal: { type: 'place', n: 2 }, reward: 3500,
-      scene: [
-        { bg: 'coast' },
-        { narr: '遠州灘の海岸線に、地元のオートバイ屋と町工場の若者たちが集まった。毎年恒例の、春のスプリント。' },
-        ['ichiro', 'すげえ人だかりだな……。みんな、浜松の工場の連中ばっかりだ。', 'emo:shock'],
-        ['natsu', 'ここに出る車は、みんな手作り。だから、ズルも、ごまかしも、通用しない。実力だけ。', 'right emo:cool'],
-        ['tome', 'この大会で優勝した車は、翌月の鈴鹿の予選に推薦される。……二位以内。それが条件。', 'emo:cool'],
-        ['ichiro', '鈴鹿の予選……。やります。絶対に、二位以内。', 'emo:cool lines']
-      ],
-      radio: [
-        { at: 'start', who: 'tome', text: '海風が横から吹く。ハンドルは、しっかり握って。' },
-        { at: 'overtook', who: 'natsu', text: 'いいよ、イチロー！ 今のライン、完璧！' },
-        { at: 'final', who: 'natsu', text: 'ラスト一周。二位以内なら、鈴鹿だよ！' }
-      ],
-      post: [
-        ['natsu', 'やった！ 二位以内……鈴鹿の予選に出られる！', 'emo:smile shake'],
-        ['tome', 'ふふ。うちの車は、浜松の誇りだよ。よく頑張ったね。', 'emo:smile'],
-        ['ichiro', 'でも、この先は、大手のワークスが相手だ。……もっと、速くなりたい。', 'emo:cool']
-      ] }),
-
-    /* ===================== 第二章 ===================== */
-    S({ id: 's3_7', ch: '2', title: '碓氷の郵便屋', boss: 'tetsu', track: 'r_usui', mode: 'touge', pace: 0.85, car: 'saka1', goal: { type: 'win' }, reward: 2800,
-      scene: [
-        { title: '第二章', sub: '峠を越えて' },
+        { title: '第一章', sub: '六連星' },
         { bg: 'forest' },
-        { narr: '群馬県、碓氷峠。かつての中山道の難所。百八十四のカーブが続く旧道で、一人の男が待っていた。' },
-        ['tetsu', 'あんたが浜松の坂下のイチローか。わしは、郵便配達の鉄っつぁんだ。', 'right emo:cool'],
-        ['ichiro', '郵便屋さん……が、俺に何の用で。', 'emo:shock'],
-        ['tetsu', 'トメ婆さんから手紙が来てな。「うちの若いの、峠で鍛えてやってくれ」と。……三輪で、碓氷を三十年走ってきた男に、勝てるか？', 'emo:cool'],
-        ['tetsu', '郵便ってのは、速けりゃいいもんじゃねえ。「確実に、時間通りに着く」が勝ちだ。それを、教えてやる。', 'emo:angry lines'],
-        { vs: ['ichiro', 'tetsu'] }
-      ],
-      radio: [
-        { at: 'start', who: 'tetsu', text: '碓氷の下りは、ブレーキを使うな。エンジンブレーキで、ゆっくり下れ。' },
-        { at: 'close', who: 'tetsu', text: 'ほう、ついてくるか。やるな、坊主。' },
-        { at: 'overtook', who: 'ichiro', text: '鉄っつぁん、お先に！' }
-      ],
-      post: [
-        ['tetsu', '……ははっ。負けた。おれの三十年が、小僧に追い抜かれたか。', 'emo:smile'],
-        ['tetsu', 'でも、勝った負けたより、ずっと大事なことがある。あんたは、峠の先まで、人を連れていける運転をした。', 'emo:smile'],
-        ['ichiro', '人を、連れていける……？', 'emo:shock'],
-        ['tetsu', 'まあ、鈴鹿でわかる。あんたに、わしのとっておきの走り方を、全部教えてやる。', 'emo:cool']
+        { narr: '榛名山の中腹、廃業したドライブインの駐車場。夜になると、ここに、走り屋たちの車が集まる。' },
+        { narr: '二、三十台は止まっている。シルビア、スカイライン、インプレッサ、ミラージュ、軽トラまで。みな、静かにエンジンを切り、缶コーヒーの湯気の向こうで、談笑していた。' },
+        ['gaku', 'おい、新入り！ そこの赤い FC、誰のだ！ 見ねえ顔じゃねえか！', 'right emo:angry'],
+        ['kazuma', '……俺の、父さんの車だ。', 'emo:cool'],
+        ['gaku', 'ああん？ 父さん？ ……って、まさか、青柳石油の、あの FC か！ 伝説の！', 'emo:shock'],
+        ['kazuma', '伝説？ ……父さんが？', 'emo:shock'],
+        { narr: '周囲の走り屋たちが、ざわつき始めた。「あの FC が」「まだ生きてたのか」「走ってたの、十年前だぞ」。' },
+        ['gaku', 'すげえぜ、お前の親父さん！ 榛名で、最速の FC として、名が通ってたんだ。今でも、みんなが語り継いでる！', 'emo:smile shake'],
+        ['kazuma', '……知らなかった。父さんは、家では、そんな話、一言も。', 'emo:sad'],
+        { narr: '人垣が割れ、一人の男が、ゆっくりと近づいてきた。背が高く、夜なのにサングラスをかけている。落ち着いた、静かな歩き方だった。' },
+        ['ryo', 'ガク、騒ぎすぎだ。……君が、青柳さんの息子さんか。', 'right emo:cool'],
+        ['kazuma', '……はい。カズマ、です。', 'emo:cool'],
+        ['ryo', '大和リョウ。ここの、まとめ役をやらせてもらってる。……君のお父さんには、昔、何度も、教えてもらった。', 'emo:smile'],
+        ['kazuma', '父さんが、あなたに？', 'emo:shock'],
+        ['ryo', '走り方も、整備の仕方も、……生き方も。', 'emo:smile'],
+        { narr: 'リョウは、夜の駐車場の、空を見上げた。サングラスの奥の目が、どこを見ているのか、カズマには、わからなかった。' },
+        ['ryo', 'ここには、決まりがある。三つだけだ。一つ、一般車を、巻き込まない。二つ、無理をしない。三つ、……帰る。', 'emo:cool'],
+        ['kazuma', '帰る？', 'emo:shock'],
+        ['ryo', '走り終わったら、必ず、家に帰る。それだけだ。……君の親父さんの、口癖だった。「速さより、帰り道」。', 'emo:smile'],
+        { narr: '父のノートの一節と、同じ言葉。カズマの胸に、小さな痛みが走った。' },
+        ['gaku', 'リョウさん、こいつ、チームに入れてやろうぜ！ ムツラボシの、七人目に！', 'emo:smile'],
+        ['kazuma', 'ムツラボシ？', 'emo:shock'],
+        ['ryo', '六連星。昴のことだ。……チーム名の由来は、昔、六人でスタートしたから。でも、一人、欠けた。それから、六のまま、時間が止まってる。', 'emo:sad'],
+        ['ryo', '昴は、肉眼で数えると、六つに見える。でも、本当は、七つ目が、あるんだ。目には見えない、七つ目が。', 'emo:cool'],
+        ['kazuma', '……七つ目。', 'emo:cool'],
+        { ask: 'ムツラボシの誘いに、どう答える？', choice: [
+          { t: '「入ります。父の車で、父の走りを知りたい」', set: { in: 1 }, lines: [
+            ['kazuma', '入ります。……父の走りを、知りたいんです。そして、この車で、何ができるのか、確かめたい。', 'emo:cool lines'],
+            ['gaku', 'よっしゃあ！ 歓迎するぜ、七つ目の星！', 'emo:smile shake'],
+            ['ryo', '……ありがとう。三つの決まりを、忘れないで。', 'emo:smile'] ] },
+          { t: '「まず、走らせてください。そのあとで、決めます」', set: { in: 0 }, lines: [
+            ['kazuma', 'まず、走らせてください。……このチームが、どんな場所か、自分の目で確かめてから、決めたいんです。', 'emo:cool'],
+            ['ryo', '慎重だな。……いい。では、まずは、ガクと一本、走ってみるといい。', 'emo:smile'],
+            ['gaku', '望むところだぜ！ 手加減しねえぞ！', 'emo:angry'] ] }
+        ] }
       ] }),
 
-    S({ id: 's3_8', ch: '2', title: '榛名の夜', track: 'r_haruna', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.3 }, reward: 2400,
+    S({ id: 's3_2', ch: '1', title: 'ガクとの一本', boss: 'gaku', track: 'akimine', mode: 'touge', pace: 0.82, car: 'fc_a1', goal: { type: 'win' }, reward: 1800,
       scene: [
         { bg: 'forest' },
-        { narr: '榛名山。夜のヘアピン。ヘッドライトの先に、石畳のような路面が、ぼんやりと浮かぶ。' },
-        ['tetsu', '夜の峠はな、「見る」んじゃない。「聞く」んだ。エンジンの音と、タイヤの音と。', 'right emo:cool'],
-        ['ichiro', '音を……聞く。', 'emo:cool'],
-        ['tetsu', '父ちゃんのエンジンはな、清造さんの音がする。わしは、あの人の工場の前を、毎朝通ってた。', 'emo:smile'],
-        ['tetsu', 'その音を覚えとる。……そのエンジンが、今の音で鳴ってるなら、ちゃんと走る。信じて、踏め。', 'emo:cool lines']
+        ['gaku', 'ここの裏道、「秋峰」で一本だ。後追いスタートでいい。ついてきな、ルーキー！', 'right emo:angry lines'],
+        { vs: ['kazuma', 'gaku'] }
       ],
       radio: [
-        { at: 'start', who: 'tetsu', text: '音を聞け。エンジンの機嫌が、道を教えてくれる。' },
-        { at: 'damage', who: 'tetsu', text: 'おいおい、焦るなって。ゆっくりでいい。' },
-        { at: 'final', who: 'tetsu', text: '最後の直線。……清造さんにも、聞かせてやれ。' }
+        { at: 'start', who: 'gaku', text: '俺の GC8 は、四駆だ。コーナーの立ち上がりで、離しちゃうぜ！' },
+        { at: 'close', who: 'gaku', text: 'ちっ、ついてくるじゃねえか！' },
+        { at: 'overtook', who: 'kazuma', text: '悪い、ガク。先に行かせてもらう！' }
       ],
       post: [
-        ['ichiro', 'できました……！ 音で、走れた！', 'emo:smile shake'],
-        ['tetsu', '上出来だ。あんたは、もう半分、清造さんの息子じゃない。……車の息子だ。', 'emo:smile'],
-        ['ichiro', '鉄っつぁん……ありがとう。', 'emo:smile']
+        ['gaku', 'ぐああ！ 負けた！ ……でも、気持ちいい！ なんだこいつ、化け物か！', 'emo:smile shake'],
+        ['kazuma', 'ガクこそ、四駆の加速、えぐいって。立ち上がりで、何度も離されかけた。', 'emo:smile'],
+        ['gaku', '決めた！ お前、うちのチームに入れ！ 反論は、受け付けねえ！', 'emo:smile'],
+        { narr: '少し離れた場所で、リョウが、静かに二人の走りを見守っていた。サングラスの奥で、何を見ていたのか。その表情は、闇に溶けていた。' }
       ] }),
 
-    S({ id: 's3_9', ch: '2', title: '赤城の朝霧', boss: 'jack', track: 'r_akagi', mode: 'touge', pace: 0.88, weather: 'fog', car: 'saka1', goal: { type: 'win' }, reward: 3200,
-      scene: [
-        { bg: 'forest', weather: 'fog' },
-        { narr: '赤城山。朝霧の立ちこめる、静かな山道。一台の見慣れない英国車が、ヘアピンの前で止まっていた。' },
-        ['jack', 'オゥ、ごきげんよう！ キミ、日本の車の運転手ですか？ ボク、ジャック・ウィルソン、イギリスから来ました。', 'right emo:smile'],
-        ['ichiro', 'イギリス……？ 外人さんが、なんで赤城に。', 'emo:shock'],
-        ['jack', 'ボクは、鈴鹿に来た。日本グランプリ。レースは、国境がないスポーツ。……ボクと、一本、走りませんか？', 'emo:smile'],
-        ['ichiro', '言葉は半分もわかんねえけど、……勝負なら、受けて立つ。やらまいか！', 'emo:smile lines'],
-        { vs: ['ichiro', 'jack'] }
-      ],
-      radio: [
-        { at: 'start', who: 'jack', text: 'ヘイ！ 霧のレース、サイコーです！' },
-        { at: 'close', who: 'jack', text: 'アメイジング……！ やりますネ、キミ！' },
-        { at: 'overtook', who: 'ichiro', text: 'ごめんな、ジャック！ 先、行かせてもらう！' }
-      ],
-      post: [
-        ['jack', 'ワンダフル！ 負けました。でも、ボク、嬉しい。こんな楽しいレース、イギリスでもありませんでした。', 'emo:smile'],
-        ['jack', 'キミ、名前は？', 'emo:smile'],
-        ['ichiro', 'イチローだ。浜松の、坂下発動機。', 'emo:smile'],
-        ['jack', 'イチロー。覚えました。鈴鹿で、また会いましょう。……本気のキミと、走りたい。', 'emo:cool lines']
-      ] }),
-
-    S({ id: 's3_10', ch: '2', title: '焼きつきの妙義', track: 'r_myogi', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.26 }, reward: 3000,
+    S({ id: 's3_t4', ch: '1', title: 'ドクの工房', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 500,
       scene: [
         { bg: 'forest' },
-        ['natsu', '耐久テスト。妙義山で、エンジンを壊れる直前まで回して、弱点を見つけるの。', 'right emo:cool'],
-        ['ichiro', 'わざと、壊れる寸前まで……ですか。', 'emo:shock'],
-        ['natsu', '鈴鹿で壊れたら、全部おしまい。だから今、壊しておくの。……壊れたら、直せばいい。', 'emo:cool'],
-        ['tetsu', '失敗しても、また作ればいいんだよ。それが、浜松の人間の強みだ。', 'emo:smile lines']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: '水温を見てて。九十度を超えたら、教えて！' },
-        { at: 'damage', who: 'natsu', text: '音が変わった……！ でも、まだいける！' },
-        { at: 'final', who: 'natsu', text: '最後まで回して！ 限界を見せて！' }
-      ],
-      post: [
-        ['natsu', '弱点、見つかった。排気側のバルブスプリング。……材質を変えれば、解決できる。', 'emo:smile'],
-        ['ichiro', '町中の工場を回って、ばね鋼を探してきます。', 'emo:cool'],
-        ['tome', '町の工場は、みんな仲間だよ。きっと、助けてくれるさ。', 'emo:smile']
-      ] }),
-
-    /* ===================== 第三章 ===================== */
-    S({ id: 's3_11', ch: '3', title: '鈴鹿・予選', track: 'r_suzuka', mode: 'time', laps: 1, car: 'saka2', unlock: 'saka2', goal: { type: 'lap', factor: 0.46 }, reward: 4500,
-      scene: [
-        { title: '第三章', sub: '鈴鹿へ' },
-        { bg: 'circuit' },
-        { narr: '五月。鈴鹿サーキット。八の字に交差する、世界でも珍しいコース。' },
-        ['okawa', '本日はいよいよ、第二回日本グランプリ予選です！ 全国から、集まった速い車が、ずらりと並んでおります！', 'right emo:smile'],
-        ['natsu', 'これが、完成した「サカシタ GP」。……父さんの SK-4 を、流線形のボディに載せたの。', 'emo:smile'],
-        ['ichiro', 'こんなに、きれいな車……。俺が、乗っていいのか。', 'emo:shock'],
-        ['tome', '「俺が乗らなきゃ、誰が乗る」と言いな。あんたは、坂下発動機の顔だよ。', 'emo:smile'],
-        ['himuro', '……あれが、坂下の車か。遅くはなさそうだ。', 'emo:cool'],
-        ['ichiro', '氷室……さん。北斗のワークスの、エース。……俺、負けませんから。', 'emo:cool lines']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: '第一ヘアピンまでは、アクセルを抜かないで。SK-4 は、高回転が得意だから。' },
-        { at: 'final', who: 'natsu', text: '最終シケイン！ ここで稼げば、決勝のグリッドが決まる！' }
-      ],
-      post: [
-        ['okawa', '予選結果が出ました！ 坂下発動機の早瀬イチロー選手、堂々の四位！ 町工場の車が、ワークス勢に食い込みました！', 'right emo:smile shake'],
-        ['natsu', '四位……！ やった！', 'emo:smile shake'],
-        ['himuro', '……ほう。よく走る。決勝で、会おう。', 'emo:cool'],
-        { narr: '氷室の視線は、イチローではなく、SK-4 のエンジンルームに向けられていた。' }
-      ] }),
-
-    S({ id: 's3_12', ch: '3', title: '雨のサポートレース', track: 'r_suzuka', mode: 'race', laps: 1, rivals: 7, pace: 0.88, weather: 'rain', car: 'saka2', goal: { type: 'place', n: 3 }, reward: 4000,
-      scene: [
-        { bg: 'circuit', weather: 'rain' },
-        { narr: '決勝の前日。突然の豪雨。サポートレースが、ずぶ濡れのコースで行われることになった。' },
-        ['ichiro', '雨か……。滑るな。ブレーキが、利かなくなる。', 'right emo:sad'],
-        ['tetsu', '雨の峠は、毎日走っとる。あんたに教えたろう。「焦らず、早めに、ゆっくり」。', 'emo:cool'],
-        ['natsu', '雨ならこっちが有利かも。SK-4 のトルク特性、低いところで粘るから。', 'emo:smile'],
-        ['ichiro', '……いい予行練習だ。三位以内。決勝のグリッドを、少しでも前に！', 'emo:cool lines']
-      ],
-      radio: [
-        { at: 'start', who: 'tetsu', text: '雨は、路面の黒い所が危ない。白線の上は避けろ！' },
-        { at: 'overtook', who: 'natsu', text: '雨の中、いいペース！ そのままで！' },
-        { at: 'damage', who: 'natsu', text: '車体、ぶつけてない！？ 心配だよ！' }
-      ],
-      post: [
-        ['natsu', '三位！ 決勝のスタート位置、いい場所になる！', 'emo:smile'],
-        ['ichiro', '雨の中、手が震えてた。でも、ちゃんと走れた。', 'emo:smile'],
-        ['tome', 'ご苦労さん。……今夜は、しっかり休みな。明日は、一番長い日になるだで。', 'right emo:smile']
-      ] }),
-
-    S({ id: 's3_13', ch: '3', title: '夜の火事', track: 'hm_city', mode: 'time', laps: 1, car: 'trike3', goal: { type: 'lap', factor: 0.38 }, reward: 3500,
-      scene: [
-        { bgm: 'tension' },
-        { bg: 'city' },
-        { narr: '決勝前夜。鈴鹿の宿に、浜松から一本の電話が入った。「工場が、燃えている」。' },
-        { narr: 'イチローは、借りた三輪トラックで、夜の街道を浜松へ取って返した。着いたとき、空は赤かった。' },
-        ['natsu', '火事！ 坂下発動機の工場が、燃えてる！', 'right emo:shock flash'],
-        ['ichiro', '嘘だろ！？ 予備のエンジンは！ 治具は！ 図面は！', 'emo:shock'],
-        ['tome', 'サカシタ GP は鈴鹿にある、無事だよ。……でも、予備のエンジンも、治具も、半分以上が、燃えちまった。', 'emo:sad'],
-        ['natsu', '消防団の人が来てくれてる。でも、水が足りない！ 三輪トラックに、ポンプを積んで！', 'emo:angry'],
-        ['ichiro', '任せろ！ 町じゅうの井戸から、水を運ぶ！', 'emo:angry lines']
-      ],
-      radio: [
-        { at: 'start', who: 'tome', text: '消防車が足りない。三輪で、ポンプを運んどくれ！' },
-        { at: 'damage', who: 'natsu', text: 'ポンプが落ちる！ 慎重に！' },
-        { at: 'final', who: 'ichiro', text: 'もう少しだ……頼む、消えてくれ！' }
-      ],
-      post: [
-        ['tome', '……鎮火したよ。でも、工場は半分、灰になった。', 'emo:sad'],
-        ['natsu', '電気配線が、古かったの。放火じゃない。……でも、雨のレースで傷んだ足回りを直す部品が、もう、ない。明日の決勝、このままじゃ。', 'emo:sad'],
-        ['ichiro', '……SK-4 の、図面は。ノートは。', 'emo:shock'],
-        ['tome', 'ノートは、わたしの懐にあるよ。……あの人の心臓は、燃えてない。', 'emo:smile']
-      ] }),
-
-    S({ id: 's3_14', ch: '3', title: '町工場総出', track: 'city', mode: 'arcade', laps: 3, traffic: 8, car: 'trike3', goal: { type: 'arcade' }, reward: 4500,
-      scene: [
-        { bg: 'city' },
-        { narr: '焼け跡に、真夜中から、町じゅうの職人が集まってきた。灯りの下で、旋盤が回りはじめた。' },
-        ['tetsu', '清造さんには、昔、世話になった。……浜松の町工場は、仲間だ。', 'right emo:cool'],
-        ['mori', '返済の件は、いったん保留にします。……私も、浜松の人間ですから。', 'emo:smile'],
-        ['natsu', 'ばね鋼、旋盤、バルブ、キャブ。……町じゅうの工場が、夜どおし部品を作ってくれるって！', 'emo:shock'],
-        ['ichiro', '三輪で、一軒ずつ回って、部品を集めてくる。……夜が明ける前に、鈴鹿へ届けなきゃ！', 'emo:cool lines'],
-        ['tome', 'みんなで、車を作り直す。……それが、浜松の「やらまいか」だよ。', 'emo:smile']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: '部品のリスト、渡したよ！ 順番に、チェックポイントを回って！' },
-        { at: 'damage', who: 'tetsu', text: '部品は丁寧に扱え！ 町のみんなの宝だ！' },
-        { at: 'final', who: 'tome', text: 'あと一軒！ 夜が明けるまでに戻っておいで！' }
-      ],
-      post: [
-        { narr: '夜明け前。町じゅうの手で作られた部品は、三輪トラックの荷台に積まれ、鈴鹿へ向けて走り出した。' },
-        ['natsu', '（無線）届いた部品で、足回りは全部直せた。……前よりも、ずっと強くなってる気がする！', 'emo:smile shake'],
-        ['ichiro', 'みんな……ありがとう。この車は、浜松の町の車だ。', 'emo:sad'],
-        { narr: '鈴鹿のピット。朝霧の中へ、部品を山積みにした三輪トラックが滑り込んだ。' },
-        ['sawaki', '……失礼。ひとつ、お渡ししたい物があります。', 'right emo:cool'],
-        ['sawaki', 'うちの技術部の者が、徹夜で作った、予備のクランクシャフトです。……清造さんの設計通りに。', 'emo:sad'],
-        ['tome', '沢木……。あんた。', 'emo:shock'],
-        ['sawaki', '勘違いしないでください。明日のレースは、正々堂々、勝負します。……ただ、あの人の心臓を、燃やしたくなかっただけです。', 'emo:cool'],
-        { ask: '沢木の差し出したクランクシャフトを、どうする？', choice: [
-          { t: '黙って受け取り、深く頭を下げる', lines: [
-            ['ichiro', '……ありがとうございます。父のエンジンを、守ってくれて。', 'emo:sad'],
-            ['sawaki', '礼には及びません。……明日、いいレースをしましょう。', 'emo:smile'] ] },
-          { t: '「勝負の相手の施しは受けない」と断る', lines: [
-            ['ichiro', '……勝負の相手から、施しは受けません。', 'emo:angry'],
-            ['tome', 'イチロー。これは施しじゃない。「職人同士の、挨拶」だよ。受け取りな。', 'emo:cool'],
-            ['ichiro', '……はい。……ありがとうございます、沢木さん。', 'emo:sad'] ] }
+        { narr: '日曜の朝。山の裏手の、トタン屋根の工場。「ドクの工房」の看板は、半分剥がれて、斜めに垂れていた。' },
+        ['doc', '入りな。……散らかってるのは、勘弁な。', 'right emo:smile'],
+        { narr: '壁一面に、年代物のレースポスターが貼られている。ル・マン、鈴鹿、ニュルブルクリンク。その隅に、小さな白黒の写真。若き日のドクが、ピットで、ヘルメットを抱えて笑っていた。' },
+        ['kazuma', '……ドクさん、レースのメカニックだったんですか。', 'emo:shock'],
+        ['doc', '昔な。F3000のチームで、十年ばかり。……ある年、エースが、ブレーキの異音を訴えた。俺は、「大丈夫だ」と言った。', 'emo:cool'],
+        ['doc', '次の日、エースは、第一コーナーで、壁に突っ込んだ。……それから、俺は、レースの世界を辞めた。', 'emo:sad'],
+        ['kazuma', '……ごめんなさい。聞いちゃいけない話を。', 'emo:sad'],
+        ['doc', 'いや。話した方が、俺も軽くなる。……それで、この峠の町に来た。ここでは、事故が起きても、「俺は止めた」と言えるように、徹底して整備する。', 'emo:cool'],
+        ['doc', 'ほら、カズマ。お前の FC を、見ろ。ブレーキホース、劣化してる。ここ、ここも。……三年放置すれば、こうなる。', 'emo:cool'],
+        { narr: 'ドクは、ジャッキで車体を持ち上げ、油まみれの手で、ブレーキホースを指さした。ゴムに、細かい亀裂が走っている。' },
+        ['kazuma', '……もし、これで走ってたら。', 'emo:shock'],
+        ['doc', 'ブレーキが、抜けた。峠のヘアピンの手前で、な。……だから、走る前に、俺に見せろ。いいか、必ずだ。', 'emo:angry'],
+        ['kazuma', 'はい。……約束します。', 'emo:cool'],
+        ['doc', 'さて、本題だ。どこから手を入れる？ 金は、とりあえず俺が立て替える。出世払いでいい。', 'emo:smile'],
+        { ask: 'FC を、どう仕上げる？', choice: [
+          { t: 'パワー重視（ブーストを上げ、直線で稼ぐ）', set: { tune: 1 }, lines: [
+            ['kazuma', 'ブーストを上げてください。ロータリーの加速を、もっと感じたい。', 'emo:cool'],
+            ['doc', 'いい返事だ。ただし、燃料系と冷却系も、同時に面倒を見る。ロータリーは、熱に弱いからな。', 'emo:smile'] ] },
+          { t: 'バランス重視（足まわりとブレーキを固める）', set: { tune: 2 }, lines: [
+            ['kazuma', '足まわりとブレーキを、先に。曲がって、止まれることの方が、大事だと思うんです。', 'emo:cool'],
+            ['doc', '……ふっ。旦那さんと、同じことを言う。それが、いちばん長生きする道だよ。', 'emo:smile'] ] }
         ] },
+        ['doc', 'よし、決まりだ。……三日で仕上げる。その間に、リョウの店にも、顔を出しておけ。あいつ、お前に話したいことがあるはずだ。', 'emo:cool']
       ] }),
 
-    /* ===================== 第四章 ===================== */
-    S({ id: 's3_15', ch: '4', title: 'ヒート戦', track: 'circuit', mode: 'elim', rivals: 6, pace: 0.94, car: 'saka2', goal: { type: 'survive' }, reward: 5000,
-      scene: [
-        { title: '第四章', sub: '日本グランプリ' },
-        { bg: 'circuit' },
-        { narr: '日本グランプリ、決勝の朝。予選の上位者だけが出場できる、ヒート戦。一周ごとに、最下位が脱落する。' },
-        ['okawa', '本日は晴天！ 全国から集まった、日本一の車が、いまスタートラインに並びます！', 'right emo:smile'],
-        ['himuro', 'イチロー。……お前の車、見事だった。夜のうちに組み直したと聞いた。', 'emo:cool'],
-        ['ichiro', '町じゅうの力ですよ。……氷室さん、本気で来てください。', 'emo:cool'],
-        ['himuro', '言われなくても。……会社の命令は、「負けるな」だ。でも俺は、ただ、走りたいだけだ。', 'emo:sad lines'],
-        ['natsu', 'イチロー、ここを抜ければ決勝。……絶対、最後まで残って！', 'emo:smile']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: '周ごとに最下位が消える！ 絶対にビリにならないで！' },
-        { at: 'overtook', who: 'tome', text: 'そうだ、その調子だよ！' },
-        { at: 'final', who: 'natsu', text: '残りわずか！ もうひと踏ん張り！' }
-      ],
-      post: [
-        ['okawa', 'ヒートを突破！ 坂下発動機のイチロー選手、決勝進出です！ 町工場のマシンが、日本グランプリの決勝に！', 'right emo:smile shake'],
-        ['jack', 'イチロー！ ボクも、突破しました！ 決勝で、一緒に走りましょう！', 'emo:smile'],
-        ['himuro', '決勝で会おう。……ただし、手加減はしない。', 'emo:cool']
-      ] }),
-
-    S({ id: 's3_16', ch: '4', title: '日本グランプリ決勝', boss: 'himuro', track: 'r_suzuka', mode: 'race', laps: 2, rivals: 7, pace: 0.96, car: 'saka2', goal: { type: 'win' }, reward: 12000,
-      scene: [
-        { bgm: 'tension' },
-        { bg: 'circuit' },
-        { narr: '日本グランプリ、決勝。スタンドは、十万人の観客で埋め尽くされていた。' },
-        ['sawaki', '氷室。……会社の指示は、取り消す。この勝負は、純粋な技術の競い合いだ。', 'right emo:cool'],
-        ['himuro', '……ありがとうございます、沢木さん。全力で、走らせてもらいます。', 'emo:smile'],
-        ['okawa', 'さあ、グリッドに並びました！ 四位スタートの早瀬イチロー、浜松の町工場が、ワークスに挑みます！', 'emo:smile'],
-        ['natsu', 'イチロー、父さんの SK-4 は、高回転でこそ輝く。……最後のシケイン、全開で！', 'emo:cool lines'],
-        ['tome', 'イチロー。……やらまいか。', 'emo:smile'],
-        ['ichiro', 'はい！ やらまいか！！', 'emo:smile flash shake'],
-        { vs: ['ichiro', 'himuro'] }
-      ],
-      radio: [
-        { at: 'start', who: 'okawa', text: 'スタートしました！ 日本グランプリ決勝、いま、走り出しました！' },
-        { at: 'overtook', who: 'natsu', text: '順位が上がった！ そのまま、そのまま！' },
-        { at: 'close', who: 'himuro', text: '……いいぞ、イチロー。まだだ、まだ離れるな。' },
-        { at: 'final', who: 'natsu', text: '最終ラップ！ 父さんの音が、聞こえる！' }
-      ],
-      post: [
-        ['okawa', '優勝は……坂下発動機、早瀬イチロー！ 町工場の車が、日本グランプリを制しました！！', 'right emo:smile shake flash'],
-        ['natsu', 'やった……！ やった、やったよイチロー！', 'emo:smile shake'],
-        ['tome', '……清造さん。見とるかい。あんたの心臓が、日本一になったよ。', 'emo:sad'],
-        ['himuro', '負けたよ、イチロー。……だが、気持ちがいい。久しぶりに、レースを楽しんだ。', 'emo:smile'],
-        ['sawaki', '坂下発動機の、勝ちだ。……清造。お前の言う通りだった。町工場の、魂が勝ったな。', 'emo:smile']
-      ] }),
-
-    /* ===================== 終章 ===================== */
-    S({ id: 's3_17', ch: '5', title: '富士の約束', track: 'r_fuji', mode: 'race', laps: 2, rivals: 6, pace: 0.98, boss: 'jack', car: 'saka2', goal: { type: 'win' }, reward: 10000,
-      scene: [
-        { title: '終章', sub: '世界へ（1966）' },
-        { bg: 'circuit' },
-        { narr: '二年後、1966 年。富士山のふもとに、新しいサーキットができた。' },
-        ['jack', 'イチロー！ 約束通り、また来たよ。今度は負けない！', 'right emo:smile'],
-        ['himuro', '俺もだ。今は自分のチームで走っている。……町工場の、な。', 'emo:cool'],
-        ['tome', '新しい工場もできた。従業員は三十人。……イチロー、あんたのおかげだよ。', 'emo:smile'],
-        ['sawaki', '北斗自動車は、坂下発動機と、技術提携を結びました。……買収ではなく、対等の仲間として。', 'emo:smile'],
-        ['natsu', 'イチロー、最後のストレートは 1.5 キロ。サカシタ GP の最高速、試してみて！', 'emo:smile lines']
-      ],
-      radio: [
-        { at: 'start', who: 'natsu', text: 'スタート！ 富士のストレートは、ぜんぶ踏んで！' },
-        { at: 'overtook', who: 'jack', text: 'ハハ！ やっぱりきみは最高だ！' },
-        { at: 'final', who: 'tome', text: '最後の一周だよ！ 浜松のみんなが、見とるでね！' }
-      ],
-      post: [
-        ['jack', 'おめでとう、イチロー。次は、ヨーロッパで会おう。', 'emo:smile'],
-        ['ichiro', 'ヨーロッパ……！', 'emo:shock'],
-        ['jack', 'ル・マンに、日本の町工場の車が出る。……世界が、きみを待ってるよ。', 'emo:smile']
-      ] }),
-
-    S({ id: 's3_18', ch: '5', title: 'ふるさとの凱旋', track: 'hm_city', mode: 'time', laps: 1, car: 'saka2', goal: { type: 'lap', factor: 0.48 }, reward: 6000, final: true,
-      scene: [
-        { bg: 'city' },
-        { narr: '浜松の町は、凱旋パレードで埋め尽くされた。駅前から、鍛冶町、浜松城まで。' },
-        ['tome', 'ほら、手を振りな。町じゅうが、あんたたちを見とるよ。', 'right emo:smile'],
-        ['natsu', 'イチロー。わたし、決めた。自動車の設計者になる。世界一の。', 'emo:smile'],
-        ['ichiro', 'じゃあ俺は、その車で世界一になる。……父さんが、見たかった景色を、見に行く。', 'emo:smile lines']
-      ],
-      radio: [{ at: 'final', who: 'natsu', text: '浜松城が見えた！ ……ありがとう、みんな！' }],
-      post: [
-        { narr: '——それから、六十年。' },
-        { bg: 'hamamatsu' },
-        ['ichiro_old', '……あの年、町工場の小さな車が、世界への道を開いた。', 'right emo:smile'],
-        ['ichiro_old', 'この町の人間は、負けても次の日には作り始める。それが、浜松だ。'],
-        ['ichiro_old', 'さあ、今度はお前たちの番だ。……やらまいか。', 'emo:smile lines'],
-        { narr: '——やらまいか 1964　完。' }
-      ] })
-  ];
-
-  var SIDE = [
-    S({ id: 's3_sq1', after: 's3_3', title: 'トメの戦後', boss: 'tome', track: 'hm_mikata', mode: 'touge', pace: 0.86, car: 'trike3', goal: { type: 'win' }, reward: 1800, char: 'tome',
-      scene: [
-        { bg: 'hamamatsu' },
-        ['tome', '戦争が終わったとき、あたしは焼け野原で、軍の払い下げのトラックを直して走らせた。', 'right emo:cool'],
-        ['tome', '食べ物を運んで、部品を運んで、町を作り直した。女がトラックなんて、って笑われたよ。'],
-        ['tome', '……一本、付き合いな。あのころの走りを見せてやる。', 'emo:smile lines'],
-        { vs: ['ichiro', 'tome'] }
-      ],
-      radio: [{ at: 'close', who: 'tome', text: 'ほう、ついてくるかい！' }],
-      post: [['tome', '……年には勝てんね。', 'emo:smile'], ['ichiro', 'いや、社長、あと一息で負けてましたよ……。', 'emo:shock']] }),
-    S({ id: 's3_sq2', after: 's3_5', title: 'ナツの設計図', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.42 }, reward: 2200, char: 'natsu',
-      scene: [
-        { bg: 'hamanako' },
-        ['natsu', 'わたしね、大学に行きたかった。でも、女の子は工業大学には入れないって言われた。', 'right emo:sad'],
-        ['natsu', 'だから、ばあちゃんの工場で、図書館の本で勉強したの。空気の流れも、重心も。'],
-        ['natsu', '新しいボディの形、湖畔の道で確かめて。風の音が静かになれば、正解だよ。', 'emo:smile']
-      ],
-      radio: [{ at: 'final', who: 'natsu', text: '……静かだ。風が、車に沿って流れてる。' }],
-      post: [['natsu', '正解だった……！ 本の中の数字が、ほんとうに走った！', 'emo:smile shake']] }),
-    S({ id: 's3_sq3', after: 's3_9', title: 'ジャックの故郷', boss: 'jack', track: 'r_iroha', mode: 'touge', pace: 0.93, car: 'saka1', goal: { type: 'win' }, reward: 3000, char: 'jack',
+    S({ id: 's3_t5', ch: '1', title: 'ガードレールの花', talk: true, track: 'r_haruna', goal: { type: 'talk' }, reward: 500,
       scene: [
         { bg: 'forest' },
-        ['jack', 'ボクの父は、戦争で日本と戦った。父は日本を憎んでいた。', 'right emo:sad'],
-        ['jack', 'でもボクは、日本の職人の車に憧れて来たんだ。……日光の九十九折り、一緒に走ろう。', 'emo:smile'],
-        { vs: ['ichiro', 'jack'] }
-      ],
-      radio: [{ at: 'overtook', who: 'jack', text: 'ビューティフル……！' }],
-      post: [['jack', '父に手紙を書くよ。「日本には、最高の友達がいる」って。', 'emo:smile']] }),
-    S({ id: 's3_sq4', after: 's3_13', title: '沢木の告白', boss: 'sawaki', track: 'hamanako', mode: 'duel', laps: 1, pace: 0.9, car: 'saka2', goal: { type: 'win' }, reward: 4000, char: 'sawaki',
-      scene: [
-        { bg: 'hamanako' },
-        ['sawaki', '清造と私は、戦争中、同じ研究所で、飛行機のエンジンを作っていた。', 'right emo:sad'],
-        ['sawaki', '終戦の日、二人で誓ったんです。「いつか、平和の中で、世界一のエンジンを作ろう」と。'],
-        ['sawaki', '清造は町に戻り、私は会社に入った。……私は、焦っていたんです。彼の設計を、早く世に出したくて。', 'emo:sad'],
-        ['sawaki', '最後に一本、走らせてください。……旧友の息子と、ただ、走ってみたい。', 'emo:smile']
-      ],
-      radio: [{ at: 'close', who: 'sawaki', text: '……ああ、清造そっくりの、走りだ。' }],
-      post: [['sawaki', '……ありがとう。やっと、約束が、果たせた気がします。', 'emo:smile']] }),
-    S({ id: 's3_sq5', after: 's3_16', title: '氷室の走り', boss: 'himuro', track: 'r_suzuka', mode: 'duel', laps: 1, pace: 0.97, car: 'saka2', goal: { type: 'win' }, reward: 4000, char: 'himuro',
-      scene: [
-        { bg: 'circuit' },
-        ['himuro', '会社を辞めた。……これからは、自分の意思で走る。', 'right emo:cool'],
-        ['himuro', '誰も見ていない鈴鹿で、もう一度だけ。ドライバー同士として。', 'emo:smile'],
-        { vs: ['ichiro', 'himuro'] }
-      ],
-      radio: [{ at: 'close', who: 'himuro', text: '……楽しいな。レースは、本当は楽しいものだった。' }],
-      post: [['himuro', 'ありがとう、イチロー。やっと、走るのが好きになれた。', 'emo:smile']] }),
-    S({ id: 's3_sq6', after: 's3_17', title: '清造のエンジン', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka2', goal: { type: 'lap', factor: 0.48 }, reward: 5000, char: 'seizo',
-      scene: [
-        { bg: 'hamanako' },
-        { narr: '父のノートの、最後のページ。インクの色が、他と違っていた。' },
-        ['seizo', '（ノートの文字）「イチロー、お前がこれを読んでいるなら、もう俺は、いないのだろう。」', 'emo:smile'],
-        ['seizo', '「エンジンは、人の心と同じだ。止まったら、また回せ。壊れたら、また作れ。そして、一人で回すな。」'],
-        ['seizo', '「町の仲間と、一緒に回せ。……やらまいか。」', 'emo:smile lines'],
-        ['ichiro', '……父さん。俺、やったよ。一人じゃなくて、みんなで。', 'emo:smile']
-      ],
-      radio: [{ at: 'final', who: 'ichiro', text: '父さん。……これで、最後の一周だ。' }],
-      post: [['ichiro', '……ありがとう、父さん。', 'emo:smile'], { narr: '湖面に映る夕日が、ゆっくりと、ノートの文字を照らしていた。' }] })
-  ];
+        { narr: '「ヤマト・チューニング」。国道沿いの、小さな整備工場。看板の下には、色とりどりのステッカーを貼った、改造車が並んでいる。' },
+        ['ryo', 'カズマ君。……来てくれたか。コーヒー、飲むか。', 'right emo:smile'],
+        ['kazuma', 'いただきます。……ここ、リョウさんのお店なんですね。', 'emo:cool'],
+        ['ryo', '親父の工場を、継いだ。小さいけどな。……工具の位置も、車の配置も、目をつぶってても、わかる。', 'emo:cool'],
+        { narr: '壁の時計は、午後八時。窓の外は、すでに暗い。リョウは、蛍光灯の下でも、サングラスを外さなかった。' },
+        { ask: '気になったことを、どうする？', choice: [
+          { t: '「サングラス、夜も外さないんですね」と訊く', set: { sign: 1 }, lines: [
+            ['kazuma', 'あの、リョウさん。……夜でも、サングラス、外さないんですね。', 'emo:cool'],
+            ['ryo', '……ああ。癖でな。光が、少し眩しく感じるんだ。年のせいかな。', 'emo:cool'],
+            { narr: 'リョウの答えは、どこか、早口だった。カズマは、その違和感を、胸の奥にしまった。' } ] },
+          { t: '何も訊かず、コーヒーを飲む', set: { sign: 0 }, lines: [
+            { narr: 'カズマは、サングラスのことには触れず、コーヒーを啜った。熱くて、苦かった。' } ] }
+        ] },
+        ['ryo', '……カズマ君。ひとつ、連れて行きたい場所がある。走って、十分だ。ついてきてくれ。', 'emo:cool'],
+        { narr: '二台の車は、榛名の途中の、見晴らしのいい、小さな展望台に停まった。ガードレールの脇に、色褪せた、造花の花束が、風に揺れていた。' },
+        ['ryo', 'ここが、三年前のカーブだ。……俺の、親友が、ここで死んだ。', 'emo:sad'],
+        ['kazuma', '……シュン、さん、でしたっけ。ガクから、聞きました。', 'emo:sad'],
+        ['ryo', 'ああ。……シュンは、ムツラボシの、六人目だった。俺と、いちばん古い友達だ。', 'emo:sad'],
+        ['ryo', '三年前の冬の夜。俺と、シュンは、ここで走ってた。ブレーキの利きが悪いと、俺は、シュンに言った。「今夜は、やめとけ」と。', 'emo:sad'],
+        ['ryo', 'でも、あいつは笑って、「大丈夫」と言った。……そして、このカーブで、ブレーキが、抜けた。', 'emo:sad flash'],
+        ['kazuma', '……リョウさんのせいじゃ、ないです。', 'emo:sad'],
+        ['ryo', 'いや。止められたはずなんだ。無理にでも、キーを取り上げていれば。……俺は、止めなかった。', 'emo:sad'],
+        { narr: '造花の花びらが、一枚、風に舞って、谷へ消えた。リョウは、しばらく、黙っていた。' },
+        ['ryo', '……それから、俺は、走ってない。ムツラボシのまとめ役は、続けてる。でも、ハンドルは、握らない。', 'emo:sad'],
+        ['kazuma', 'どうして、俺に、その話を。', 'emo:cool'],
+        ['ryo', '君の親父さんは、シュンの事故のあと、「峠の走りを、卒業しろ」と、みんなに言ってくれた。……でも、俺は、聞かなかった。', 'emo:cool'],
+        ['ryo', '君の走りを、少し見た。……お父さんと、同じ、優しい走りだった。だから、頼みたい。', 'emo:cool'],
+        ['ryo', '君は、……ちゃんと、帰ってきてくれ。何があっても。', 'emo:sad lines'],
+        ['kazuma', '……約束します。必ず、帰ります。', 'emo:cool']
+      ] }),
 
-  R.STORIES = R.STORIES || [];
-  R.STORIES.push({ id: 's3', name: { ja: 'ストーリー3　やらまいか 1964', en: 'Story 3: Yaramaika 1964' }, hero: 'ichiro', era: '1964 年（昭和 39 年）', place: '静岡県浜松市・鈴鹿・富士',
-                   desc: { ja: '潰れかけの町工場の見習いイチローが、亡き父の幻のエンジンと町じゅうの職人の力で、鈴鹿の日本グランプリに挑む。', en: 'An apprentice at a failing Hamamatsu workshop takes his late father\'s engine and a whole town of craftsmen to the Japanese GP.' },
-                   chapters: CH, events: EV, side: SIDE, filter: 'sepia(0.45) saturate(0.85) contrast(1.06) brightness(1.02)' });
+    S({ id: 's3_3', ch: '1', title: '榛名の定例走行会', track: 'r_haruna', mode: 'race', laps: 1, rivals: 6, pace: 0.82, car: 'fc_a2', goal: { type: 'place', n: 3 }, reward: 3000,
+      scene: [
+        { bg: 'forest' },
+        { narr: '月に一度の、定例の走行会。ムツラボシと、近隣のチームが、順番にゆっくりと走るだけの、のどかな集まりだ。' },
+        ['gaku', 'ただし、今日は、ちょっとだけ、本気だ！ 三位以内に入ったら、おでん奢りだぞ！', 'right emo:smile'],
+        ['kazuma', 'おでん？ ……任せろ。', 'emo:smile']
+      ],
+      radio: [
+        { at: 'start', who: 'doc', text: 'ドクだ。足は、仕上げておいた。ブレーキも、新品に近い。安心して走れ。' },
+        { at: 'overtook', who: 'gaku', text: 'いいぞカズマ！ 抜け抜け！' },
+        { at: 'final', who: 'ryo', text: '最後は、慌てるな。……ゆっくり、速く。' }
+      ],
+      post: [
+        ['gaku', '三位！ やった！ おでん、奢ってやる！ ……ほら、リョウさんも！', 'emo:smile shake'],
+        ['ryo', 'いい走りだ。……素直で、まっすぐで。お父さんの血、だな。', 'emo:smile'],
+        { narr: 'ドライブインの屋台のおでんは、湯気の向こうで、不思議なほど旨かった。仲間たちと、肩を並べて食べる夜。カズマの胸に、久しぶりの、温かい何かが灯った。' },
+        { narr: 'その夜。駐車場の入口に、見慣れない一団が、ゆっくりと現れた。黒、白、紫。ずらりと並ぶ、ハイパワーな、改造車。' }
+      ] })
+  );
 })();
