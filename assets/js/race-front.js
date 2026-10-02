@@ -413,7 +413,7 @@
       var e = M.edgeOf(h), toN = M.nodes[M.to(h)];
       exits = M.exits(h);
       var sig = toN.sig && exits.length > 1;
-      var jn = exits.length > 1 || toN.out.length > 1 ? { signal: sig, w: 10 + (e.c <= 2 ? 8 : 0) } : null;
+      var jn = exits.length > 1 ? { signal: sig, w: 10 + (e.c <= 2 ? 8 : 0) } : null;
       var forks = exits.length > 1 ? exits.map(function (ex) { return dirArrow(ex.dir) + ' ' + exitLabel(ex); }) : null;
       // 先の景色（道が続いて見える方向）: 直進に近い道（約 35 度以内）を優先。なければナビの道、それもなければ、もっとも真っすぐに近い道
       // 曲がる道は、先読みにせず「側道」として描く。道が勝手に曲がって見えないようにする
@@ -615,6 +615,13 @@
         return cfgFor({ speed: 0, x: carry.x, nitro: carry.nitro, damage: carry.damage, frac: 1 - carry.frac });
       }
       var fixed = arrive(M.to(h));
+      if (!exits.length) {   // 行き止まり: 戻れる道があれば U ターン、無ければ止まる
+        var dv = M.rev(h);
+        if (dv < 0) { w.flash = { text: L('行き止まりです（R で戻れません）', 'Dead end'), t: 3 }; return null; }
+        go(dv, 0);
+        w.flash = { text: L('行き止まり: 引き返します', 'Dead end: turning back'), t: 3 };
+        return cfgFor({ speed: carry.speed * 0.3, x: -carry.x, nitro: carry.nitro, damage: carry.damage, total: 0 });
+      }
       var ci = Math.min(carry.choice || 0, exits.length - 1), ex = exits[ci] || exits[0];
       go(ex.h, ex.ang);
       return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: fixed ? 0 : carry.damage, total: 0, copGap: carry.copGap });
@@ -1998,7 +2005,7 @@
       };
       if (opts.chain) cfg.onEdgeEnd = function (carry) {
         var nx = opts.chain(carry);
-        if (!nx) return;
+        if (!nx) return false;
         setTimeout(function () {
           if (!app.sess || app.mode !== 'race') return;
           var keys = app.sess.keys, old = app.sess;
@@ -2010,6 +2017,7 @@
           for (var k in keys) app.sess.keys[k] = keys[k];
           if (app.r3d) { try { app.r3d.rebuild(app.sess); app.r3dSess = app.sess; } catch (e) { detach3D(); } }
         }, 0);
+        return true;
       };
     }
     function results(sum, r, opts) {

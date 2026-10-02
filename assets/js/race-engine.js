@@ -1448,7 +1448,8 @@
     }
     /* --- 交差点の信号・交差車両・警察 --- */
     var sig = { phase: 'green', t: Math.random() * 14, cross: [], crossT: 0 };
-    var cops = [], wantedT = 0, escapeT = 0, bustHits = 0, orbisDone = false, stopDone = false;
+    var cops = [], wantedT = 0, escapeT = 0, bustHits = 0, orbisDone = false,
+        stopDone = !!(cfg.start && spec.stopSeg && P.total + PLAYER_Z > spec.stopSeg * SEG);   // 停止線より先から始まるなら信号は判定しない
     segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = function () { return sig.phase; }; if (sp.kind === 'fork') sp.pick = function () { return cfg.exitDirs ? chooseExit() : -1; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
     function violation(kind) {
       if (mode !== 'world' || demo) return;
@@ -1792,7 +1793,7 @@
       if (move < 0 && P.total + move < 0) {
         if (mode === 'world' && !edgeDone && cfg.onEdgeEnd && cfg.canBack) {
           edgeDone = true;
-          cfg.onEdgeEnd({ speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, back: true });
+          if (cfg.onEdgeEnd({ speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, back: true }) === false) edgeDone = false;
         }
         move = -P.total; P.speed = 0;
       }
@@ -1813,8 +1814,10 @@
         else if (nx === 2) ch = P.x < 0 ? 0 : 1;
         else if (nx >= 3) ch = P.x < -0.3 ? 0 : P.x > 0.3 ? 2 : 1;
         if (sirenA) { sirenA.stop(); sirenA = null; }
-        if (cfg.onEdgeEnd) cfg.onEdgeEnd({ speed: P.speed, x: clamp(P.x, -0.9, 0.9), nitro: P.nitro, damage: P.damage, choice: ch,
-                                           copGap: cops.length ? clamp(pz() - cops[0].total, SEG * 5, SEG * 200) : 0 });
+        if (cfg.onEdgeEnd && cfg.onEdgeEnd({ speed: P.speed, x: clamp(P.x, -0.9, 0.9), nitro: P.nitro, damage: P.damage, choice: ch,
+                                           copGap: cops.length ? clamp(pz() - cops[0].total, SEG * 5, SEG * 200) : 0 }) === false) {
+          edgeDone = false; P.speed = 0; P.total = Math.max(0, edgeLen - SEG * 6);   // 進めない（行き止まり）: 手前で止める
+        }
       }
       if (mode === 'brake' && !P.finished) {
         var zc = (cfg.stopAt + 0.5) * SEG;
@@ -2178,7 +2181,7 @@
     }
 
     function moveTraffic(dt) {
-      var stopZ = spec.stopSeg ? spec.stopSeg * SEG : null, holding = stopZ !== null && sig.phase !== 'green';
+      var stopZ = spec.stopSeg ? spec.stopSeg * SEG : null, holding = stopZ !== null && sig.phase !== 'green' && !!(spec.junction && spec.junction.signal);
       traffic.forEach(function (t) {
         if (t.train) { if (state === 'race') t.total += t.speed * dt; return; }
         if (t.dir !== -1 && stopZ !== null) {   // 赤・黄では停止線の手前で止まる
@@ -3053,7 +3056,7 @@
       if (down && (k === 'e' || k === 'E' || k === 'c' || k === 'C' || k === '.')) { P.blink = P.blink === 1 ? 0 : 1; sfx('click'); return true; }
       if ((k === 'r' || k === 'R') && down && mode === 'world' && !edgeDone && P.speed < MAX * 0.15 && cfg.onEdgeEnd) {
         edgeDone = true;
-        cfg.onEdgeEnd({ speed: 0, x: -P.x, nitro: P.nitro, damage: P.damage, reverse: true, frac: clamp(P.total / edgeLen, 0, 1) });
+        if (cfg.onEdgeEnd({ speed: 0, x: -P.x, nitro: P.nitro, damage: P.damage, reverse: true, frac: clamp(P.total / edgeLen, 0, 1) }) === false) edgeDone = false;
         return true;
       }
       return !!m;
