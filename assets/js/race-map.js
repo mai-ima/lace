@@ -421,7 +421,7 @@
     for (var i = 0; i < n; i++) {
       var dh = hs[i + 1] - hs[i];
       var c = -dh * CURVE_K;
-      var cv = Math.max(-26, Math.min(26, c * 0.8));
+      var cv = Math.max(-12, Math.min(12, c * 0.8));   // 見た目のカーブの上限（もとのコースの最大は 9 前後。きついカーブは phys が速度制限で表す）
       b.add(cv, (r.y[i + 1] - y0) * UNITS);
       var s = segs[segs.length - 1];
       s.phys = (c < 0 ? -1 : 1) * Math.min(16, 3.2 * Math.sqrt(Math.abs(c)));   // 曲率半径に合った限界速度（約 1G）
@@ -623,7 +623,7 @@
     var spec = {
       id: 'map-' + h, name: { ja: M.roadName(h), en: M.roadName(h) }, pal: PALS[kind], weather: 'clear',
       custom: true, noFinish: true, wpY0: y0,
-      geom: { rw: Math.round(hwv * UNITS * 2), cw: cw, lanes: Math.min(4, g.lanes), hw: hwv },
+      geom: { rw: Math.max(2000, Math.round(hwv * UNITS * 2)), cw: cw, lanes: Math.min(4, g.lanes), hw: hwv },
       twoWay: !e.one && !hwy, limit: limit, police: hwy ? 1 : (kind === 'city' ? 1 : 0), orbis: hwy && r.len > 1200,
       banner: opt.banner, fork: opt.fork, junction: opt.junction || null, startMark: null, endMark: null,
       mapEdge: h, mapLen: e.len, kind: kind, hwy: hwy, jEnd: jEnd, line: r,
@@ -696,7 +696,7 @@
     var hwv = opt.hw || 5.2, y0 = r.y[0];
     return {
       r: r, hw: hwv,
-      geom: { rw: Math.round(hwv * UNITS * 2), cw: 0.9 / hwv, lanes: opt.lanes || 2, hw: hwv },
+      geom: { rw: Math.max(2000, Math.round(hwv * UNITS * 2)), cw: 0.9 / hwv, lanes: opt.lanes || 2, hw: hwv },   // 道幅は、もとのコースの標準（2000）より狭くしない
       build: function (b) { pushSegs(b, r, y0); }
     };
   };

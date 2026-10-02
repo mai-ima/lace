@@ -57,7 +57,23 @@
     else after(r);
   }
 
+  /* ゲーム本体は、ひみつの遊び場で最初に遊ぶときに読み込む（起動を軽くするため） */
+  var gamesReady = false, gamesLoading = null;
+  function ensureGames(cb) {
+    if (gamesReady) { cb(); return; }
+    if (gamesLoading) { gamesLoading.push(cb); return; }
+    gamesLoading = [cb];
+    var files = ['gamekit', 'games', 'games-arcade', 'games-gui'], i = 0;
+    (function next() {
+      if (i >= files.length) { gamesReady = true; var w = gamesLoading; gamesLoading = null; w.forEach(function (f) { f(); }); return; }
+      var sc = document.createElement('script'); sc.src = 'assets/js/' + files[i++] + '.js';
+      sc.onload = next; sc.onerror = next;
+      document.head.appendChild(sc);
+    })();
+  }
   function launch(kind, id, label) {
+    if (kind === 'tool') { if (TB.commands[id]) TB.commands[id].run([], {}); return; }
+    if (!gamesReady) { ensureGames(function () { launch(kind, id, label); }); return; }
     if (kind === 'key') playKeyGame(id, label);
     else if (kind === 'btn') TB.GuiGames[id]();
     else if (TB.commands[id]) TB.commands[id].run([], {});

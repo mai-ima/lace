@@ -1832,6 +1832,24 @@
       var A = R.admin, v = A.v;
       p.appendChild(el('div', 'rx-s', L('※ ここでの設定は保存されません。ページを閉じる・再読み込み・「初期値に戻す」で元に戻ります。', 'Nothing here is saved. Reloading or pressing Reset restores the defaults.')));
       p.appendChild(optRow(L('管理者モード', 'Admin mode'), function () { return A.on ? 'ON' : 'OFF'; }, function () { A.on = !A.on; rebuild(); }));
+      /* 所持金（管理者モードが ON のときだけ変えられる。こちらはセーブデータに反映される） */
+      p.appendChild(el('div', 'rx-sec', L('所持金', 'Money')));
+      var MSTEP = [1000, 10000, 100000, 1000000, 10000000];
+      A.moneyStep = A.moneyStep || 10000;
+      function setMoney(n) { if (!A.on) { sfx('bad'); return; } R.edit(function (s) { s.money = clamp(Math.round(n), 0, 999999999); }); sfx('coin'); rebuild(); }
+      p.appendChild(optRow(L('所持金', 'Money'), function () { return yen(R.load().money) + (A.on ? '' : L('（管理者モード ON で変更可）', ' (turn admin ON to edit)')); },
+        function (d) { setMoney(R.load().money + d * A.moneyStep); }));
+      p.appendChild(optRow(L('増減の単位', 'Step'), function () { return yen(A.moneyStep); }, function (d) { A.moneyStep = stepVal(MSTEP, A.moneyStep, d); }));
+      var mrow = el('div', 'rx-row');
+      var inp = el('input', 'gg-input'); inp.type = 'number'; inp.min = 0; inp.max = 999999999; inp.placeholder = L('金額を入力', 'Amount'); inp.value = String(R.load().money);
+      inp.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') setMoney(parseInt(inp.value, 10) || 0); });
+      mrow.appendChild(inp); p.appendChild(mrow);
+      p.appendChild(list([
+        item(L('この金額にする', 'Set to this amount'), '', function () { setMoney(parseInt(inp.value, 10) || 0); }, { icon: 'coin', dis: !A.on }),
+        item(L('0 円にする', 'Set to 0'), '', function () { setMoney(0); }, { icon: 'coin', dis: !A.on }),
+        item(L('100,000 円にする', 'Set to 100,000'), '', function () { setMoney(100000); }, { icon: 'coin', dis: !A.on }),
+        item(L('10,000,000 円にする', 'Set to 10,000,000'), '', function () { setMoney(10000000); }, { icon: 'coin', dis: !A.on })
+      ], 2));
       function num(label, key, list, fmtv) {
         p.appendChild(optRow(label, function () { return (fmtv || function (x) { return '× ' + x; })(v[key]); }, function (d) { v[key] = stepVal(list, v[key], d); }));
       }

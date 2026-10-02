@@ -145,10 +145,16 @@
    * 補正は、まっすぐな所ほど多く、きついカーブの所はほとんど触らない。
    * 位置・向きの 3 つの条件を、ゆるやかな波（0〜H 次）の最小の変更で満たす。
    */
+  var FIT_PRESET = {"coast":{"n":2260,"wexp":0,"H":6,"th":[0.4989848,-0.0887038,0.4966072,0.1743308,-0.0666228,0.1255276,0.0131278,-0.0501002,-0.0673155,-0.0395212,-0.0924247,-0.006487,-0.0353368]},"forest":{"n":1960,"wexp":0,"H":6,"th":[-0.5753476,-0.7040768,0.3714131,0.1270112,-0.5105115,-0.109778,-0.0692825,-0.0325557,-0.031662,0.0503423,-0.0540454,-0.0038744,-0.0879713]},"desert":{"n":2590,"wexp":0,"H":6,"th":[0.4212502,0.1448932,0.2295596,0.104915,-0.1345949,-0.1394641,-0.1933349,0.0201893,-0.1723621,0.0039922,-0.1307255,-0.0255586,-0.0938019]},"ridge":{"n":2530,"wexp":0,"H":6,"th":[-0.2500496,-0.2013807,-0.452405,-0.1254578,0.3322729,0.1849072,0.4614795,0.0042081,0.0853818,-0.1349047,0.2739723,-0.0117881,0.0327323]},"hamamatsu":{"n":1720,"wexp":0,"H":6,"th":[0.8155194,-0.1693486,-0.2551055,0.0759392,-0.0764341,-0.0366296,-0.1063273,-0.0126134,0.0043883,0.0206122,0.0125725,-0.0070104,0.0113949]},"hamanako":{"n":1960,"wexp":0,"H":6,"th":[-0.7437168,-0.0098748,-0.2492513,-0.0097638,-0.0218193,0.0235316,0.0298761,-0.0258166,0.0145664,-0.0089526,0.0052637,0.0021372,0.0085211]},"city":{"n":2110,"wexp":0,"H":6,"th":[-0.5431271,0.0686057,0.1455886,-0.027962,-0.0058647,0.0061607,-0.0318409,0.0115514,-0.0118368,0.0217516,0.0019771,-0.0136274,-0.0089508]},"harbor":{"n":1750,"wexp":0,"H":6,"th":[-0.8120367,-0.2007243,0.0635552,0.0253157,0.0237736,-0.0086182,0.0156843,-0.0022567,0.0225392,-0.0237851,-0.0015943,0.0122001,0.0022765]},"snow":{"n":1780,"wexp":0.7,"H":4,"th":[-1.3619399,-0.7070562,-1.3944922,-0.7910526,0.9893246,0.6619816,0.299704,-0.3632583,0.0243418]},"highway":{"n":2530,"wexp":0,"H":6,"th":[0.4674684,-0.131204,0.0932419,0.0022672,0.0390044,-0.0130809,0.012988,0.0060124,-0.0040358,0.0031217,-0.0010134,0.0021577,0.0019859]},"tomei":{"n":2350,"wexp":0,"H":6,"th":[0.5890924,-0.8035828,-0.2319352,-0.5663541,-0.2691005,-0.0193722,0.0486218,0.0748592,0.0688441,-0.0409599,0.0331961,0.0297976,0.0442036]},"nagoya":{"n":1780,"wexp":0,"H":6,"th":[-0.664422,-0.7357885,0.3743078,-0.0350548,-0.41181,0.0250722,-0.0598004,-0.175911,-0.0959922,0.0416438,-0.1139375,0.0271188,-0.1292814]},"canyon":{"n":1720,"wexp":0,"H":6,"th":[-0.6556259,0.115048,-0.3766154,0.0797083,0.077368,-0.0605541,0.1176279,-0.0259893,0.0833802,0.0214125,0.0306548,0.0093828,0.041244]},"circuit":{"n":1810,"wexp":1.5,"H":1,"th":[-1.3873951,0.2394275,-1.5055338]},"fujisp":{"n":1360,"wexp":0,"H":6,"th":[0.6605944,-0.0659354,0.0402566,-0.0019893,0.0015398,0.001945,-0.0004302,0.0042489,0.001798,-0.0021738,-0.0032269,0.0007397,-0.0007581]},"isetec":{"n":1675,"wexp":0,"H":6,"th":[-0.7881969,-0.559837,0.1728034,0.0169789,-0.1831845,0.0020793,-0.0409197,-0.0053576,-0.0889676,-0.0002543,-0.0518636,-0.0187672,-0.0403557]},"volcano":{"n":1810,"wexp":0,"H":6,"th":[-0.7952197,-0.3548462,0.1318949,0.0041978,-0.0163026,-0.0573462,0.0377773,0.0089717,-0.0235081,-0.0134596,0.025692,0.0072588,-0.0088907]},"neon":{"n":2020,"wexp":0,"H":6,"th":[0.5764248,0.0213888,0.0424877,0.0082004,0.0083062,0.002577,0.0033998,-0.0053062,0.0010684,-0.003358,-0.0034279,0.0024826,0.0005363]}};
   var CURVE_TURN = 1 / 232;   // カーブ 1 あたりの向きの変化（ラジアン/区間）
-  function fitLoop(segs, spec) {
+  function fitLoop(segs, spec, trackId) {
     var n = segs.length, K = CURVE_TURN, MS = 1.3, c0 = new Float64Array(n), tot = 0, i;
     for (i = 0; i < n; i++) { c0[i] = segs[i].curve; tot += c0[i]; }
+    if ((!spec.fitCache || spec.fitCache.n !== n) && FIT_PRESET[trackId] && FIT_PRESET[trackId].n === n) {
+      // あらかじめ計算しておいた補正（同じ結果。起動後の最初の読み込みを速くする）。閉じなければ使わず、下で計算し直す
+      var pre = FIT_PRESET[trackId], pth = Float64Array.from(pre.th), pres = integ(pth, pre.H, weights(pre.wexp));
+      if (Math.hypot(pres.x[n], pres.z[n]) < 1.0) spec.fitCache = { n: n, th: pth, wexp: pre.wexp, H: pre.H };
+    }
     if (!spec.fitCache || spec.fitCache.n !== n) {
       var hw = spec.geom && spec.geom.hw ? spec.geom.hw : (spec.touge || spec.narrow ? 1350 : 2000) / 154;
       var s0 = tot < 0 ? -1 : 1, best = null;
@@ -242,7 +248,7 @@
     var rand = seeded(id.length * 7919 + id.charCodeAt(0) * 131 + id.charCodeAt(1));
 
     if (spec.custom && spec.after) spec.after(segs);
-    if (!spec.custom && !(segs[0] && segs[0].wp) && (!(spec.touge || spec.p2p || spec.noFinish || spec.stopZone || spec.finishAt) || spec.loop)) fitLoop(segs, spec);
+    if (!spec.custom && !(segs[0] && segs[0].wp) && (!(spec.touge || spec.p2p || spec.noFinish || spec.stopZone || spec.finishAt) || spec.loop)) fitLoop(segs, spec, id);
     var GR = R.Map && R.Map.GROUND;
     segs.forEach(function (s, i) {
       if (mirror) { s.curve = -s.curve; if (s.phys !== undefined) s.phys = -s.phys; if (s.wp) { s.wp = { x: -s.wp.x, z: s.wp.z, y: s.wp.y, h: -s.wp.h }; } }
@@ -2481,18 +2487,27 @@
       }
     }
 
-    function drawCloud(g, x, y, k, a) {
-      var puffs = [[0, 0, 26], [22, -8, 22], [-24, 2, 20], [44, 4, 18], [-46, 8, 15], [10, 6, 24]];
-      g.save(); g.globalAlpha = a;
-      puffs.forEach(function (p) {
+    // 雲は大きさごとに 1 度だけ絵にしておき、毎フレームはそれを貼るだけにする（見た目は同じ）
+    var cloudCache = {};
+    function cloudSprite(k) {
+      var key = Math.round(k * 100);
+      if (cloudCache[key]) return cloudCache[key];
+      var wpx = Math.ceil(150 * k) + 8, hpx = Math.ceil(70 * k) + 8, c = document.createElement('canvas'); c.width = wpx; c.height = hpx;
+      var g2 = c.getContext('2d'), x = wpx / 2, y = hpx / 2 - 6 * k;
+      [[0, 0, 26], [22, -8, 22], [-24, 2, 20], [44, 4, 18], [-46, 8, 15], [10, 6, 24]].forEach(function (p) {
         var px = x + p[0] * k, py = y + p[1] * k, r = p[2] * k * 0.8;
-        var gr = g.createRadialGradient(px - r * 0.2, py - r * 0.35, r * 0.2, px, py, r);
+        var gr = g2.createRadialGradient(px - r * 0.2, py - r * 0.35, r * 0.2, px, py, r);
         gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(226,236,248,.85)');
-        g.fillStyle = gr; g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.fill();
+        g2.fillStyle = gr; g2.beginPath(); g2.arc(px, py, r, 0, Math.PI * 2); g2.fill();
       });
-      g.fillStyle = 'rgba(160,185,215,.22)'; g.beginPath(); g.ellipse(x, y + 12 * k, 60 * k, 5 * k, 0, 0, Math.PI * 2); g.fill();
-      g.restore();
+      g2.fillStyle = 'rgba(160,185,215,.22)'; g2.beginPath(); g2.ellipse(x, y + 12 * k, 60 * k, 5 * k, 0, 0, Math.PI * 2); g2.fill();
+      return (cloudCache[key] = c);
     }
+    function drawCloud(g, x, y, k, a) {
+      var c = cloudSprite(k);
+      g.globalAlpha = a; g.drawImage(c, x - c.width / 2, y - c.height / 2 + 6 * k); g.globalAlpha = 1;
+    }
+    var rangeGrad = {};
     function drawRange(g, color, baseY, amp, off, seed) {
       var pts = [];
       for (var i = 0; i <= W; i += 6) {
@@ -2501,14 +2516,17 @@
         var y = baseY - (Math.sin(tt + seed) * 0.5 + Math.sin(tt * 2.3 + seed * 1.7) * 0.3 + Math.sin(tt * 5.1 + seed * 0.7) * 0.12 + 0.72) * amp;
         pts.push(i, y);
       }
-      var gr = g.createLinearGradient(0, baseY - amp * 1.3, 0, baseY + amp * 0.3);
-      gr.addColorStop(0, mix(color, '#ffffff', 0.16)); gr.addColorStop(1, color);
-      g.fillStyle = gr;
+      var gk = color + '|' + Math.round(baseY) + '|' + Math.round(amp), gr = rangeGrad[gk];
+      if (!gr) {
+        gr = rangeGrad[gk] = { fill: g.createLinearGradient(0, baseY - amp * 1.3, 0, baseY + amp * 0.3), rim: rgba(mix(color, '#ffffff', 0.4), 0.45) };
+        gr.fill.addColorStop(0, mix(color, '#ffffff', 0.16)); gr.fill.addColorStop(1, color);
+      }
+      g.fillStyle = gr.fill;
       g.beginPath(); g.moveTo(0, H);
       for (var k = 0; k < pts.length; k += 2) g.lineTo(pts[k], pts[k + 1]);
       g.lineTo(W, H); g.closePath(); g.fill();
-      g.strokeStyle = rgba(mix(color, '#ffffff', 0.4), 0.45); g.lineWidth = 1.2;
-      g.beginPath(); for (k = 0; k < pts.length; k += 2) { if (k) g.lineTo(pts[k], pts[k + 1]); else g.moveTo(pts[k], pts[k + 1]); } g.stroke();
+      g.strokeStyle = gr.rim; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(pts[0], pts[1]); for (k = 2; k < pts.length; k += 2) g.lineTo(pts[k], pts[k + 1]); g.stroke();
     }
     function drawSkyline(g, color, baseY, off) {
       g.fillStyle = color;
@@ -2797,7 +2815,7 @@
       if (!cache.mapPath) {
         cache.mapPath = new Path2D();
         T.map.forEach(function (p, i) { var px = mx + 8 + p[0] * (ms - 16), py = my + 8 + p[1] * (ms - 16); if (i === 0) cache.mapPath.moveTo(px, py); else cache.mapPath.lineTo(px, py); });
-        cache.mapPath.closePath();
+        if (T.path && T.path.loop) cache.mapPath.closePath();   // 一周コースだけ閉じる（点から点のコースに戻りの線を引かない）
       }
       g.stroke(cache.mapPath); g.lineWidth = 1;
       function dot(total, color, r) {

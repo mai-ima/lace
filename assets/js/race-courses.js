@@ -180,7 +180,7 @@
         var hp = hmPolyline(o), hw = o.hw || (o.hwy ? 7.5 : 6.2);
         var line = M.lineOf(hp.p, hp.st, 0, !!o.loop);
         var y0 = line.y[0];
-        this.geom = { rw: Math.round(hw * M.UNITS * 2), cw: 0.9 / hw, lanes: o.hwy ? 2 : 2, hw: hw };
+        this.geom = { rw: Math.max(2000, Math.round(hw * M.UNITS * 2)), cw: 0.9 / hw, lanes: o.hwy ? 2 : 2, hw: hw };
         M.pushSegs(b, line, y0);
       },
       after: function (segs) { if (R.Map.ready && segs[0] && segs[0].wp) R.Map.decorate(segs, this.geom ? this.geom.hw : 4, { cls: this.hwy ? 0 : 2, hwy: this.hwy }); }
