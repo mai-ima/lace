@@ -173,7 +173,7 @@
         ['tome', '……もう、帰りな、沢木。', 'right emo:angry']
       ] }),
 
-    S({ id: 's3_5', ch: '1', title: '父の設計図', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.37 }, reward: 2200,
+    S({ id: 's3_5', ch: '1', title: '父の設計図', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.42 }, reward: 2200,
       scene: [
         { bg: 'hamanako' },
         { narr: 'その夜、イチローは眠れなかった。「SK-4」。聞き覚えのない名前が、頭の中で繰り返された。' },
@@ -241,7 +241,7 @@
         ['tetsu', 'まあ、鈴鹿でわかる。あんたに、わしのとっておきの走り方を、全部教えてやる。', 'emo:cool']
       ] }),
 
-    S({ id: 's3_8', ch: '2', title: '榛名の夜', track: 'r_haruna', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.27 }, reward: 2400,
+    S({ id: 's3_8', ch: '2', title: '榛名の夜', track: 'r_haruna', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.3 }, reward: 2400,
       scene: [
         { bg: 'forest' },
         { narr: '榛名山。夜のヘアピン。ヘッドライトの先に、石畳のような路面が、ぼんやりと浮かぶ。' },
@@ -283,7 +283,7 @@
         ['jack', 'イチロー。覚えました。鈴鹿で、また会いましょう。……本気のキミと、走りたい。', 'emo:cool lines']
       ] }),
 
-    S({ id: 's3_10', ch: '2', title: '焼きつきの妙義', track: 'r_myogi', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.23 }, reward: 3000,
+    S({ id: 's3_10', ch: '2', title: '焼きつきの妙義', track: 'r_myogi', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.26 }, reward: 3000,
       scene: [
         { bg: 'forest' },
         ['natsu', '耐久テスト。妙義山で、エンジンを壊れる直前まで回して、弱点を見つけるの。', 'right emo:cool'],
@@ -303,7 +303,7 @@
       ] }),
 
     /* ===================== 第三章 ===================== */
-    S({ id: 's3_11', ch: '3', title: '鈴鹿・予選', track: 'r_suzuka', mode: 'time', laps: 1, car: 'saka2', unlock: 'saka2', goal: { type: 'lap', factor: 0.36 }, reward: 4500,
+    S({ id: 's3_11', ch: '3', title: '鈴鹿・予選', track: 'r_suzuka', mode: 'time', laps: 1, car: 'saka2', unlock: 'saka2', goal: { type: 'lap', factor: 0.46 }, reward: 4500,
       scene: [
         { title: '第三章', sub: '鈴鹿へ' },
         { bg: 'circuit' },
@@ -478,7 +478,7 @@
         ['jack', 'ル・マンに、日本の町工場の車が出る。……世界が、きみを待ってるよ。', 'emo:smile']
       ] }),
 
-    S({ id: 's3_18', ch: '5', title: 'ふるさとの凱旋', track: 'hm_city', mode: 'time', laps: 1, car: 'saka2', goal: { type: 'lap', factor: 0.42 }, reward: 6000, final: true,
+    S({ id: 's3_18', ch: '5', title: 'ふるさとの凱旋', track: 'hm_city', mode: 'time', laps: 1, car: 'saka2', goal: { type: 'lap', factor: 0.48 }, reward: 6000, final: true,
       scene: [
         { bg: 'city' },
         { narr: '浜松の町は、凱旋パレードで埋め尽くされた。駅前から、鍛冶町、浜松城まで。' },
@@ -508,7 +508,7 @@
       ],
       radio: [{ at: 'close', who: 'tome', text: 'ほう、ついてくるかい！' }],
       post: [['tome', '……年には勝てんね。', 'emo:smile'], ['ichiro', 'いや、社長、あと一息で負けてましたよ……。', 'emo:shock']] }),
-    S({ id: 's3_sq2', after: 's3_5', title: 'ナツの設計図', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.38 }, reward: 2200, char: 'natsu',
+    S({ id: 's3_sq2', after: 's3_5', title: 'ナツの設計図', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka1', goal: { type: 'lap', factor: 0.42 }, reward: 2200, char: 'natsu',
       scene: [
         { bg: 'hamanako' },
         ['natsu', 'わたしね、大学に行きたかった。でも、女の子は工業大学には入れないって言われた。', 'right emo:sad'],
@@ -545,7 +545,7 @@
       ],
       radio: [{ at: 'close', who: 'himuro', text: '……楽しいな。レースは、本当は楽しいものだった。' }],
       post: [['himuro', 'ありがとう、イチロー。やっと、走るのが好きになれた。', 'emo:smile']] }),
-    S({ id: 's3_sq6', after: 's3_17', title: '清造のエンジン', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka2', goal: { type: 'lap', factor: 0.4 }, reward: 5000, char: 'seizo',
+    S({ id: 's3_sq6', after: 's3_17', title: '清造のエンジン', track: 'hm_oku', mode: 'time', laps: 1, car: 'saka2', goal: { type: 'lap', factor: 0.48 }, reward: 5000, char: 'seizo',
       scene: [
         { bg: 'hamanako' },
         { narr: '父のノートの、最後のページ。インクの色が、他と違っていた。' },

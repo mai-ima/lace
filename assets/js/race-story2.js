@@ -248,7 +248,7 @@
         ['mari', '霧の深い夜だった。……あたし、ナビ席で見てた。夜鴉の運転は、人間の速さじゃなかった。でも、妙に優しかったんだ。', 'emo:cool']
       ] }),
 
-    S({ id: 's2_7', ch: '2', title: '霧の榛名', track: 'r_haruna', mode: 'time', laps: 1, car: 'z31', weather: 'fog', goal: { type: 'lap', factor: 0.27 }, reward: 2800,
+    S({ id: 's2_7', ch: '2', title: '霧の榛名', track: 'r_haruna', mode: 'time', laps: 1, car: 'z31', weather: 'fog', goal: { type: 'lap', factor: 0.3 }, reward: 2800,
       scene: [
         { bg: 'forest', weather: 'fog' },
         { narr: '群馬、榛名山。標高が上がるにつれて、ヘッドライトの先が白く溶けていく。' },
@@ -272,7 +272,7 @@
         ['touko', '……何を、話すつもりだったの、兄さん。', 'emo:sad']
       ] }),
 
-    S({ id: 's2_8', ch: '2', title: '椿ラインの夜明け', track: 'r_tsubaki', mode: 'time', laps: 1, car: 'z31', goal: { type: 'lap', factor: 0.23 }, reward: 3000,
+    S({ id: 's2_8', ch: '2', title: '椿ラインの夜明け', track: 'r_tsubaki', mode: 'time', laps: 1, car: 'z31', goal: { type: 'lap', factor: 0.26 }, reward: 3000,
       scene: [
         { bg: 'forest' },
         { narr: '湯河原から箱根へ。椿ラインは、中低速のコーナーが延々と続く。' },
@@ -596,7 +596,7 @@
         { narr: '東の空が、ゆっくりと白んでいく。長い夜が、ようやく終わろうとしていた。' }
       ] }),
 
-    S({ id: 's2_21', ch: '6', title: '大観山の朝', track: 'r_turnpike', mode: 'time', laps: 1, car: 'z31t', goal: { type: 'lap', factor: 0.42 }, reward: 8000, final: true,
+    S({ id: 's2_21', ch: '6', title: '大観山の朝', track: 'r_turnpike', mode: 'time', laps: 1, car: 'z31t', goal: { type: 'lap', factor: 0.48 }, reward: 8000, final: true,
       scene: [
         { bg: 'forest' },
         { narr: '事件から一週間。新聞の一面には、「東亜信用銀行　不正融資事件」の文字が踊った。' },
@@ -651,7 +651,7 @@
       ],
       radio: [{ at: 'overtook', who: 'jin', text: 'いいぞ！ 町工場の意地、見せてやれ！' }],
       post: [['jin', 'ありがとな。……親父、スタンドで見ててくれた。「速えじゃねえか」って、笑ってた。', 'emo:smile']] }),
-    S({ id: 's2_sq3', after: 's2_8', title: 'マリの引っ越しトラック', track: 'r_tsubaki', mode: 'time', laps: 1, car: 'pickup', goal: { type: 'lap', factor: 0.22 }, reward: 3000, char: 'mari',
+    S({ id: 's2_sq3', after: 's2_8', title: 'マリの引っ越しトラック', track: 'r_tsubaki', mode: 'time', laps: 1, car: 'pickup', goal: { type: 'lap', factor: 0.24 }, reward: 3000, char: 'mari',
       scene: [
         { bg: 'forest' },
         ['mari', 'あたしの会社のトラック、一台貸してあげる。……いつもの荷物の気持ちで、走ってみな。', 'right emo:smile'],

@@ -1450,13 +1450,15 @@
       var sharp = Math.max(Math.abs(cv(ahead)), Math.abs(cv(far))) > 4.5 && P.speed > topSpeed * 0.84;
       keys.up = !sharp; keys.down = sharp && P.speed > topSpeed * 0.92;
       keys.nitro = Math.abs(cv(ahead)) < 1.2 && Math.abs(cv(far)) < 2 && P.nitro > 0.45;
-      if (spec.custom) {   // 実在の道: この先のカーブと制限速度に合わせて速さを決める
-        var look = Math.min(260, 20 + P.speed * P.speed / (2 * BRAKE) / SEG * 1.2), vOk = limitKmh && mode === 'world' ? (limitKmh + 8) / 280 * MAX : topSpeed;
+      {   // この先のカーブに合わせて速さを決める（曲がりきれる速さは、ハンドルの切れ・グリップ・天気で車ごとに違う）
+        var look = Math.min(260, 20 + P.speed * P.speed / (2 * BRAKE) / SEG * 1.2), vOk = spec.custom && limitKmh && mode === 'world' ? (limitKmh + 8) / 280 * MAX : topSpeed;
+        var kcar = 0.8 * steer / (0.6 * grip);
         for (var la = 2; la < look; la += 2) {
           var sgA = findSeg(pz() + SEG * la), pc = Math.abs(cv(sgA));
-          if (pc > 0.5) { var vv = MAX * Math.min(1, 2.3 / pc); vOk = Math.min(vOk, Math.sqrt(vv * vv + 2 * BRAKE * SEG * Math.max(0, la - 4))); }
+          if (pc > 0.5) { var vv = MAX * Math.min(1, kcar / pc); vOk = Math.min(vOk, Math.sqrt(vv * vv + 2 * BRAKE * SEG * Math.max(0, la - 4))); }
         }
-        keys.up = P.speed < vOk * 0.97; keys.down = P.speed > vOk * 1.03; keys.nitro = false;
+        keys.up = P.speed < vOk * 0.97; keys.down = P.speed > vOk * 1.03;
+        if (spec.custom || vOk < topSpeed * 0.98) keys.nitro = false;
       }
       if (mode === 'drag') { keys.nitro = P.rpm > 0.86; keys.left = keys.right = false; }
       if (mode === 'brake') { var dz = (cfg.stopAt + 0.5) * SEG - pz(), stopD = P.speed * P.speed / (2 * BRAKE); keys.up = dz > stopD * 1.02; keys.down = !keys.up; keys.nitro = false; }
