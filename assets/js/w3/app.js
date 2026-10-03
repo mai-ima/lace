@@ -190,7 +190,13 @@ export async function start(container, opt) {
     car.st.x = p[0] + (-dz / l) * off; car.st.z = p[1] + (dx / l) * off; car.st.yaw = Math.atan2(dx, dz);
     if (pr.one && pr.rev) car.st.yaw += Math.PI;
   }
-  const ground = (x, z) => ({ y: W.terrain.at(x, z) + 0.06, mu: 1 });
+  // 接地の高さ: 橋の上は橋の路面、歩道は縁石の高さ（+0.2m）、それ以外は地形（道路の面と同じ高さ）。道の外は滑りやすく抵抗あり
+  const ground = (x, z) => {
+    const by = world.bridgeY(x, z); if (by !== null) return { y: by + 0.05, mu: 1 };
+    const t = W.terrain.at(x, z), onR = world.onRoadPt(x, z);
+    if (world.walkG.at(x, z)) return { y: t + 0.2, mu: 1 };   // 歩道（0.5m 格子）を車道（1m 格子）より優先
+    return onR ? { y: t + 0.06, mu: 1 } : { y: t + 0.02, mu: 0.8, drag: 0.08 };
+  };
   car.st.y = ground(car.st.x, car.st.z).y;
   // 入力
   const keys = {};

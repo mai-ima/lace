@@ -133,7 +133,7 @@ export function buildWorld(scene, W, gfx) {
     roadGeos.push(g);
     if (pr.walk > 0 && !e.internal) [[-1], [1]].forEach(([s]) => {
       const a = s < 0 ? -pr.hw - pr.walk : pr.hw, b = s < 0 ? -pr.hw : pr.hw + pr.walk;
-      walkGeos.push(strip(ribbon(e, a, b), 0.2, true));
+      const wg = strip(ribbon(e, a, b), 0.2, true); walkGeos.push(wg); (out.walkTopGeos = out.walkTopGeos || []).push(wg);
       const R = ribbon(e, s < 0 ? -pr.hw : pr.hw, s < 0 ? -pr.hw : pr.hw);
       walkGeos.push(wall(R, 0.2, 0.04, true));
     });
@@ -287,6 +287,25 @@ export function buildWorld(scene, W, gfx) {
   const roadG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
   out.roadTris((ax, az, bx, bz, cx, cz) => roadG.tri(ax, az, bx, bz, cx, cz));
   out.onRoadPt = (x, z) => roadG.at(x, z) === 1;
+  // 歩道の上面（0.5m 格子）。接地の高さ（縁石 +0.2m）に使う
+  out.walkG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 0.5);
+  (out.walkTopGeos || []).forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) out.walkG.tri(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
+  // 橋（路面の高さが地形と違う所）: 線と半幅
+  out.bridges = net.edges.filter(e => e.pr.bridge && !e.hidden && e.line.length >= 2).map(e => {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; e.line.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); });
+    const m = e.pr.hw + 0.5; return { L: e.line, hw: e.pr.hw, x0: x0 - m, x1: x1 + m, z0: z0 - m, z1: z1 + m };
+  });
+  out.bridgeY = (x, z) => {
+    for (const b of out.bridges) {
+      if (x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) continue;
+      for (let i = 1; i < b.L.length; i++) {
+        const a = b.L[i - 1], c = b.L[i], dx = c[0] - a[0], dz = c[1] - a[1], l2 = dx * dx + dz * dz || 1;
+        const u = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / l2)), px = a[0] + dx * u - x, pz = a[1] + dz * u - z;
+        if (px * px + pz * pz <= b.hw * b.hw) return a[2] + (c[2] - a[2]) * u;
+      }
+    }
+    return null;
+  };
   const onRoad = out.onRoad = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (roadG.at(x + a * 0.75, z + b * 0.75)) return true; return false; };
   out.pierTris = [];
   const railH = t => (/新幹線/.test(t.name || '') ? 11 : /遠州/.test(t.name || '') ? 8.5 + (+(t.layer || 1) - 1) * 5 : 8.5);
