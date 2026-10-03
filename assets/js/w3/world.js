@@ -204,7 +204,11 @@ export function buildWorld(scene, W, gfx) {
           vec3 sky = mix(vec3(0.2, 0.25, 0.3), vec3(0.5, 0.6, 0.68), clamp(fy * 0.8 + cell * 0.3, 0.0, 1.0));
           vec3 glass = mix(vec3(0.1, 0.12, 0.14), sky, 0.35 + 0.4 * cell);
           if (shop > 0.5) glass = mix(vec3(0.18, 0.17, 0.15), vec3(0.42, 0.4, 0.36), cell);
-          diffuseColor.rgb = mix(diffuseColor.rgb, glass, win * (1.0 - mull * 0.8));
+          // 遠くでは窓の格子がちらつくので、画素あたりの格子の大きさに応じて平均の色へ寄せる
+          float fw = max(fwidth(u / bay), fwidth(rel / fh)), far2 = smoothstep(0.18, 0.5, fw);
+          float cover = (wy1 - wy0) * (wu1 - wu0) * (kind > 2.5 && kind < 3.5 ? 0.1 : kind < 0.5 ? 0.75 : 1.0);
+          win = mix(win * (1.0 - mull * 0.8), cover, far2);
+          diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
           // 階ごとの床の帯（共同住宅のベランダ・事務所の腰壁）と、屋上の笠木
           float band = (kind > 0.5 && kind < 2.5) ? step(fy, 0.08) * step(fh, rel) : 0.0;
           diffuseColor.rgb *= 1.0 - band * 0.12;
