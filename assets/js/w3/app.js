@@ -90,16 +90,38 @@ export async function start(container, opt) {
   const kd = e => onKey(e, true), ku = e => onKey(e, false);
   window.addEventListener('keydown', kd); window.addEventListener('keyup', ku);
   const ctl = { steer: 0, throttle: 0, brake: 0, hand: 0, reverse: false };
+  // タッチ操作（スマホ）: 左下にハンドル（左右）、右下にアクセルとブレーキ、その上にサイドブレーキ。アイコンは SVG
+  const touch = { left: 0, right: 0, up: 0, down: 0, hand: 0 };
+  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || opt.touch;
+  if (isTouch) {
+    const svg = d => '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+    const ICON = { left: svg('<path d="M15 5l-7 7 7 7"/>'), right: svg('<path d="M9 5l7 7-7 7"/>'), up: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'), down: svg('<rect x="6" y="9" width="12" height="9" rx="2"/><path d="M8 9V6h8v3"/>'), hand: svg('<path d="M12 3v10"/><circle cx="12" cy="17" r="4"/>'), exit: svg('<path d="M10 6l-6 6 6 6M4 12h16"/>') };
+    const pad = document.createElement('div'); pad.className = 'w3-pad';
+    pad.innerHTML = '<style>.w3-pad b{position:fixed;display:flex;align-items:center;justify-content:center;border-radius:18px;background:rgba(20,24,30,.42);border:1px solid rgba(255,255,255,.28);touch-action:none;user-select:none;-webkit-user-select:none}.w3-pad b.on{background:rgba(255,255,255,.3)}</style>' +
+      '<b data-k="left" style="left:16px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:84px">' + ICON.left + '</b>' +
+      '<b data-k="right" style="left:112px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:84px">' + ICON.right + '</b>' +
+      '<b data-k="down" style="right:112px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:84px">' + ICON.down + '</b>' +
+      '<b data-k="up" style="right:16px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:120px">' + ICON.up + '</b>' +
+      '<b data-k="hand" style="right:16px;bottom:calc(152px + env(safe-area-inset-bottom));width:84px;height:56px">' + ICON.hand + '</b>' +
+      '<b data-k="exit" style="right:16px;top:calc(12px + env(safe-area-inset-top));width:52px;height:52px">' + ICON.exit + '</b>';
+    container.appendChild(pad);
+    pad.querySelectorAll('b').forEach(b => {
+      const k = b.dataset.k;
+      const on = e => { e.preventDefault(); if (k === 'exit') { if (opt.onExit) opt.onExit(); return; } touch[k] = 1; b.classList.add('on'); };
+      const offf = e => { e.preventDefault(); touch[k] = 0; b.classList.remove('on'); };
+      b.addEventListener('pointerdown', on); b.addEventListener('pointerup', offf); b.addEventListener('pointercancel', offf); b.addEventListener('pointerleave', offf);
+    });
+  }
   function readInput(dt) {
-    const L = keys.ArrowLeft || keys.a || keys.A, Rr = keys.ArrowRight || keys.d || keys.D;
+    const L = keys.ArrowLeft || keys.a || keys.A || touch.left, Rr = keys.ArrowRight || keys.d || keys.D || touch.right;
     const s = (L ? 1 : 0) - (Rr ? 1 : 0);   // 左が +（向きが増える）
     ctl.steer += (s - ctl.steer) * Math.min(1, dt * (s ? 4 : 6));
-    const up = keys.ArrowUp || keys.w || keys.W, dn = keys.ArrowDown || keys.s || keys.S;
+    const up = keys.ArrowUp || keys.w || keys.W || touch.up, dn = keys.ArrowDown || keys.s || keys.S || touch.down;
     const v = car.st.vx;
     if (dn && v < 0.5) { ctl.reverse = true; ctl.throttle = 1; ctl.brake = 0; }
     else { ctl.reverse = false; ctl.throttle = up ? 1 : 0; ctl.brake = dn ? 1 : 0; }
     if (ctl.reverse && up) { ctl.reverse = false; ctl.throttle = 0; ctl.brake = 1; }
-    ctl.hand = keys[' '] ? 1 : 0;
+    ctl.hand = keys[' '] || touch.hand ? 1 : 0;
     if (opt.autoDrive) { ctl.throttle = car.kmh() < 40 ? 0.6 : 0; ctl.steer = 0; }
   }
   // 追従カメラ
