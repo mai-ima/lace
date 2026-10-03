@@ -629,8 +629,8 @@
 
     // テールランプ
     var ly = y - h * (B.body - 0.07), lh = h * 0.1;
-    g.fillStyle = opt.brake ? '#ff3b3b' : '#9e1f1f';
-    var lc = opt.front ? '#fff4c8' : opt.brake ? '#ff3b3b' : '#9e1f1f';
+    g.fillStyle = opt.brake ? '#ff3b3b' : '#c4232b';
+    var lc = opt.front ? '#fff4c8' : opt.brake ? '#ff3b3b' : '#c4232b';
     if (opt.front) g.fillStyle = lc;
     if (B.lamps === 'round2') {
       circle(g, x - w * 0.34, ly + lh * 0.5, lh * 0.62, lc); circle(g, x + w * 0.34, ly + lh * 0.5, lh * 0.62, lc);
@@ -654,6 +654,7 @@
     g.fillStyle = dark;
     g.fillRect(x - w * 0.48, y - h * 0.28, w * 0.96, h * 0.07);
     if (w > 26) { g.fillStyle = '#e8e8e8'; g.fillRect(x - w * 0.09, y - h * 0.42, w * 0.18, h * 0.09); }
+    if (w > 40) finishRear(g, x, y, w, h, B, color, tw, th, bt, tp, lean);
 
     // ウイング（車体より手前）
     if (B.wing) {
@@ -666,6 +667,34 @@
     }
     exhaust(g, x, y, w, h, opt, [-0.2, 0.2]);
     labelCar(g, x, y, w, h, opt);
+  }
+
+  /** 後ろ姿の仕上げ（近くの車だけ）: 光沢・ホイールアーチとホイール・バンパー・ナンバー・マフラー */
+  function finishRear(g, x, y, w, h, B, color, tw, th, bt, tp, lean) {
+    g.save();
+    // 車体の光沢（斜めに走る反射と、屋根からのハイライト）
+    var top = y - h * B.top, bottom = y - h * 0.2;
+    g.beginPath(); g.rect(x - w * 0.48, bt, w * 0.96, bottom - bt); g.clip();
+    var sp = g.createLinearGradient(x - w * 0.5, bt, x + w * 0.2, bottom);
+    sp.addColorStop(0, 'rgba(255,255,255,0)'); sp.addColorStop(0.22, 'rgba(255,255,255,.20)'); sp.addColorStop(0.34, 'rgba(255,255,255,0)'); sp.addColorStop(1, 'rgba(0,0,0,.18)');
+    g.fillStyle = sp; g.fillRect(x - w * 0.5, bt, w, bottom - bt);
+    g.restore();
+    // ホイールアーチ（タイヤの上のくぼみ）とホイール
+    g.save(); g.beginPath(); g.rect(x - w * 0.48, bt, w * 0.96, y - bt); g.clip();
+    [x - w * 0.5 + tw * 0.5, x + w * 0.5 - tw * 0.5].forEach(function (cx) {
+      g.fillStyle = '#121316'; g.beginPath(); g.ellipse(cx, y - th * 0.95, tw * 0.62, th * 0.3, 0, Math.PI, 0); g.fill();
+    });
+    g.restore();
+    // バンパー（黒い帯と上端のハイライト）・ナンバープレート
+    g.fillStyle = 'rgba(8,8,10,.55)'; g.fillRect(x - w * 0.47, y - h * 0.235, w * 0.94, h * 0.07);
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x - w * 0.47, y - h * 0.235, w * 0.94, Math.max(1, h * 0.012));
+    g.fillStyle = '#f5f5ee'; g.fillRect(x - w * 0.1, y - h * 0.43, w * 0.2, h * 0.1);
+    g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = Math.max(1, w * 0.006); g.strokeRect(x - w * 0.1, y - h * 0.43, w * 0.2, h * 0.1);
+    g.fillStyle = '#3a4a6a'; g.fillRect(x - w * 0.08, y - h * 0.405, w * 0.16, h * 0.012);
+    // 足元の接地影（タイヤの間に濃く）
+    var ao = g.createLinearGradient(0, y - h * 0.2, 0, y);
+    ao.addColorStop(0, 'rgba(0,0,0,0)'); ao.addColorStop(1, 'rgba(0,0,0,.42)');
+    g.fillStyle = ao; g.fillRect(x - w * 0.46, y - h * 0.2, w * 0.92, h * 0.2);
   }
 
   /** 対向車（前から見た姿）: フロントガラス・グリル・ヘッドライト */
