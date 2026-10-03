@@ -341,8 +341,25 @@ export function buildWorld(scene, W, gfx) {
 
   /* --- 信号機（LED 薄型の横型 3 灯、φ250、フードなし）。下端 5.6m、柱は進んでくる車の左、アームは車線の上へ。
          すべてインスタンス描画（部品ごとに 1 回の描画）で、灯の点灯はインスタンスの色で切り替える --- */
-  const sigs = signals(net), NS = sigs.length;
+  const sigs = signals(net); let NS = sigs.length;
   out.signals = sigs;
+  // 柱の位置: 交差点の向こう側で、進入車線の中心の延長線上の点から運転者の左へ探し、車道の外（縁から 0.4m 以上）に出た最初の所。
+  // アームは灯器が車線の中心の上に来る長さ（2〜8m）。見つからないときは、少し手前・奥にずらして探す。それでも無理なら置かない
+  const offRoad = (x, z) => !(roadG.at(x, z) || roadG.at(x + 0.4, z) || roadG.at(x - 0.4, z) || roadG.at(x, z + 0.4) || roadG.at(x, z - 0.4));
+  sigs.forEach(sg => {
+    const lx = sg.dz, lz = -sg.dx; sg.skip = true;
+    for (const along of [0, 2, -2, 4, 6, -4, 8, 10, -6, 12, 14, 16]) {
+      const cx = sg.laneX + sg.dx * along, cz = sg.laneZ + sg.dz * along;
+      if (!roadG.at(cx, cz)) continue;   // 車線の延長線上が車道でない（交差点の外れ）
+      for (let lat = 1.5; lat <= 9; lat += 0.25) {
+        const px = cx + lx * lat, pz = cz + lz * lat;
+        if (offRoad(px, pz)) { sg.x = px; sg.z = pz; sg.arm = Math.max(2, Math.min(9.5, lat + 0.55)); sg.skip = false; break; }
+      }
+      if (!sg.skip) break;
+    }
+  });
+  for (let i = sigs.length - 1; i >= 0; i--) if (sigs[i].skip) sigs.splice(i, 1);
+  NS = sigs.length;
   const SH = (window.TB && TB.Race && TB.Race.SPEC && TB.Race.SPEC.signalHead) || { height: 0.37, width: 1.05, minBottom: 5.6 };
   const headY = SH.minBottom + SH.height / 2, armY = headY + SH.height / 2 + 0.22, poleH = armY + 0.25;
   const poleG = new THREE.CylinderGeometry(0.11, 0.14, 1, 8, 1, true); poleG.translate(0, 0.5, 0);

@@ -170,17 +170,30 @@ async function w3(page) {
     const r = await page.evaluate(() => {
       const W = window.W3, R = window.TB.Race, msgs = [];
       // 描画予算（出発地点と、向きを変えた 3 方向）
-      let maxCalls = 0, maxTris = 0;
+      let maxCalls = 0, maxTris = 0, worst = '';
       const s0 = { x: W.car.st.x, z: W.car.st.z, yaw: W.car.st.yaw };
-      for (let k = 0; k < 4; k++) { W.pose(s0.x, s0.z, s0.yaw + k * Math.PI / 2); W.tick(0.05, {}); W.draw(); const i = W.renderer.info.render; maxCalls = Math.max(maxCalls, i.calls); maxTris = Math.max(maxTris, i.triangles); }
+      // 出発地点と、建物の多い地点・大通りの交差点など 8 か所で、それぞれ 4 方向
+      const spots = [[s0.x, s0.z], [-373, 292], [-740, 416], [600, 500], [-900, -900], [158, 523], [-55, -488], [300, 60]];
+      spots.forEach(([x, z]) => { for (let k = 0; k < 4; k++) { W.pose(x, z, k * Math.PI / 2); W.tick(0.05, {}); W.draw(); const i = W.renderer.info.render; if (i.triangles > maxTris) worst = x + ',' + z; maxCalls = Math.max(maxCalls, i.calls); maxTris = Math.max(maxTris, i.triangles); } });
       if (maxCalls > 300) msgs.push('描画回数 ' + maxCalls + ' > 300');
-      if (maxTris > 1.5e6) msgs.push('三角形 ' + maxTris + ' > 150 万');
-      // 信号: 同じ交差点で、主道路と従道路が同時に青（黄）にならない
+      if (maxTris > 1.5e6) msgs.push('三角形 ' + maxTris + ' > 150 万（' + worst + '）');
+      // 信号柱が車道の上にない・灯器が車道の上にある
+      const sg = W.world.signals, lx = s => s.dz, lz = s => -s.dx;
+      const poleOn = sg.filter(s => W.world.onRoadPt(s.x, s.z)).length, headOff = sg.filter(s => !W.world.onRoadPt(s.x - lx(s) * (s.arm - 0.55), s.z - lz(s) * (s.arm - 0.55))).length;
+      if (poleOn) msgs.push('車道の上の信号柱 ' + poleOn);
+      if (headOff) msgs.push('車道の上にない灯器 ' + headOff);
+      // 信号: 同じ交差点で、灯器の向き（進んでくる向き）が交差する（一直線から 45 度以上ずれる）2 基が、同時に赤以外にならない
       let conflict = 0;
-      const byJ = new Map(); W.world.signals.forEach(s => { if (!byJ.has(s.junction)) byJ.set(s.junction, s); });
-      for (let t = 0; t < 40; t += 0.5) byJ.forEach(s => { const p = R.SPEC.phaseAt(t, s.art); if (p.phase !== 'red' && p.crossPhase !== 'red') conflict++; });
+      const byJ = new Map(); W.world.signals.forEach(s => { if (!byJ.has(s.junction)) byJ.set(s.junction, []); byJ.get(s.junction).push(s); });
+      for (let t = 0; t < 70; t += 0.5) byJ.forEach(list => {
+        const cols = list.map(s => R.SPEC.phasesAt(t + (s.junction * 7.3) % 33, s.n, s.art)[s.grp]);
+        for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+          const c = Math.abs(list[i].dx * list[j].dx + list[i].dz * list[j].dz);
+          if (c < Math.cos(45 * Math.PI / 180) && cols[i] !== 'red' && cols[j] !== 'red') conflict++;
+        }
+      });
       if (conflict) msgs.push('信号の矛盾 ' + conflict);
-      const car = W.car; W.pose(s0.x, s0.z, s0.yaw);
+      const car = W.car; W.pose(s0.x, s0.z, s0.yaw); W.tick(0.05, {});
       // 当たり判定: 道路の中心線が建物の中にある点
       const g = W.collide.grid; let bad = 0; W.world.net.edges.forEach(e => e.line.forEach(q => { if (e.pr.rank <= 4 && g.at(q[0], q[1])) bad++; }));
       if (bad > 0) msgs.push('主要道の見えない壁 ' + bad + ' 点');

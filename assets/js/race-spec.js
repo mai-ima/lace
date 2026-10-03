@@ -59,6 +59,21 @@
     var cp = t >= cs && t < cs + c.cg ? 'green' : t >= cs + c.cg && t < cs + c.cg + c.cy ? 'yellow' : 'red';
     return { phase: ph, cross: cp === 'green', crossPhase: cp, t: t, len: c.len };
   };
+  /**
+   * n 現示（交差点の腕を向きでまとめた n 個のグループ）の信号。グループ 0 が主道路（青 14 秒）、ほかは青 9 秒。
+   * 各グループの青のあとに黄（幹線 4 秒、その他 3 秒）と全赤 2 秒を入れる。返り値: グループごとの色の配列
+   */
+  SPEC.phasesAt = function (t, n, arterial) {
+    var S = SPEC.signal, y = arterial ? S.yellowArterial : S.yellow, len = 0, i, d = [];
+    for (i = 0; i < n; i++) { d.push(i === 0 ? S.green : S.crossGreen); len += d[i] + y + S.allRed; }
+    t = ((t % len) + len) % len;
+    var out = [], acc = 0;
+    for (i = 0; i < n; i++) {
+      var a = t - acc, col = a >= 0 && a < d[i] ? 'green' : a >= d[i] && a < d[i] + y ? 'yellow' : 'red';
+      out.push(col); acc += d[i] + y + S.allRed;
+    }
+    return out;
+  };
   /** OSM の maxspeed がない道の規制速度の推定（道路の種類 c と車線数） */
   SPEC.limitFor = function (e) {
     if (e.ms) return e.ms;

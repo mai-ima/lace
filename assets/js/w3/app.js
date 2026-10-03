@@ -282,10 +282,10 @@ export async function start(container, opt) {
   }
   // 信号（race-spec.js の公式の秒数。交差点ごとに位相をずらす）
   function updateSignals(t) {
-    // 交差点ごとに周期をずらし、主道路（grp 0）は phase、従道路（grp 1）は crossPhase（全赤を挟むので同時に青にならない）
+    // 交差点ごとに周期をずらす。腕の向きのグループごとに順に青（全赤を挟むので、交差する向きが同時に青にならない）
     world.signals.forEach((s, k) => {
-      const ph = R && R.SPEC ? R.SPEC.phaseAt(t + (s.junction * 7.3) % 33, s.art) : { phase: 'green', crossPhase: 'red' };
-      world.setSignal(k, s.grp === 0 ? ph.phase : ph.crossPhase);
+      const cols = R && R.SPEC ? R.SPEC.phasesAt(t + (s.junction * 7.3) % 33, s.n, s.art) : ['green'];
+      world.setSignal(k, cols[s.grp] || 'red');
     });
     world.signalsDone();
   }

@@ -345,12 +345,21 @@ export function signals(net) {
     .concat(net.junctions.filter(n => n.sig && !n.cluster).map(n => ({ x: n.x, z: n.z, A: n.A, id: n.id })));
   units.forEach(n => {
     // 現示のグループ: いちばん格の高い腕の向きと平行な腕は主道路（0）、それ以外は従道路（1）
-    let main = n.A[0]; n.A.forEach(a => { if (a.arm.e.pr.rank < main.arm.e.pr.rank) main = a; });
-    if (!main) return;
-    const art = main.arm.e.pr.rank <= 2;   // 幹線（国道・主要地方道）は黄 4 秒
+    if (!n.A.length) return;
+    // 現示のグループ: 腕の向きでまとめる（一直線から 40 度以内の腕は同じ軸 = 対向。45 度以上ずれると交差として別の現示）。格の高い腕から順に軸を作るので、
+    // グループ 0 が主道路。軸が 3 つ以上なら 3 現示以上になる（同時に青になるのは同じ軸の腕だけ）
+    const order = n.A.slice().sort((p, q) => p.arm.e.pr.rank - q.arm.e.pr.rank), axes = [];
+    const grpOf = new Map();
+    order.forEach(a => {
+      // グループの全員と一直線から 40 度以内のときだけ入れる（代表とだけ比べると、両側に 40 度ずつずれた 2 本が同じ組になる）
+      let g = axes.findIndex(ms => ms.every(b => Math.abs(a.d[0] * b.d[0] + a.d[1] * b.d[1]) > Math.cos(40 * Math.PI / 180)));
+      if (g < 0) { axes.push([]); g = axes.length - 1; }
+      axes[g].push(a); grpOf.set(a, g);
+    });
+    const art = order[0].arm.e.pr.rank <= 2;   // 幹線（国道・主要地方道）は黄 4 秒
     n.A.forEach(a => {
-      const grp = Math.abs(a.d[0] * main.d[0] + a.d[1] * main.d[1]) > Math.SQRT1_2 ? 0 : 1;
-      a.arm.sig = { grp, unit: n.id, art };   // 交通 AI が「この腕から入るときの信号」を引けるように
+      const grp = grpOf.get(a), ngrp = axes.length;
+      a.arm.sig = { grp, n: ngrp, unit: n.id, art };   // 交通 AI が「この腕から入るときの信号」を引けるように
       const pr = a.arm.e.pr;
       const inLanes = a.arm.end === 0 ? pr.bw : pr.fw;   // この腕から交差点へ入ってくる車線
       if (!inLanes) return;
@@ -360,10 +369,10 @@ export function signals(net) {
       far = Math.max(far, a.trim * 0.8);
       const lx = tz, lz = -tx;
       // 腕の中心線の横のずれ（a.lat は d の +90 度側。運転者の左 = d の −90 度側なので符号が逆）
-      const side = -(a.lat || 0) + pr.hw + 1.2;
+      const side = -(a.lat || 0) + pr.hw + 1.2, laneLat = -(a.lat || 0) + pr.hw - pr.edge - inLanes * pr.lw / 2;   // 進入車線の中心（左が +）
       out.push({ x: n.x + tx * (far + 2) + lx * side, z: n.z + tz * (far + 2) + lz * side, face: Math.atan2(-tx, -tz),
         arm: Math.max(2.0, Math.min(6.0, 1.2 + pr.edge + inLanes * pr.lw * 0.5)),   /* 灯器を進入車線の中央の上に */
-        junction: n.id, grp, art });
+        junction: n.id, grp, n: ngrp, art, dx: tx, dz: tz, laneX: n.x + tx * (far + 2) + lx * laneLat, laneZ: n.z + tz * (far + 2) + lz * laneLat });
     });
   });
   return out;

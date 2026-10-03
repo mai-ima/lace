@@ -123,12 +123,12 @@ export function makeTraffic(scene, net, opt) {
   function sigColor(c, t) {
     const arm = (c.dir > 0 ? net.nodes.get(c.e.b) : net.nodes.get(c.e.a)).arms.find(a => a.e === c.e && a.end === (c.dir > 0 ? 1 : 0));
     if (!arm || !arm.sig || !R || !R.SPEC) return null;
-    const ph = R.SPEC.phaseAt(t + (arm.sig.unit * 7.3) % 33, arm.sig.art); return arm.sig.grp === 0 ? ph.phase : ph.crossPhase;
+    return R.SPEC.phasesAt(t + (arm.sig.unit * 7.3) % 33, arm.sig.n, arm.sig.art)[arm.sig.grp] || 'red';
   }
   function mustStop(c, t) {
     const arm = (c.dir > 0 ? net.nodes.get(c.e.b) : net.nodes.get(c.e.a)).arms.find(a => a.e === c.e && a.end === (c.dir > 0 ? 1 : 0));
     if (!arm || !arm.sig || !R || !R.SPEC) return false;
-    const ph = R.SPEC.phaseAt(t + (arm.sig.unit * 7.3) % 33, arm.sig.art), col = arm.sig.grp === 0 ? ph.phase : ph.crossPhase;
+    const col = R.SPEC.phasesAt(t + (arm.sig.unit * 7.3) % 33, arm.sig.n, arm.sig.art)[arm.sig.grp] || 'red';
     if (col === 'red') return true;
     if (col === 'yellow') { const dist = c.e.L - STOP_BACK - c.s; return dist > c.v * c.v / (2 * 3.5); }   // 止まれる距離なら止まる
     return false;
