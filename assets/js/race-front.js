@@ -447,7 +447,7 @@
       var dflt = Math.max(0, defIdx), navI = navIdx;
       return {
         track: sp, mode: 'world', laps: Infinity, weather: opts.weather || 'clear', field: [],
-        traffic: trafficFor(e), car: playerCar(s, carId), levelMul: 1,
+        traffic: trafficFor(e), car: playerCar(s, carId), levelMul: 1, drive: R.driveSettings(),
         exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitAngs: exits.map(function (x) { return x.ang; }), tailChoice: tailIdx, exitNames: exits.map(exitLabel),
         canBack: hist.length > 0, start: start,
         hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo,
@@ -1932,6 +1932,47 @@
       app.keyHook = function (k) { if (k === 'Escape' || k === 'p' || k === 'P' || k === 'o' || k === 'O' || k === 'F2') { pause(); return true; } return false; };
     }
 
+    /* ---------- フリー走行の運転設定（保存される。走りながら変えられる） ---------- */
+    function buildDrive(p, rebuild) {
+      var D = R.driveSettings();
+      function chg(fn) { fn(); D.preset = 'custom'; R.driveSave(); rebuild(); }
+      var PK = Object.keys(R.DRIVE_PRESETS);
+      p.appendChild(el('div', 'rx-s', L('フリー走行だけに効きます。ストーリー・レースの車の性能は変わりません。', 'Applies to Free Roam only. Races and stories are unaffected.')));
+      p.appendChild(optRow(L('プリセット', 'Preset'), function () { return D.preset === 'custom' ? L('カスタム', 'Custom') : t(R.DRIVE_PRESETS[D.preset].name); }, function (d) {
+        var i = PK.indexOf(D.preset); i = (i < 0 ? 0 : i + d + PK.length) % PK.length;
+        var src = R.DRIVE_PRESETS[PK[i]]; D.preset = PK[i]; for (var k in src.v) D[k] = src.v[k]; R.driveSave(); rebuild();
+      }));
+      function num(label, key, list2, fmt2) {
+        p.appendChild(optRow(label, function () { return (fmt2 || function (x) { return '× ' + x; })(D[key]); }, function (d) { chg(function () { D[key] = stepVal(list2, D[key], d); }); }));
+      }
+      function flag(label, key) { p.appendChild(optRow(label, function () { return D[key] ? 'ON' : 'OFF'; }, function () { chg(function () { D[key] = !D[key]; }); })); }
+      num(L('ステアリング感度', 'Steering'), 'steer', [0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5]);
+      num(L('直進安定（ハンドルを離したとき）', 'Straight-line stability'), 'center', [0, 0.2, 0.4, 0.6, 0.8, 1], function (x) { return x === 0 ? L('なし', 'off') : Math.round(x * 100) + '%'; });
+      num(L('ブレーキの強さ', 'Brake strength'), 'brake', [0.6, 0.8, 1, 1.2, 1.4, 1.6]);
+      num(L('車重', 'Vehicle weight'), 'mass', [0.7, 0.85, 1, 1.2, 1.5]);
+      num(L('アクセルの強さ', 'Throttle'), 'throttle', [0.6, 0.8, 1, 1.15, 1.3, 1.5]);
+      flag(L('自動減速（赤信号・カーブの手前）', 'Auto-brake (red lights, curves)'), 'autoBrake');
+      flag(L('制限速度アシスト', 'Speed-limit assist'), 'limitAssist');
+    }
+    SCREENS.drive = function () {
+      return { build: function (o) {
+        var p = panel(L('運転設定（フリー走行）', 'Driving settings (Free Roam)'), L('車の挙動を好みに合わせる', 'Tune how the car behaves'));
+        buildDrive(p, function () { refresh(); });
+        p.appendChild(list([item(L('戻る', 'Back'), '', back, { icon: 'back' })]));
+        p.appendChild(hint());
+        o.appendChild(p);
+      } };
+    };
+    function driveOverlay() {
+      over.classList.remove('hidden'); over.innerHTML = '';
+      var p = panel(L('運転設定', 'Driving settings'), L('走りながら調整できます', 'Adjust on the fly'));
+      buildDrive(p, driveOverlay);
+      p.appendChild(list([item(L('レースに戻る', 'Back to the race'), '', pause, { icon: 'back' })]));
+      over.appendChild(p);
+      app.sel = 0; highlight();
+      app.keyHook = function (k) { if (k === 'Escape' || k === 'p' || k === 'P') { pause(); return true; } return false; };
+    }
+
     SCREENS.settings = function () {
       return { build: function (o) {
         var p = panel(L('設定・遊び方', 'Settings & Help'), '');
@@ -1944,6 +1985,7 @@
           function () { R.edit(function (s) { s.r3d = !s.r3d; }); }));
         p.appendChild(optRow(L('ストーリーで峠を使う', 'Use mountain passes in stories'), function () { return R.load().noTouge ? L('使わない（サーキットに置き換え）', 'No (circuits instead)') : L('使う', 'Yes'); },
           function () { R.edit(function (s) { s.noTouge = !s.noTouge; ntFlag = !!s.noTouge; }); R.resetStoryView(); }));
+        p.appendChild(item(L('運転設定（フリー走行）', 'Driving settings (Free Roam)'), L('ステアリング・ブレーキ・車重・自動減速', 'Steering, brakes, weight, auto-brake'), function () { go(SCREENS.drive()); }, { icon: 'tool' }));
         p.appendChild(optRow(L('効果音', 'Sound'), function () { return TB.store.get('sound', '1') === '1' ? 'ON' : 'OFF'; }, function () { TB.Sfx.set(TB.store.get('sound', '1') !== '1'); }));
         var help = el('div', 'rx-help');
         [L('←→ ハンドル　↑ アクセル　↓ ブレーキ　スペース ニトロ（ゼロヨンではシフトアップ）', '←→ steer  ↑ gas  ↓ brake  space nitro (shift up in drag)'),
@@ -2082,6 +2124,7 @@
       var items = [
         item(L('つづける', 'Resume'), '', resume, { icon: 'play' }),
         !w ? item(L('やり直す', 'Restart'), '', function () { run(app.runOpts); }, { icon: 'redo' }) : null,
+        w ? item(L('運転設定', 'Driving settings'), L('ステアリング・ブレーキ・車重など', 'Steering, brakes, weight...'), driveOverlay, { icon: 'tool' }) : null,
         item(L('管理者パネル', 'Admin panel'), L('数値の変更（o キー）', 'Tweak values (o key)'), adminOverlay, { icon: 'tool' }),
         app.runOpts.skip && R.admin && R.admin.on ? item(L('このバトルをスキップ', 'Skip this battle'), L('成功扱い', 'Counts as a win'), function () {
           var o = app.runOpts, r = o.skip(), sum = o.onResult(r);

@@ -1374,7 +1374,7 @@
     var steer0 = 2 * (0.82 + st.grp * 0.03), grip0 = (1.35 - st.grp * 0.07) / wGrip;
     var topSpeed = topSpeed0, accel = accel0, steer = steer0, grip = grip0, RV = 1;   // 管理者モードの倍率で毎フレーム更新する
     var offDecel = -MAX / 2 * (car.offroad ? 0.5 : 1) * (1.2 - st.grp * 0.04);
-    var dmgTaken = clamp(1.4 - st.arm * 0.09, 0.35, 1.3);
+    var dmgTaken = clamp(1.4 - st.arm * 0.09, 0.35, 1.3), dmgK = dmgTaken, brakeV = BRAKE;
     var nitroRate = 0.34 / (0.7 + st.nit * 0.08);
     var nitroPower = 1.16 + st.nit * 0.012;
     var nitroRefill = 0.8 + st.nit * 0.06;
@@ -1448,6 +1448,7 @@
     }
     /* --- 交差点の信号・交差車両・警察 --- */
     var sig = { phase: 'green', t: Math.random() * 14, cross: [], crossT: 0 };
+    if (mode === 'world' && spec.mapEdge !== undefined) sig.t = (((spec.sigSeed || 0) * 5.7) + Date.now() / 1000) % 16.5;   // 同じ交差点はいつも同じ位相（現実の時刻で進む）
     var cops = [], wantedT = 0, escapeT = 0, bustHits = 0, orbisDone = false,
         stopDone = !!(cfg.start && spec.stopSeg && P.total + PLAYER_Z > spec.stopSeg * SEG);   // 停止線より先から始まるなら信号は判定しない
     segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = function () { return sig.phase; }; if (sp.kind === 'fork') sp.pick = function () { return cfg.exitDirs ? chooseExit() : -1; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
@@ -1480,7 +1481,7 @@
           if (sig.phase === 'red' && spec.junction.signal) { pop(L('信号無視！', 'RAN A RED LIGHT!'), '#ff5252'); violation('signal'); }
         }
         // 赤の間は交差する道路を車が横切る
-        if (spec.junction.signal && sig.phase === 'red' && (!spec.mapEdge || spec.crossBoth)) {
+        if (spec.junction.signal && sig.phase === 'red' && sig.t > 11.5 && sig.t < 16 && (!spec.mapEdge || spec.crossBoth)) {   // 全赤の約 1 秒のあとに交差する車が出る
           sig.crossT -= dt;
           if (sig.crossT <= 0) {
             var tt = R.TRAFFIC[Math.floor(Math.random() * R.TRAFFIC.length)];
@@ -1656,17 +1657,36 @@
       keys.up = !sharp; keys.down = sharp && P.speed > topSpeed * 0.92;
       keys.nitro = Math.abs(cv(ahead)) < 1.2 && Math.abs(cv(far)) < 2 && P.nitro > 0.45;
       {   // この先のカーブに合わせて速さを決める（曲がりきれる速さは、ハンドルの切れ・グリップ・天気で車ごとに違う）
-        var look = Math.min(260, 20 + P.speed * P.speed / (2 * BRAKE) / SEG * 1.2), vOk = spec.custom && limitKmh && mode === 'world' ? (limitKmh + 8) / 280 * MAX : topSpeed;
+        var look = Math.min(260, 20 + P.speed * P.speed / (2 * brakeV) / SEG * 1.2), vOk = spec.custom && limitKmh && mode === 'world' ? (limitKmh + 8) / 280 * MAX : topSpeed;
         var kcar = 0.8 * steer / (0.6 * grip);
         for (var la = 2; la < look; la += 2) {
           var sgA = findSeg(pz() + SEG * la), pc = Math.abs(cv(sgA));
-          if (pc > 0.5) { var vv = MAX * Math.min(1, kcar / pc); vOk = Math.min(vOk, Math.sqrt(vv * vv + 2 * BRAKE * SEG * Math.max(0, la - 4))); }
+          if (pc > 0.5) { var vv = MAX * Math.min(1, kcar / pc); vOk = Math.min(vOk, Math.sqrt(vv * vv + 2 * brakeV * SEG * Math.max(0, la - 4))); }
         }
         keys.up = P.speed < vOk * 0.97; keys.down = P.speed > vOk * 1.03;
         if (spec.custom || vOk < topSpeed * 0.98) keys.nitro = false;
       }
       if (mode === 'drag') { keys.nitro = P.rpm > 0.86; keys.left = keys.right = false; }
-      if (mode === 'brake') { var dz = (cfg.stopAt + 0.5) * SEG - pz(), stopD = P.speed * P.speed / (2 * BRAKE); keys.up = dz > stopD * 1.02; keys.down = !keys.up; keys.nitro = false; }
+      if (mode === 'brake') { var dz = (cfg.stopAt + 0.5) * SEG - pz(), stopD = P.speed * P.speed / (2 * brakeV); keys.up = dz > stopD * 1.02; keys.down = !keys.up; keys.nitro = false; }
+    }
+
+    /* 運転支援: 自動減速（赤信号・きついカーブの手前）と制限速度アシスト。ブレーキを踏んでいない間だけ働く */
+    function driveAssist(dt) {
+      if (keys.down) return;
+      var dv = cfg.drive, vMax = Infinity, i;
+      if (dv.limitAssist && limitKmh) vMax = (limitKmh + 6) / 280 * MAX;
+      if (dv.autoBrake) {
+        var look = Math.min(200, 20 + P.speed * P.speed / (2 * brakeV) / SEG * 1.2), kc = 0.8 * steer / (0.6 * grip);
+        for (var la = 2; la < look; la += 3) {
+          var pc = Math.abs(cv(findSeg(pz() + SEG * la)));
+          if (pc > 0.5) { var vv = MAX * Math.min(1, kc / pc); vMax = Math.min(vMax, Math.sqrt(vv * vv + 2 * brakeV * 0.7 * SEG * Math.max(0, la - 4))); }
+        }
+        if (spec.stopSeg && spec.junction && spec.junction.signal && sig.phase !== 'green') {
+          var dzs = spec.stopSeg * SEG - pz();
+          if (dzs > 0 && dzs < SEG * 120) vMax = Math.min(vMax, Math.sqrt(2 * brakeV * 0.6 * Math.max(0, dzs - SEG * 2)));
+        }
+      }
+      if (P.speed > vMax * 1.02) P.speed = Math.max(vMax, P.speed - (dv.autoBrake ? brakeV * 0.7 : COAST * 2) * dt);
     }
 
     /* --- 更新 --- */
@@ -1677,6 +1697,12 @@
       var adm = R.admin && R.admin.on ? R.admin.v : null;
       topSpeed = topSpeed0 * (adm ? adm.speed : 1); accel = accel0 * (adm ? adm.accel : 1);
       steer = steer0 * (adm ? adm.grip : 1); grip = grip0 / (adm ? adm.grip : 1); RV = adm ? adm.rival : 1;
+      dmgK = dmgTaken; brakeV = BRAKE;
+      if (mode === 'world' && cfg.drive) {   // フリー走行の運転設定（車の性能 → 運転設定 → 管理者の倍率）
+        var dv = cfg.drive;
+        steer *= dv.steer; grip *= Math.sqrt(dv.mass); accel *= dv.throttle / Math.pow(dv.mass, 0.8);
+        brakeV = BRAKE * dv.brake / Math.sqrt(dv.mass); dmgK = dmgTaken / dv.mass;
+      }
       if (adm && state === 'race' && !P.finished) { if (adm.nitro) P.nitro = 1; if (adm.god) P.damage = 0; }
       t0 += dt;
       if (msg.t > 0) msg.t -= dt;
@@ -1716,6 +1742,7 @@
       }
       var sc = cv(seg);
       P.x -= dxc * Math.abs(pct) * sc * CENTRIFUGAL * grip;
+      if (mode === 'world' && cfg.drive && cfg.drive.center > 0 && !keys.left && !keys.right && P.spin <= 0 && Math.abs(P.x) < 1) P.x -= P.x * Math.min(1, cfg.drive.center * 1.2 * dt) * Math.abs(pct);   // 直進安定: ハンドルを離すと車線の中央へ
       P.skid = (Math.abs(sc) > 3 && pct > 0.7 && ((sc > 0 && keys.right) || (sc < 0 && keys.left))) ? 1 : 0;
 
       // スリップストリーム
@@ -1760,25 +1787,26 @@
       } else if (P.rev) {
         // バック（後退ギア）: ↓で下がる、↑でブレーキ → 止まったら前進に戻る
         if (keys.down) P.speed -= accel * 0.45 * dt;
-        else if (keys.up) P.speed += BRAKE * dt;
+        else if (keys.up) P.speed += brakeV * dt;
         else P.speed = Math.min(0, P.speed + COAST * dt);
         if (P.speed >= 0 && keys.up) { P.rev = false; P.speed = 0; }
       } else if (keys.up || P.boosting) P.speed += (P.boosting ? accel * 1.6 : accel) * dt;
       else if (keys.down) {
-        P.speed -= BRAKE * dt;
+        P.speed -= brakeV * dt;
         // 止まってから↓を押し続けるとバックに入る
         if (P.speed <= MAX * 0.004 && canReverse()) { P.revT = (P.revT || 0) + dt; if (P.revT > 0.35) { P.rev = true; P.revT = 0; pop(L('R（バック）', 'REVERSE'), '#cfd8dc'); } }
       }
       else P.speed -= COAST * dt;
       if (!keys.down) P.revT = 0;
 
+      if (mode === 'world' && cfg.drive && (cfg.drive.autoBrake || cfg.drive.limitAssist) && !P.rev && P.speed > 0 && !keys.nitro) driveAssist(dt);
       // 芝生・壁・飾り
       var off = P.x < -1 || P.x > 1;
       var wallX = seg.tunnel ? 1.12 : seg.rails ? 1.06 : 0;
       if (wallX && Math.abs(P.x) > wallX) {
         P.x = clamp(P.x, -wallX, wallX);
         if (seg.rails && P.hitCool <= 0 && P.speed > MAX / 4) { sfx('hit'); eng.event('scrape'); P.hitCool = 0.4; P.bump = 0.15; }
-        if (P.speed > MAX / 5) { P.speed -= MAX * 0.9 * dt; P.damage = Math.min(1.2, P.damage + 0.03 * dt * dmgTaken); spark(W / 2 + (P.x > 0 ? 40 : -40), H - 30, 2); }
+        if (P.speed > MAX / 5) { P.speed -= MAX * 0.9 * dt; P.damage = Math.min(1.2, P.damage + 0.03 * dt * dmgK); spark(W / 2 + (P.x > 0 ? 40 : -40), H - 30, 2); }
       } else if (off) {
         if (P.speed > MAX / 4) P.speed += offDecel * dt;
         if (Math.random() < 0.6) dust();
@@ -1938,7 +1966,7 @@
     }
 
     function hurt(n) {
-      P.damage = Math.min(1.2, P.damage + n * dmgTaken);
+      P.damage = Math.min(1.2, P.damage + n * dmgK);
       if (mode === 'sp') spg.me -= n * 60;
       if (mode === 'traffic' && P.damage >= 1 && !P.finished) end('wrecked');
     }

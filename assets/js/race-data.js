@@ -1065,9 +1065,19 @@
      ===================================================================== */
 
   var SAVE = 'race:save';
+  /* フリー走行の運転設定（steer 操舵 / center 直進安定 / brake ブレーキ / mass 車重 / throttle アクセル / autoBrake 自動減速 / limitAssist 制限速度アシスト） */
+  function driveDefault() { return { preset: 'standard', steer: 1, center: 0, brake: 1, mass: 1, throttle: 1, autoBrake: false, limitAssist: false }; }
+  R.DRIVE_PRESETS = {
+    standard: { name: { ja: '標準', en: 'Standard' }, v: { steer: 1, center: 0, brake: 1, mass: 1, throttle: 1, autoBrake: false, limitAssist: false } },
+    drift: { name: { ja: 'ドリフト寄り', en: 'Drift' }, v: { steer: 1.25, center: 0, brake: 1.1, mass: 0.9, throttle: 1.15, autoBrake: false, limitAssist: false } },
+    stable: { name: { ja: '安定重視', en: 'Stable' }, v: { steer: 0.9, center: 0.6, brake: 1.3, mass: 1.2, throttle: 0.9, autoBrake: true, limitAssist: false } },
+    truck: { name: { ja: 'トラック風', en: 'Heavy truck' }, v: { steer: 0.75, center: 0.4, brake: 0.8, mass: 1.5, throttle: 0.7, autoBrake: false, limitAssist: true } }
+  };
+  R.driveSettings = function () { if (!R._drive) R._drive = R.load().drive; return R._drive; };
+  R.driveSave = function () { var d = R._drive; if (d) R.edit(function (s) { s.drive = d; }); };
   function fresh() {
     return { v: 2, money: 1000, owned: ['pod'], car: 'pod', paint: {}, upg: {}, story: 0, cups: {}, laps: {},
-             bosses: {}, level: 'normal', stats: { races: 0, wins: 0, podiums: 0, titles: 0, km: 0, near: 0, best: {}, jobs: 0, earned: 0, fares: 0 }, mini: {}, visited: {}, ach: {}, daily: { last: 0, streak: 0, best: 0, total: 0 } };
+             bosses: {}, level: 'normal', stats: { races: 0, wins: 0, podiums: 0, titles: 0, km: 0, near: 0, best: {}, jobs: 0, earned: 0, fares: 0 }, mini: {}, visited: {}, ach: {}, daily: { last: 0, streak: 0, best: 0, total: 0 }, drive: driveDefault() };
   }
   R.load = function () {
     var s = null;
@@ -1087,6 +1097,7 @@
     var d = fresh();
     for (var k in d) if (s[k] === undefined) s[k] = d[k];
     for (var k2 in d.stats) if (s.stats[k2] === undefined) s.stats[k2] = d.stats[k2];
+    for (var k3 in d.drive) if (s.drive[k3] === undefined) s.drive[k3] = d.drive[k3];
     return s;
   };
   R.save = function (s) { TB.store.set(SAVE, JSON.stringify(s)); };

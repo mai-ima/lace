@@ -646,7 +646,7 @@
       geom: { rw: Math.max(2000, Math.round(hwv * UNITS * 2)), cw: cw, lanes: Math.min(4, g.lanes), hw: hwv },
       twoWay: !e.one && !hwy, limit: limit, police: hwy ? 1 : (kind === 'city' ? 1 : 0), orbis: hwy && r.len > 1200,
       banner: opt.banner, fork: opt.fork, junction: opt.junction || null, branches: opt.branches || [], startMark: null, endMark: null,
-      mapEdge: h, mapLen: e.len, kind: kind, hwy: hwy, jEnd: jEnd, line: r,
+      mapEdge: h, sigSeed: M.to(h), mapLen: e.len, kind: kind, hwy: hwy, jEnd: jEnd, line: r,
       build: function (b) { pushSegs(b, r, y0); },
       after: function (segs) {
         decorate(segs, hwv, { cls: e.c, hwy: hwy });
