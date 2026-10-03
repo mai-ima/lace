@@ -350,6 +350,7 @@ export function signals(net) {
     const art = main.arm.e.pr.rank <= 2;   // 幹線（国道・主要地方道）は黄 4 秒
     n.A.forEach(a => {
       const grp = Math.abs(a.d[0] * main.d[0] + a.d[1] * main.d[1]) > Math.SQRT1_2 ? 0 : 1;
+      a.arm.sig = { grp, unit: n.id, art };   // 交通 AI が「この腕から入るときの信号」を引けるように
       const pr = a.arm.e.pr;
       const inLanes = a.arm.end === 0 ? pr.bw : pr.fw;   // この腕から交差点へ入ってくる車線
       if (!inLanes) return;

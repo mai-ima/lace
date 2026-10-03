@@ -10,3 +10,5 @@ assets/data/world/ の出典（加工して作成）
   このファイルは ODbL の「派生データベース」にあたるため、同じ ODbL で提供する。
 - 街路樹（props/tree_broadleaf_*）: Poly Haven「Jacaranda Tree」（Rico Cilliers、CC0）を、tools/world/impostor.js で
   水平 8 方向の色と法線の画像（インポスター）に焼き付けて作成。
+- 一般車の軽いモデル（props/car_concept_lod1.json, car_concept_lod2.json）: Khronos glTF Sample Assets「Car Concept」
+  （CC BY 4.0）を tools/world/car_lod.mjs と meshoptimizer（MIT）で間引いて作成。

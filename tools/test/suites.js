@@ -184,9 +184,16 @@ async function w3(page) {
       // 当たり判定: 道路の中心線が建物の中にある点
       const g = W.collide.grid; let bad = 0; W.world.net.edges.forEach(e => e.line.forEach(q => { if (e.pr.rank <= 4 && g.at(q[0], q[1])) bad++; }));
       if (bad > 0) msgs.push('主要道の見えない壁 ' + bad + ' 点');
-      return { msgs, maxCalls, maxTris, signals: W.world.signals.length, kmh: car.kmh() };
+      // 一般車: 40 秒走らせて、道路の外に出ない・赤信号で交差点に入らない
+      let off = 0, n = 0;
+      for (let k = 0; k < 80; k++) { W.tick(0.5, {}); W.traffic.cars.forEach(c => { if (!c.P) return; n++; if (!W.world.onRoadPt(c.P.x, c.P.z)) off++; }); }
+      const st = W.traffic.stats;
+      if (off > n * 0.01) msgs.push('一般車が道路の外 ' + off + '/' + n);
+      if (st.redEntries > 0) msgs.push('一般車の赤信号の進入 ' + st.redEntries + '/' + st.sigEntries);
+      if (st.sigEntries < 5) msgs.push('信号のある交差点を通った一般車が少ない ' + st.sigEntries);
+      return { msgs, maxCalls, maxTris, signals: W.world.signals.length, kmh: car.kmh(), sig: st.sigEntries };
     });
-    return { ok: r.msgs.length === 0, msg: r.msgs.join(' / ') || ('描画 ' + r.maxCalls + ' 回・' + Math.round(r.maxTris / 1e4) / 100 + ' 百万三角形・信号 ' + r.signals + ' 基') };
+    return { ok: r.msgs.length === 0, msg: r.msgs.join(' / ') || ('描画 ' + r.maxCalls + ' 回・' + Math.round(r.maxTris / 1e4) / 100 + ' 百万三角形・信号 ' + r.signals + ' 基・一般車の信号通過 ' + r.sig + ' 回（赤 0）') };
   } finally { srv.close(); }
 }
 

@@ -9,6 +9,7 @@ import { makeCar, makeColliders } from './vehicle.js';
 import { makeGrid } from './grid.js';
 import { loadImpostor, plantTrees } from './trees.js';
 import { buildProps } from './props.js';
+import { makeTraffic } from './traffic.js';
 
 /** 品質の段階（GPU 名で自動判定。iPhone 17 は高、Intel 内蔵は中） */
 export function detectGfx(renderer, force) {
@@ -107,6 +108,32 @@ export async function start(container, opt) {
   if (!(TB.RaceRealCars && TB.RaceRealCars.concept)) await new Promise(r => { const s = document.createElement('script'); s.src = 'assets/vendor/real-concept.js'; s.onload = s.onerror = r; document.head.appendChild(s); });
   const carM = TB.RaceRealCars && TB.RaceRealCars.concept ? decodeCar(TB.RaceRealCars.concept) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
   scene.add(carM.root);
+  // 一般車（自車の周り 400m に 40 台。低画質は 20 台）
+  let traffic = null;
+  try {
+    const [l1, l2] = await Promise.all(['car_concept_lod1', 'car_concept_lod2'].map(n => fetch('assets/data/world/props/' + n + '.json').then(r => r.json())));
+    const near = decodeCar(l1), far = decodeCar(l2);
+    traffic = makeTraffic(scene, world.net, { near: { root: near.root, paint: near.mats.paint }, far: { root: far.root, paint: far.mats.paint }, count: gfx.tier === 'low' ? 20 : 40 });
+  } catch (e) { console.warn('一般車を読めませんでした', e); }
+  function trafficStep(dt) {
+    if (!traffic) return;
+    const st = car.st;
+    traffic.step(dt, simT, { x: st.x, z: st.z, v: Math.hypot(st.vx, st.vy), yaw: st.yaw });
+    // 一般車との接触（車体を半径 1.1m の円 2 つで近似）
+    const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
+    traffic.cars.forEach(c => {
+      if (!c.P) return;
+      const gx = Math.sin(c.P.yaw), gz = Math.cos(c.P.yaw);
+      for (const a of [-1.1, 1.1]) for (const b of [-1.1, 1.1]) {
+        const px = st.x + fx * a, pz = st.z + fz * a, qx = c.P.x + gx * b, qz = c.P.z + gz * b, dx = px - qx, dz = pz - qz, d = Math.hypot(dx, dz);
+        if (d < 2.0 && d > 1e-3) {
+          const push = 2.0 - d, nx = dx / d, nz = dz / d; st.x += nx * push; st.z += nz * push;
+          const vwx = fx * st.vx + fz * st.vy, vwz = fz * st.vx - fx * st.vy, vn = vwx * nx + vwz * nz;
+          if (vn < 0) { const rx = vwx - 1.4 * vn * nx, rz = vwz - 1.4 * vn * nz; st.vx = (rx * fx + rz * fz) * 0.8; st.vy = (rx * fz - rz * fx) * 0.8; hitT = 0.4; c.v *= 0.3; }
+        }
+      }
+    });
+  }
   const car = makeCar(opt.car);
   // 出発: 浜松駅北口の前の道（いちばん近い幹線の上）
   const startAt = opt.start || { x: -40, z: -260 };
@@ -215,6 +242,7 @@ export async function start(container, opt) {
       const hit = collide(car.st); if (hit > 3) hitT = 0.4;
       acc -= STEP; simT += STEP;
     }
+    trafficStep(dt);
     if (hitT > 0) hitT -= dt;
     const st = car.st;
     carM.root.position.set(st.x, st.y, st.z);
@@ -230,7 +258,7 @@ export async function start(container, opt) {
   }
   requestAnimationFrame(frame);
   const api = {
-    renderer, scene, cam, car, world, gfx, W, collide,
+    renderer, scene, cam, car, world, gfx, W, collide, traffic,
     stop() {
       running = false;
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', resize); window.removeEventListener('blur', onBlur);
@@ -249,7 +277,7 @@ export async function start(container, opt) {
     keys, ready: world.orthoReady,
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
-    tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; } },
+    tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
     draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; updateCam(1 / 60); updateSignals(simT); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
