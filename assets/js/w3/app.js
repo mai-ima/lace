@@ -21,7 +21,26 @@ export function detectGfx(renderer, force) {
   return Object.assign({ tier, gpu: name, orthoZ: 17 }, T);
 }
 
-function decodeCar(D) {
+/** タイヤとホイールを 4 輪に分ける（前後左右の位置で三角形を振り分け、各輪の中心を回転の軸にする） */
+function splitWheels(geo, mat, parent, wheels) {
+  const P = geo.attributes.position, I = geo.index.array, buckets = {};
+  for (let t = 0; t < I.length; t += 3) {
+    let cx = 0, cz = 0; for (let j = 0; j < 3; j++) { cx += P.getX(I[t + j]); cz += P.getZ(I[t + j]); }
+    const key = (cx > 0 ? 'R' : 'L') + (cz > 0 ? 'F' : 'B'); (buckets[key] = buckets[key] || []).push(I[t], I[t + 1], I[t + 2]);
+  }
+  Object.keys(buckets).forEach(key => {
+    const ix = buckets[key], b = new THREE.Box3(), v = new THREE.Vector3();
+    ix.forEach(i => b.expandByPoint(v.fromBufferAttribute(P, i)));
+    const c = b.getCenter(new THREE.Vector3());
+    const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', P.clone()); g2.setAttribute('normal', geo.attributes.normal); g2.setIndex(ix);
+    g2.translate(-c.x, -c.y, -c.z);   // 位置は輪ごとに複製してから、輪の中心を原点に
+    const m = new THREE.Mesh(g2, mat); m.castShadow = true; m.receiveShadow = true;
+    if (!wheels[key]) { const steer = new THREE.Group(), spin = new THREE.Group(); steer.position.copy(c); steer.add(spin); parent.add(steer); wheels[key] = { steer, spin, key, r: (b.max.y - b.min.y) / 2 }; }
+    wheels[key].spin.add(m);
+  });
+}
+function decodeCar(D, split) {
+  const wheels = {};
   const dec = (b64, Tp) => { const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new Tp(u8.buffer); };
   const mats = {
     paint: new THREE.MeshPhysicalMaterial({ color: 0xb01826, metalness: 0.55, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.06 }),
@@ -43,11 +62,13 @@ function decodeCar(D) {
     for (let i = 0; i < P.length; i++) { pos[i] = P[i] / 1000; nor[i] = N[i] / 127; }
     if (k === 'head') for (let i = 2; i < pos.length; i += 3) { headZ += pos[i]; headN++; }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setIndex(new THREE.BufferAttribute(I, 1));
+    if (split && (k === 'tire' || k === 'rim')) { splitWheels(geo, mats[k], g, wheels); return; }
     const m = new THREE.Mesh(geo, mats[k] || mats.dark); m.castShadow = k !== 'glass'; m.receiveShadow = true; g.add(m);
   });
-  if (headN && headZ / headN < 0) g.rotation.y = Math.PI;
+  const flip = headN && headZ / headN < 0; if (flip) g.rotation.y = Math.PI;
+  Object.values(wheels).forEach(w => { w.front = (w.key[1] === 'F') !== !!flip; });   // 前輪（ライトのある側）
   root.add(g);
-  return { root, mats };
+  return { root, mats, wheels, flip };
 }
 
 export async function start(container, opt) {
@@ -106,7 +127,7 @@ export async function start(container, opt) {
   }
   // 車（Khronos Car Concept。高品質なリアル調の車がそろうまでの暫定）
   if (!(TB.RaceRealCars && TB.RaceRealCars.concept)) await new Promise(r => { const s = document.createElement('script'); s.src = 'assets/vendor/real-concept.js'; s.onload = s.onerror = r; document.head.appendChild(s); });
-  const carM = TB.RaceRealCars && TB.RaceRealCars.concept ? decodeCar(TB.RaceRealCars.concept) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
+  const carM = TB.RaceRealCars && TB.RaceRealCars.concept ? decodeCar(TB.RaceRealCars.concept, true) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
   scene.add(carM.root);
   // 一般車（自車の周り 400m に 40 台。低画質は 20 台）
   let traffic = null;
@@ -228,6 +249,12 @@ export async function start(container, opt) {
     });
     world.signalsDone();
   }
+  // 車輪の回転と前輪の舵角、ブレーキランプ
+  function carVisual(dt) {
+    const st = car.st;
+    if (carM.wheels) Object.values(carM.wheels).forEach(w => { w.spin.rotation.x += st.vx * dt / Math.max(0.2, w.r) * (carM.flip ? -1 : 1); if (w.front) w.steer.rotation.y = st.steer; });
+    if (carM.mats) carM.mats.tail.emissiveIntensity = ctl.brake > 0.1 ? 3.0 : 0.6;
+  }
   let last = performance.now(), acc = 0, simT = 0, running = true, frames = 0, fpsT = 0, fps = 0, hitT = 0;
   const STEP = 1 / 120;
   function frame(now) {
@@ -247,6 +274,7 @@ export async function start(container, opt) {
     const st = car.st;
     carM.root.position.set(st.x, st.y, st.z);
     carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll);
+    carVisual(dt);
     updateCam(dt); updateSignals(simT);
     renderer.render(scene, cam);
     frames++; fpsT += dt; if (fpsT > 0.5) { fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
@@ -278,7 +306,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; updateCam(1 / 60); updateSignals(simT); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
   return api;
