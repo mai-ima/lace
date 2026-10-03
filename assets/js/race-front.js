@@ -413,7 +413,7 @@
       var e = M.edgeOf(h), toN = M.nodes[M.to(h)];
       exits = M.exits(h);
       var sig = toN.sig && exits.length > 1;
-      var jn = exits.length > 1 ? { signal: sig, w: 10 + (e.c <= 2 ? 8 : 0) } : null;
+      var jn = exits.length > 1 ? { signal: sig, w: 10 + (e.c <= 2 ? 8 : 0), dirs: exits.map(function (x) { return x.dir; }) } : null;
       var forks = exits.length > 1 ? exits.map(function (ex) { return dirArrow(ex.dir) + ' ' + exitLabel(ex); }) : null;
       // 先の景色（道が続いて見える方向）: 直進に近い道（約 35 度以内）を優先。なければナビの道、それもなければ、もっとも真っすぐに近い道
       // 曲がる道は、先読みにせず「側道」として描く。道が勝手に曲がって見えないようにする

@@ -388,6 +388,15 @@
         }
         spec.stopSeg = stp - 1; spec.crossSeg = Math.min(jl - 2, stp + 2 + Math.floor(jw / 2));
         addBranches(segs, spec, jl);
+        // 路面の進行方向の矢印（車線が 2 本以上のとき。左の車線は左折、右の車線は右折があればその矢印）
+        var dirs = spec.junction.dirs || [], nLn = spec.geom && spec.geom.lanes ? spec.geom.lanes : 2, myLn = spec.twoWay ? Math.floor(nLn / 2) : nLn;
+        if (dirs.length > 1 && myLn >= 2 && stp - 14 > 0) {
+          var hasL = dirs.indexOf('left') >= 0, hasR = dirs.indexOf('right') >= 0;
+          for (var ln = 0; ln < myLn; ln++) {
+            var ak = ln === 0 && hasL ? 'L' : ln === myLn - 1 && hasR ? 'R' : 'S';
+            for (var pt = 0; pt < 4; pt++) { var as = segs[stp - 14 + pt]; (as.arrows = as.arrows || []).push({ lane: ln, n: myLn, part: pt, kind: ak, half: !!spec.twoWay }); }
+          }
+        }
       } else {
         segs[jl - 41].crosswalk = segs[jl - 40].crosswalk = true;
         segs[jl - 40].stopLine = true;
@@ -2719,6 +2728,18 @@
           for (var zk = 0; zk < 10; zk++) {
             var za1 = x1 - w1 + (w1 * 2 / 10) * zk, za2 = x2 - w2 + (w2 * 2 / 10) * zk;
             if (zk % 2 === 0) poly(g, za1, y1, za1 + w1 * 0.2, y1, za2 + w2 * 0.2, y2, za2, y2, '#e8e8e8');
+          }
+        }
+        if (s.arrows) {   // 車線の進行方向の矢印（棒 3 区間 + 矢じり 1 区間）
+          for (var ai = 0; ai < s.arrows.length; ai++) {
+            var A = s.arrows[ai], span = A.half ? 0.5 : 1, lwA1 = w1 * 2 * span / A.n, lwA2 = w2 * 2 * span / A.n;
+            var o1x = A.half ? x1 - w1 : x1 - w1, o2x = A.half ? x2 - w2 : x2 - w2;
+            var c1 = o1x + lwA1 * (A.lane + 0.5), c2 = o2x + lwA2 * (A.lane + 0.5), sh = lwA1 * 0.07, sh2 = lwA2 * 0.07;
+            if (A.part < 3) poly(g, c1 - sh, y1, c1 + sh, y1, c2 + sh2, y2, c2 - sh2, y2, 'rgba(240,240,236,.85)');
+            else {
+              var dx2 = A.kind === 'L' ? -lwA2 * 0.28 : A.kind === 'R' ? lwA2 * 0.28 : 0;
+              poly(g, c1 - lwA1 * 0.2, y1, c1 + lwA1 * 0.2, y1, c2 + dx2, y2, c2 + dx2, y2, 'rgba(240,240,236,.85)');
+            }
           }
         }
         if (s.stopLine) poly(g, x1 - w1, y1, x1 + w1 * 0.05, y1, x2 + w2 * 0.05, y2 - 1, x2 - w2, y2 - 1, '#ffffff');
