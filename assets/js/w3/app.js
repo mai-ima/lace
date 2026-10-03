@@ -7,6 +7,7 @@ import { loadWorld } from './data.js';
 import { buildWorld, buildSky } from './world.js';
 import { makeCar, makeColliders } from './vehicle.js';
 import { makeGrid } from './grid.js';
+import { loadImpostor, plantTrees } from './trees.js';
 
 /** 品質の段階（GPU 名で自動判定。iPhone 17 は高、Intel 内蔵は中） */
 export function detectGfx(renderer, force) {
@@ -67,6 +68,33 @@ export async function start(container, opt) {
   const sky = buildSky(scene, renderer, { shadows: gfx.shadows, far: gfx.far, elev: opt.elev, azim: opt.azim });
   const world = buildWorld(scene, W, gfx);
   const T0 = W.terrain, collide = makeColliders(W.bldg, { x0: T0.x0, z0: T0.z0, size: (T0.nx - 1) * T0.cell }, makeGrid, world.roadTris, world.pierTris);
+  // 街路樹: 幹線（歩道のある道）の両側の歩道に、約 12m ごと。建物・車道・信号の近くは避ける
+  try {
+    const imp = await loadImpostor('assets/data/world/props/', 'tree_broadleaf');
+    const spots = [], hsh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+    const sigNear = (x, z) => world.signals.some(s => Math.abs(s.x - x) < 5 && Math.abs(s.z - z) < 5);
+    world.net.edges.forEach(e => {
+      const pr = e.pr; if (!(pr.walk > 0) || pr.rank > 4 || e.internal || e.hidden) return;
+      const L = e.line; let acc = 0, next = 8;
+      for (let i = 1; i < L.length; i++) {
+        const a = L[i - 1], b = L[i], sl = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        while (next <= acc + sl) {
+          const u = (next - acc) / sl, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl;
+          [-1, 1].forEach(sd => {
+            const off = pr.hw + pr.walk * 0.5, tx = x - dz * off * sd, tz = z + dx * off * sd;
+            if (collide.grid.at(tx, tz) || world.onRoadPt(tx, tz) || sigNear(tx, tz)) return;
+            const r = hsh(tx, tz);
+            spots.push({ x: tx, y: W.terrain.at(tx, tz) + 0.15, z: tz, h: 8 + r * 4, yaw: r * 6.283 });
+          });
+          next += 11 + hsh(x, z) * 3;
+        }
+        acc += sl;
+      }
+    });
+    world.trees = plantTrees(scene, imp, spots, { shadows: gfx.shadows > 0 });
+    spots.forEach(p => { const r = 0.35; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });   // 幹の当たり判定
+    world.treeSpots = spots;
+  } catch (e) { console.warn('街路樹を読めませんでした', e); }
   // 車（Khronos Car Concept。高品質なリアル調の車がそろうまでの暫定）
   if (!(TB.RaceRealCars && TB.RaceRealCars.concept)) await new Promise(r => { const s = document.createElement('script'); s.src = 'assets/vendor/real-concept.js'; s.onload = s.onerror = r; document.head.appendChild(s); });
   const carM = TB.RaceRealCars && TB.RaceRealCars.concept ? decodeCar(TB.RaceRealCars.concept) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };

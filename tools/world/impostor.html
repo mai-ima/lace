@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>インポスターの焼き付け</title>
+<!--
+  重い 3D モデル（木など）を、水平 8 方向から正射影で撮って、色（不透明度つき）と法線の画像に焼き付ける。
+  tools/world/impostor.js（Playwright）から開く。?src=モデルの URL&n=方向の数&px=1 枚の画素数
+  色: 光を当てない素の色（基本色 × AO）。法線: 撮影の向きから見た面の向き（x 右、y 上、z 手前）を 0〜1 に詰めたもの。
+-->
+<script type="importmap">{ "imports": { "three": "../../assets/vendor/three/three.module.js", "three/addons/": "../../assets/vendor/three/addons/" } }</script>
+</head><body style="margin:0;background:#000">
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search), N = +(q.get('n') || 8), PX = +(q.get('px') || 512);
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true, alpha: true });
+renderer.setSize(PX, PX); renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const gl = await new GLTFLoader().loadAsync(q.get('src'));
+const model = gl.scene;
+const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+const half = Math.max(size.x, size.z, size.y) / 2 * 1.02;
+const scene = new THREE.Scene(); scene.add(model);
+const cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.1, half * 8);
+// 2 種類の材質に差し替えて撮る
+const albedo = new Map(), normal = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+model.traverse(o => {
+  if (!o.isMesh) return;
+  const m = o.material;
+  albedo.set(o, new THREE.MeshBasicMaterial({ map: m.map, color: m.color, side: THREE.DoubleSide, alphaTest: 0.5, transparent: false, alphaMap: m.alphaMap || null }));
+});
+function shot(kind, k) {
+  const a = k / N * Math.PI * 2, d = half * 4;
+  cam.position.set(ctr.x + Math.sin(a) * d, ctr.y, ctr.z + Math.cos(a) * d); cam.lookAt(ctr); cam.updateMatrixWorld();
+  model.traverse(o => { if (o.isMesh) o.material = kind === 'albedo' ? albedo.get(o) : normal; });
+  // 法線は色ではないので、sRGB への変換をしない
+  renderer.outputColorSpace = kind === 'albedo' ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+  renderer.render(scene, cam);
+  return renderer.domElement.toDataURL('image/png');
+}
+const out = { n: N, px: PX, height: size.y, width: Math.max(size.x, size.z), half, centerY: ctr.y - box.min.y, albedo: [], normal: [] };
+for (let k = 0; k < N; k++) { out.albedo.push(shot('albedo', k)); out.normal.push(shot('normal', k)); }
+window.__out = out;
+document.title = 'done';
+</script>
+</body></html>

@@ -284,7 +284,8 @@ export function buildWorld(scene, W, gfx) {
   // 道路の範囲（1m 格子）。高架橋は道路をまたぐので、道路の上（と 1.5m 以内）には橋脚を置かない
   const roadG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
   out.roadTris((ax, az, bx, bz, cx, cz) => roadG.tri(ax, az, bx, bz, cx, cz));
-  const onRoad = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (roadG.at(x + a * 0.75, z + b * 0.75)) return true; return false; };
+  out.onRoadPt = (x, z) => roadG.at(x, z) === 1;
+  const onRoad = out.onRoad = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (roadG.at(x + a * 0.75, z + b * 0.75)) return true; return false; };
   out.pierTris = [];
   const railH = t => (/新幹線/.test(t.name || '') ? 11 : /遠州/.test(t.name || '') ? 8.5 + (+(t.layer || 1) - 1) * 5 : 8.5);
   const RP = W.roads.p;
