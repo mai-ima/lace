@@ -197,4 +197,5 @@ async function w3(page) {
   } finally { srv.close(); }
 }
 
+w3.gl = true;
 module.exports = { golden, invariants, world, menus, w3 };

@@ -20,11 +20,14 @@ const suites = require('./suites');
 
 (async () => {
   const exe = fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined;
-  const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
+  // 3D のテスト（suite.gl）だけ、ソフトウェアの WebGL を使うブラウザで動かす（ほかのテストの速さを変えないため）
+  let glBrowser = null;
+  const browserFor = async fn => { if (!fn.gl) return browser; if (!glBrowser) glBrowser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }); return glBrowser; };
   let fails = 0, total = 0;
   for (const name of Object.keys(suites)) {
     if (only.length && !only.includes(name)) continue;
-    const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
+    const page = await (await browserFor(suites[name])).newPage({ viewport: { width: 960, height: 600 } });
     const errs = [];
     page.on('pageerror', e => errs.push(e.message));
     page.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 200)); });
@@ -56,7 +59,7 @@ const suites = require('./suites');
     console.log((res.ok ? 'PASS ' : 'FAIL ') + name.padEnd(12) + ' ' + ((Date.now() - t0) / 1000).toFixed(1) + 's ' + (res.msg || ''));
     await page.close();
   }
-  await browser.close();
+  await browser.close(); if (glBrowser) await glBrowser.close();
   console.log((fails ? 'FAILED ' : 'OK ') + (total - fails) + '/' + total);
   process.exit(fails ? 1 : 0);
 })();
