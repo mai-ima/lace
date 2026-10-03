@@ -151,4 +151,43 @@ async function menus(page) {
   return { ok: n > 20, msg: n + ' 画面' };
 }
 
-module.exports = { golden, invariants, world, menus };
+/* 3D 自由走行（world3d.html）: 例外なし、描画予算（中: 300 回・150 万三角形）、信号の矛盾なし、主要道に見えない壁なし */
+async function w3(page) {
+  const http = require('http'), fs = require('fs'), path = require('path'), ROOT = path.resolve(__dirname, '../..');
+  const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png', '.bin': 'application/octet-stream', '.wasm': 'application/wasm' };
+  const srv = http.createServer((q, r) => {
+    if (q.url === '/favicon.ico') { r.writeHead(204); r.end(); return; }
+    const f = path.join(ROOT, decodeURIComponent(q.url.split('?')[0]));
+    if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); r.end(); return; }
+    r.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(r);
+  });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  try {
+    await page.goto('http://127.0.0.1:' + srv.address().port + '/world3d.html?capture=1&tier=mid');
+    await page.waitForFunction(() => document.title.includes('ready'), null, { timeout: 120000 });
+    await page.evaluate(() => window.W3.freeze());
+    await page.evaluate(() => window.W3.ready);
+    const r = await page.evaluate(() => {
+      const W = window.W3, R = window.TB.Race, msgs = [];
+      // 描画予算（出発地点と、向きを変えた 3 方向）
+      let maxCalls = 0, maxTris = 0;
+      const s0 = { x: W.car.st.x, z: W.car.st.z, yaw: W.car.st.yaw };
+      for (let k = 0; k < 4; k++) { W.pose(s0.x, s0.z, s0.yaw + k * Math.PI / 2); W.tick(0.05, {}); W.draw(); const i = W.renderer.info.render; maxCalls = Math.max(maxCalls, i.calls); maxTris = Math.max(maxTris, i.triangles); }
+      if (maxCalls > 300) msgs.push('描画回数 ' + maxCalls + ' > 300');
+      if (maxTris > 1.5e6) msgs.push('三角形 ' + maxTris + ' > 150 万');
+      // 信号: 同じ交差点で、主道路と従道路が同時に青（黄）にならない
+      let conflict = 0;
+      const byJ = new Map(); W.world.signals.forEach(s => { if (!byJ.has(s.junction)) byJ.set(s.junction, s); });
+      for (let t = 0; t < 40; t += 0.5) byJ.forEach(s => { const p = R.SPEC.phaseAt(t, s.art); if (p.phase !== 'red' && p.crossPhase !== 'red') conflict++; });
+      if (conflict) msgs.push('信号の矛盾 ' + conflict);
+      const car = W.car; W.pose(s0.x, s0.z, s0.yaw);
+      // 当たり判定: 道路の中心線が建物の中にある点
+      const g = W.collide.grid; let bad = 0; W.world.net.edges.forEach(e => e.line.forEach(q => { if (e.pr.rank <= 4 && g.at(q[0], q[1])) bad++; }));
+      if (bad > 0) msgs.push('主要道の見えない壁 ' + bad + ' 点');
+      return { msgs, maxCalls, maxTris, signals: W.world.signals.length, kmh: car.kmh() };
+    });
+    return { ok: r.msgs.length === 0, msg: r.msgs.join(' / ') || ('描画 ' + r.maxCalls + ' 回・' + Math.round(r.maxTris / 1e4) / 100 + ' 百万三角形・信号 ' + r.signals + ' 基') };
+  } finally { srv.close(); }
+}
+
+module.exports = { golden, invariants, world, menus, w3 };

@@ -53,14 +53,19 @@ export function buildWorld(scene, W, gfx) {
   scene.add(out.group);
   const terr = W.terrain;
   /* --- 地形 --- */
-  const geo = new THREE.PlaneGeometry((terr.nx - 1) * terr.cell, (terr.nz - 1) * terr.cell, terr.nx - 1, terr.nz - 1);
-  geo.rotateX(-Math.PI / 2);
-  const pa = geo.attributes.position;
-  for (let j = 0; j < terr.nz; j++) for (let i = 0; i < terr.nx; i++) {
-    const k = j * terr.nx + i;
-    pa.setX(k, terr.x0 + i * terr.cell); pa.setZ(k, terr.z0 + j * terr.cell); pa.setY(k, terr.H[k] - 0.15);
+  // 地形は 200m 四方（40 マス）のチャンクに分ける（画面外は描かない）。UV は全体の航空写真に合わせる
+  const CH = 40, terrGeos = [];
+  const spanX = (terr.nx - 1) * terr.cell, spanZ = (terr.nz - 1) * terr.cell;
+  for (let cj = 0; cj < terr.nz - 1; cj += CH) for (let ci = 0; ci < terr.nx - 1; ci += CH) {
+    const w = Math.min(CH, terr.nx - 1 - ci), h = Math.min(CH, terr.nz - 1 - cj), pos = new Float32Array((w + 1) * (h + 1) * 3), uv = new Float32Array((w + 1) * (h + 1) * 2), ix = [];
+    for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) {
+      const k = j * (w + 1) + i, gi = ci + i, gj = cj + j, x = terr.x0 + gi * terr.cell, z = terr.z0 + gj * terr.cell;
+      pos.set([x, terr.H[gj * terr.nx + gi] - 0.15, z], k * 3); uv.set([(x - terr.x0) / spanX, 1 - (z - terr.z0) / spanZ], k * 2);
+      if (i < w && j < h) ix.push(k, k + w + 1, k + 1, k + 1, k + w + 1, k + w + 2);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(ix); g.computeVertexNormals(); g.computeBoundingSphere();
+    terrGeos.push(g);
   }
-  geo.computeVertexNormals();
   // 同梱の航空写真（tools/world/ortho.py で作成）を使う。無ければ地理院タイルから組み立てる
   out.orthoReady = new Promise(r => {
     out.ortho = new THREE.TextureLoader().load(W.base + 'ortho.jpg', () => r(), undefined, () => {
@@ -69,7 +74,7 @@ export function buildWorld(scene, W, gfx) {
     out.ortho.colorSpace = THREE.SRGBColorSpace; out.ortho.anisotropy = 8;
   });
   const groundMat = new THREE.MeshStandardMaterial({ map: out.ortho, roughness: 0.95, metalness: 0 });
-  const ground = new THREE.Mesh(geo, groundMat); ground.receiveShadow = true; out.group.add(ground);
+  terrGeos.forEach(g => { const m = new THREE.Mesh(g, groundMat); m.receiveShadow = true; out.group.add(m); });
 
   /* --- 道路網 --- */
   const net = build(W.roads, (x, z) => terr.at(x, z));
@@ -218,7 +223,23 @@ export function buildWorld(scene, W, gfx) {
           diffuseColor.rgb *= 0.86 + 0.14 * smoothstep(0.0, 4.0, rel);   // 地面の近くは少し暗く（汚れ・陰）
         }`);
   };
-  const bmesh = new THREE.Mesh(bg, bmat); bmesh.castShadow = true; bmesh.receiveShadow = true; out.group.add(bmesh);
+  // 建物は重心の位置で 200m 四方のチャンクに分ける（頂点は共有し、三角形の番号だけ分ける）
+  const cx = new Float32Array(nb), cz = new Float32Array(nb), cn = new Uint32Array(nb);
+  for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v]; cx[k] += B.pos[v * 3]; cz[k] += B.pos[v * 3 + 2]; cn[k]++; }
+  const chunks = new Map();
+  for (let t = 0; t < B.idx.length; t += 3) {
+    const k = B.bid[B.idx[t]], key = Math.floor(cx[k] / cn[k] / 200) + ',' + Math.floor(cz[k] / cn[k] / 200);
+    let c = chunks.get(key); if (!c) chunks.set(key, c = []); c.push(B.idx[t], B.idx[t + 1], B.idx[t + 2]);
+  }
+  out.buildingMeshes = [];
+  chunks.forEach(ix => {
+    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(ix), 1));
+    const sp = new THREE.Sphere(), V = new THREE.Vector3(), box = new THREE.Box3();
+    for (let i = 0; i < ix.length; i++) box.expandByPoint(V.fromArray(B.pos, ix[i] * 3));
+    box.getBoundingSphere(sp); g.boundingSphere = sp; g.boundingBox = box;
+    const m = new THREE.Mesh(g, bmat); m.castShadow = true; m.receiveShadow = true; out.group.add(m); out.buildingMeshes.push(m);
+  });
 
   /* --- 信号機（LED 薄型の横型 3 灯、φ250、フードなし）。下端 5.6m、柱は進んでくる車の左、アームは車線の上へ。
          すべてインスタンス描画（部品ごとに 1 回の描画）で、灯の点灯はインスタンスの色で切り替える --- */
