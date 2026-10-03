@@ -215,13 +215,17 @@ export async function start(container, opt) {
   pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了</div>';
   pauseEl.addEventListener('pointerdown', () => setPause(false));
   container.appendChild(pauseEl);
-  function setPause(v) { paused = v; pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
+  function setPause(v) { paused = v; if (engineAudio) engineAudio.mute(v); pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
   const onKey = (e, d) => {
     if (d && e.key === 'Escape') { setPause(!paused); return; }
     if (d && paused && (e.key === 'Enter' || e.key === 'q' || e.key === 'Q')) { if (opt.onExit) opt.onExit(); return; }
     keys[e.key] = d;
   };
   const onBlur = () => { Object.keys(keys).forEach(k => { keys[k] = false; }); };
+  // エンジン音（race-audio.js の合成音。ブラウザの決まりで、最初の操作のあとに鳴らし始める）
+  let engineAudio = null;
+  const startAudio = () => { if (engineAudio || !(R && R.carAudio)) return; try { engineAudio = R.carAudio('super'); } catch (e) { engineAudio = null; } };
+  window.addEventListener('keydown', startAudio); window.addEventListener('pointerdown', startAudio);
   const kd = e => onKey(e, true), ku = e => onKey(e, false);
   window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('blur', onBlur);
   document.addEventListener('visibilitychange', () => { if (document.hidden && !paused) setPause(true); });
@@ -352,6 +356,7 @@ export async function start(container, opt) {
     carM.root.position.set(st.x, st.y, st.z);
     carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll);
     carVisual(dt);
+    if (engineAudio) engineAudio.update({ speed: Math.min(1.05, car.kmh() / 230), throttle: ctl.throttle > 0.1 && !ctl.reverse });
     updateCam(dt); updateSignals(simT);
     present();
     frames++; fpsT += dt; if (fpsT > 0.5) { fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
@@ -366,7 +371,7 @@ export async function start(container, opt) {
   const api = {
     renderer, scene, cam, car, world, gfx, W, collide, traffic,
     stop() {
-      running = false;
+      running = false; if (engineAudio) engineAudio.stop(); window.removeEventListener('keydown', startAudio); window.removeEventListener('pointerdown', startAudio);
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', resize); window.removeEventListener('blur', onBlur);
       // GPU の資源（形・材質・テクスチャ・環境マップ）を片付けて、WebGL のコンテキストも手放す
       const seen = new Set();
