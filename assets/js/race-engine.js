@@ -1149,7 +1149,7 @@
       case 'banner': case 'fork':
         var bh2 = s * (sp.kind === 'fork' ? 0.32 : 0.2), half2 = s * 1.15, top2 = y - s * 1.05;
         g.fillStyle = '#444'; g.fillRect(x - half2, top2, s * 0.04, y - top2); g.fillRect(x + half2 - s * 0.04, top2, s * 0.04, y - top2);
-        g.fillStyle = sp.kind === 'fork' ? (sp.blue ? '#1d4fa3' : '#1b7a3e') : '#0d47a1'; g.fillRect(x - half2, top2, half2 * 2, bh2);
+        g.fillStyle = sp.kind === 'fork' ? (sp.blue ? '#1d4fa3' : '#1b7a3e') : sp.green ? '#1b7a3e' : '#0d47a1'; g.fillRect(x - half2, top2, half2 * 2, bh2);
         if (sp.blue) { g.strokeStyle = '#fff'; g.lineWidth = Math.max(1, s * 0.01); g.strokeRect(x - half2 + s * 0.02, top2 + s * 0.02, half2 * 2 - s * 0.04, bh2 - s * 0.04); }
         if (s > 24) {
           g.fillStyle = '#fff'; g.textAlign = 'center';

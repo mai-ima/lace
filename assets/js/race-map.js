@@ -590,6 +590,44 @@
         if (Math.abs(sl) > 12 && i % 3 === 0) s.rails = true;
       }
     }
+    // 実在の目印: IC（料金所・案内標識）・駅・城・神社・アクトタワー
+    function poi(x, z, maxd) {
+      var j = nearestSeg(x, z); if (j < 0) return null;
+      var F = frame(j), vx = x - F.x, vz = z - F.z, lat = vx * F.rx + vz * F.rz, al = vx * F.fx + vz * F.fz;
+      var d = Math.hypot(vx, vz); if (d > maxd) return null;
+      return { j: Math.max(0, Math.min(n - 1, j + Math.round(al / SEG_M))), lat: lat, d: d };
+    }
+    function side(q) { return q.lat >= 0 ? 1 : -1; }
+    (M.ics || []).forEach(function (ic) {
+      var nm = ic[0].replace(/[（(].*$/, '').replace(/ＩＣ/g, 'IC').replace(/ＪＣＴ/g, 'JCT').replace(/I\.C/g, 'IC');
+      if (hwy && cls !== 5) {   // 高速の本線: 手前の案内標識（緑）
+        var q = poi(ic[1], ic[2], 140); if (!q) return;
+        var jb = Math.max(4, q.j - 110);
+        if (!segs[jb].tunnel && !segs[jb].bridge) segs[jb].sprites.push({ kind: 'banner', offset: 0, text: nm + (/JCT/.test(nm) ? '' : '  出口 約 150m'), green: true, city: true });
+      } else if (cls === 5 && n > 120) {   // ランプ: 本線と分かれる側の反対の端に料金所
+        var q2 = poi(ic[1], ic[2], 60); if (!q2) return;
+        var jt = q2.j < n * 0.3 ? n - 34 : q2.j > n * 0.7 ? 34 : -1;
+        if (jt < 0 || segs[jt].tunnel) return;
+        segs[jt].sprites.push({ kind: 'tollgate', offset: 0, city: true });
+        segs[jt - 16 > 0 ? jt - 16 : jt + 16].sprites.push({ kind: 'banner', offset: 0, text: nm + ' 料金所', city: true });
+      }
+    });
+    (M.stations || []).forEach(function (st) {
+      if (hwy) return;
+      var q = poi(st[1], st[2], 110); if (!q || Math.abs(q.lat) < hw + 6) return;
+      segs[q.j].sprites.push({ kind: 'station', offset: side(q) * Math.max(2.4, Math.abs(q.lat) / hw), seed: 1, city: true });
+    });
+    (M.lms || []).forEach(function (lm) {
+      if (hwy) return;
+      var kind = lm[1] === 'castle' ? 'castle' : lm[1] === 'shrine' ? 'torii' : null; if (!kind) return;
+      var q = poi(lm[2], lm[3], kind === 'castle' ? 160 : 45); if (!q || Math.abs(q.lat) < hw + 2) return;
+      segs[q.j].sprites.push({ kind: kind, offset: side(q) * Math.max(kind === 'castle' ? 2.8 : 1.6, Math.abs(q.lat) / hw), seed: Math.floor(hash2(lm[2], lm[3]) * 1000), city: true });
+    });
+    [[-70, 12, 'acttower', 140]].forEach(function (mk) {
+      if (hwy) return;
+      var q = poi(mk[0], mk[1], mk[3]); if (!q || Math.abs(q.lat) < hw + 6) return;
+      segs[q.j].sprites.push({ kind: mk[2], offset: side(q) * Math.max(2.4, Math.abs(q.lat) / hw), seed: 2, city: true });
+    });
   }
   M.decorate = decorate;
 
