@@ -125,6 +125,7 @@ export async function start(container, opt) {
     const sigNear = (x, z) => world.signals.some(s => Math.abs(s.x - x) < 5 && Math.abs(s.z - z) < 5);
     world.net.edges.forEach(e => {
       const pr = e.pr; if (!(pr.walk > 0) || pr.rank > 4 || e.internal || e.hidden) return;
+      if (hsh(e.way || e.id, 7) > [1, 1, 1, 0.6, 0.25][pr.rank]) return;   // 並木のある道の割合（国道・主要地方道は全部、県道は 6 割、2 車線の道は 4 分の 1。道（way）ごとに決める）
       const L = e.line; let acc = 0, next = 8;
       for (let i = 1; i < L.length; i++) {
         const a = L[i - 1], b = L[i], sl = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -132,7 +133,7 @@ export async function start(container, opt) {
           const u = (next - acc) / sl, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl;
           [-1, 1].forEach(sd => {
             const off = pr.hw + pr.walk * 0.5, tx = x - dz * off * sd, tz = z + dx * off * sd;
-            if (collide.grid.at(tx, tz) || world.onRoadPt(tx, tz) || sigNear(tx, tz)) return;
+            if (collide.grid.at(tx, tz) || world.onRoadPt(tx, tz) || sigNear(tx, tz) || world.underViaduct(tx, tz, 4)) return;   // 高架の下（4m 以内）には植えない
             const r = hsh(tx, tz);
             spots.push({ x: tx, y: W.terrain.at(tx, tz) + 0.15, z: tz, h: 8 + r * 4, yaw: r * 6.283 });
           });
@@ -148,7 +149,7 @@ export async function start(container, opt) {
   // 電柱・電線・街灯（建物・車道・木・信号と重ならない所）
   {
     const T = world.treeSpots || [];
-    const free = (x, z) => !collide.grid.at(x, z) && !world.onRoadPt(x, z) && !world.signals.some(s => Math.abs(s.x - x) < 3 && Math.abs(s.z - z) < 3) && !T.some(t => Math.abs(t.x - x) < 2.5 && Math.abs(t.z - z) < 2.5);
+    const free = (x, z) => !collide.grid.at(x, z) && !world.onRoadPt(x, z) && !world.underViaduct(x, z, 3) && !world.signals.some(s => Math.abs(s.x - x) < 3 && Math.abs(s.z - z) < 3) && !T.some(t => Math.abs(t.x - x) < 2.5 && Math.abs(t.z - z) < 2.5);
     world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, {});
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }

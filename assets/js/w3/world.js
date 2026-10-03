@@ -282,7 +282,9 @@ export function buildWorld(scene, W, gfx) {
 
   /* --- 鉄道の高架橋（東海道新幹線・東海道本線・遠州鉄道。OSM では全区間が bridge）。
          桁（幅 5m・厚さ 1.4m）、壁高欄（高さ 1.0m）、橋脚（10m ごと）。レール面の高さは路線ごとの目安 --- */
-  const railGeos = [];
+  const railGeos = [], piers = [];
+  const viaG = out.viaductG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
+  out.underViaduct = (x, z, m) => { m = m || 0; for (let a = -m; a <= m; a += 1) for (let b = -m; b <= m; b += 1) if (viaG.at(x + a, z + b)) return true; return false; };
   // 道路の範囲（1m 格子）。高架橋は道路をまたぐので、道路の上（と 1.5m 以内）には橋脚を置かない
   const roadG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
   out.roadTris((ax, az, bx, bz, cx, cz) => roadG.tri(ax, az, bx, bz, cx, cz));
@@ -320,6 +322,7 @@ export function buildWorld(scene, W, gfx) {
     const hw = 2.5, n = L.length;
     const side = (off) => L.map((p, i) => { const q = L[Math.min(n - 1, i + 1)], r = L[Math.max(0, i - 1)], dx = q[0] - r[0], dz = q[1] - r[1], l = Math.hypot(dx, dz) || 1; return [p[0] - dz / l * off, p[1] + dx / l * off]; });
     const A = side(-hw), Bs = side(hw);
+    for (let i = 1; i < n; i++) { viaG.tri(A[i - 1][0], A[i - 1][1], Bs[i - 1][0], Bs[i - 1][1], A[i][0], A[i][1]); viaG.tri(Bs[i - 1][0], Bs[i - 1][1], Bs[i][0], Bs[i][1], A[i][0], A[i][1]); }   // 高架の下の範囲
     const quadStrip = (P, Q, yA, yB) => { const pos = new Float32Array(n * 6), ix = []; for (let i = 0; i < n; i++) { pos.set([P[i][0], yA(i), P[i][1], Q[i][0], yB(i), Q[i][1]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g; };
     railGeos.push(quadStrip(A, Bs, i => ys[i], i => ys[i]));                       // 上面
     railGeos.push(quadStrip(A, Bs, i => ys[i] - 1.4, i => ys[i] - 1.4));           // 下面
@@ -328,6 +331,8 @@ export function buildWorld(scene, W, gfx) {
     // 橋脚（10m ごと、1.6m 角）
     for (let i = 0; i < n; i += 3) {
       const p = L[i], gy = terr.at(p[0], p[1]), h = ys[i] - 1.4 - gy; if (h < 1 || onRoad(p[0], p[1])) continue;
+      if (piers.some(q => Math.abs(q[0] - p[0]) < 6 && Math.abs(q[1] - p[1]) < 6)) continue;   // 平行な線路の橋脚は共有する（林のように並ばないように）
+      piers.push(p);
       const g = new THREE.BoxGeometry(1.6, h, 1.6); g.translate(p[0], gy + h / 2, p[1]); railGeos.push(g);
       out.pierTris.push([p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8], [p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8, p[0] - 0.8, p[1] + 0.8]);
     }
