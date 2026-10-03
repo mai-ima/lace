@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { build, markings, signals, ribbon } from './roadnet.js';
+import { makeGrid } from './grid.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -280,6 +281,10 @@ export function buildWorld(scene, W, gfx) {
   /* --- 鉄道の高架橋（東海道新幹線・東海道本線・遠州鉄道。OSM では全区間が bridge）。
          桁（幅 5m・厚さ 1.4m）、壁高欄（高さ 1.0m）、橋脚（10m ごと）。レール面の高さは路線ごとの目安 --- */
   const railGeos = [];
+  // 道路の範囲（1m 格子）。高架橋は道路をまたぐので、道路の上（と 1.5m 以内）には橋脚を置かない
+  const roadG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
+  out.roadTris((ax, az, bx, bz, cx, cz) => roadG.tri(ax, az, bx, bz, cx, cz));
+  const onRoad = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (roadG.at(x + a * 0.75, z + b * 0.75)) return true; return false; };
   out.pierTris = [];
   const railH = t => (/新幹線/.test(t.name || '') ? 11 : /遠州/.test(t.name || '') ? 8.5 + (+(t.layer || 1) - 1) * 5 : 8.5);
   const RP = W.roads.p;
@@ -300,7 +305,7 @@ export function buildWorld(scene, W, gfx) {
     railGeos.push(quadStrip(Bs, Bs, i => ys[i] + 1.0, i => ys[i] - 1.4));
     // 橋脚（10m ごと、1.6m 角）
     for (let i = 0; i < n; i += 3) {
-      const p = L[i], gy = terr.at(p[0], p[1]), h = ys[i] - 1.4 - gy; if (h < 1) continue;
+      const p = L[i], gy = terr.at(p[0], p[1]), h = ys[i] - 1.4 - gy; if (h < 1 || onRoad(p[0], p[1])) continue;
       const g = new THREE.BoxGeometry(1.6, h, 1.6); g.translate(p[0], gy + h / 2, p[1]); railGeos.push(g);
       out.pierTris.push([p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8], [p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8, p[0] - 0.8, p[1] + 0.8]);
     }
