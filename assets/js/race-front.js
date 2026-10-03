@@ -2012,6 +2012,12 @@
           function (d) { R.edit(function (s) { var v = s.bgm === undefined ? 0.6 : s.bgm; s.bgm = Math.round(clamp(v + d * 0.1, 0, 1) * 10) / 10; }); if (R.Music) { R.Music.refresh(); if (!R.Music.current) R.Music.play('title'); } }));
         if (R.ENABLE_3D) p.appendChild(optRow(L('描画', 'Renderer'), function () { return R.load().r3d ? L('3D（WebGL・試験版）', '3D (WebGL, beta)') : L('疑似 3D（標準）', 'Pseudo-3D (default)'); },
           function () { R.edit(function (s) { s.r3d = !s.r3d; }); }));
+        p.appendChild(optRow(L('3D の画質', '3D quality'), function () { var v = R.load().gfxTier || 'auto'; return { auto: L('自動', 'Auto'), low: L('低', 'Low'), mid: L('中', 'Medium'), high: L('高', 'High') }[v]; },
+          function (d) { R.edit(function (s) { var ks = ['auto', 'low', 'mid', 'high'], i = ks.indexOf(s.gfxTier || 'auto'); s.gfxTier = ks[(i + (d || 1) + 4) % 4]; }); }));
+        p.appendChild(item(L('3D 自由走行（試作: 浜松駅周辺）', '3D free roam (preview: Hamamatsu Sta.)'), L('実在の地形・道路・建物（PLATEAU）を走る。Esc で戻る', 'Real terrain, roads and PLATEAU buildings. Esc to return'), function () {
+          if (location.protocol === 'file:') { toast(L('3D はブラウザの制約でファイルから直接は開けません。http で配信して開いてください（例: python3 -m http.server）', '3D needs http(s). Serve the folder (e.g. python3 -m http.server).')); return; }
+          var tier = R.load().gfxTier; location.href = 'world3d.html' + (tier && tier !== 'auto' ? '?tier=' + tier : '');
+        }, { icon: 'map' }));
         p.appendChild(optRow(L('時間の進め方', 'Simulation step'), function () { return R.load().varStep ? L('可変刻み（旧方式）', 'Variable (legacy)') : L('固定刻み（標準）', 'Fixed (default)'); },
           function () { R.edit(function (s) { s.varStep = !s.varStep; }); }));
         p.appendChild(optRow(L('ストーリーで峠を使う', 'Use mountain passes in stories'), function () { return R.load().noTouge ? L('使わない（サーキットに置き換え）', 'No (circuits instead)') : L('使う', 'Yes'); },
