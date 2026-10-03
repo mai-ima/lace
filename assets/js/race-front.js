@@ -722,14 +722,21 @@
     }
     startDemo();
 
-    var last = null, raf = 0;
+    var last = null, raf = 0, STEP = 1 / 240;
     function frame(now) {
       if (app.closed) return;
       if (last === null) last = now;
       var dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (app.sess) {
-        if (!app.paused) for (var st = 0; st < (R.speedup || 1) && app.sess; st++) app.sess.update(dt);
+        if (!app.paused) {
+          if (app.varStep) { for (var st = 0; st < (R.speedup || 1) && app.sess; st++) app.sess.update(dt); }   // 旧方式（可変刻み）
+          else {   // 固定刻み（1/240 秒）。画面の更新頻度に関係なく同じ動きになる
+            app.acc = Math.min(0.25, (app.acc || 0) + dt * (R.speedup || 1));
+            var cur = app.sess;
+            while (app.acc >= STEP && app.sess === cur) { cur.update(STEP); app.acc -= STEP; }
+          }
+        }
         if (app.r3d && app.r3dSess === app.sess) { try { app.r3d.render(); } catch (e) { console.error(e); detach3D(); } app.sess.renderHud(g); }
         else app.sess.render(g);
       } else if (app.demo) {
@@ -2005,6 +2012,8 @@
           function (d) { R.edit(function (s) { var v = s.bgm === undefined ? 0.6 : s.bgm; s.bgm = Math.round(clamp(v + d * 0.1, 0, 1) * 10) / 10; }); if (R.Music) { R.Music.refresh(); if (!R.Music.current) R.Music.play('title'); } }));
         if (R.ENABLE_3D) p.appendChild(optRow(L('描画', 'Renderer'), function () { return R.load().r3d ? L('3D（WebGL・試験版）', '3D (WebGL, beta)') : L('疑似 3D（標準）', 'Pseudo-3D (default)'); },
           function () { R.edit(function (s) { s.r3d = !s.r3d; }); }));
+        p.appendChild(optRow(L('時間の進め方', 'Simulation step'), function () { return R.load().varStep ? L('可変刻み（旧方式）', 'Variable (legacy)') : L('固定刻み（標準）', 'Fixed (default)'); },
+          function () { R.edit(function (s) { s.varStep = !s.varStep; }); }));
         p.appendChild(optRow(L('ストーリーで峠を使う', 'Use mountain passes in stories'), function () { return R.load().noTouge ? L('使わない（サーキットに置き換え）', 'No (circuits instead)') : L('使う', 'Yes'); },
           function () { R.edit(function (s) { s.noTouge = !s.noTouge; ntFlag = !!s.noTouge; }); R.resetStoryView(); }));
         p.appendChild(item(L('運転設定（フリー走行）', 'Driving settings (Free Roam)'), L('ステアリング・ブレーキ・車重・自動減速', 'Steering, brakes, weight, auto-brake'), function () { go(SCREENS.drive()); }, { icon: 'tool' }));
@@ -2030,7 +2039,7 @@
       app.demo = null;
       if (app.sess) app.sess.stop();
       over.innerHTML = ''; over.classList.add('hidden');
-      app.mode = 'race'; app.paused = false; app.keyHook = null;
+      app.mode = 'race'; app.paused = false; app.keyHook = null; app.varStep = !!R.load().varStep; app.acc = 0;
       sizeCanvas();
       var cfg = opts.make();
       if (R.needsMap(cfg.track) && !R.Map.ready) {   // 浜松の公道コースは地図を読んでから

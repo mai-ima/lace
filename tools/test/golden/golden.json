@@ -802,6 +802,7 @@
     0
    ]
   ],
+  "events": "0 say,1.97 damage,4.25 popup",
   "result": null
  },
  "race:coast:ae86": {
@@ -1607,6 +1608,7 @@
     0
    ]
   ],
+  "events": "0 say,2.03 popup,7.82 damage,8.53 damage,9.4 damage",
   "result": null
  },
  "race:coast:gt": {
@@ -2412,6 +2414,7 @@
     0
    ]
   ],
+  "events": "0 say,1.18 damage,2.1 popup,2.22 damage,2.57 popup,2.87 damage,3.65 popup,4.23 damage,4.83 damage,5.35 damage,6.55 damage,7.28 damage,8.87 popup,10.1 damage,11.25 popup,21.07 popup,21.25 damage",
   "result": null
  },
  "race:r_suzuka:pod": {
@@ -3217,6 +3220,7 @@
     0
    ]
   ],
+  "events": "0 say,1.63 damage,3.95 damage",
   "result": null
  },
  "race:r_suzuka:ae86": {
@@ -4022,6 +4026,7 @@
     0
    ]
   ],
+  "events": "0 say,1.63 damage,3.95 damage,6.57 popup,10.63 popup,10.68 damage,11.22 popup",
   "result": null
  },
  "race:r_suzuka:gt": {
@@ -4827,6 +4832,7 @@
     0
    ]
   ],
+  "events": "0 say,1.85 damage,3.27 popup,3.58 popup,3.68 damage,9.72 damage,10.32 damage,11.18 damage,11.87 popup,12.2 popup,19.2 damage,21.05 popup,21.15 damage",
   "result": null
  },
  "race:city:pod": {
@@ -5632,6 +5638,7 @@
     0
    ]
   ],
+  "events": "0 say,1.38 damage,2.07 damage,3.88 popup",
   "result": null
  },
  "race:city:ae86": {
@@ -6437,6 +6444,7 @@
     0
    ]
   ],
+  "events": "0 say,1.83 damage,3.8 popup,4.17 popup,4.38 damage,5.3 damage",
   "result": null
  },
  "race:city:gt": {
@@ -7242,6 +7250,7 @@
     0
    ]
   ],
+  "events": "0 say,1.48 damage,2.7 popup,3 popup,8.48 damage,9.5 popup",
   "result": null
  },
  "time:coast:pod": {
@@ -8047,6 +8056,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:coast:ae86": {
@@ -8852,6 +8862,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:coast:gt": {
@@ -9657,6 +9668,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:r_suzuka:pod": {
@@ -10462,6 +10474,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:r_suzuka:ae86": {
@@ -11267,6 +11280,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:r_suzuka:gt": {
@@ -12072,6 +12086,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:city:pod": {
@@ -12877,6 +12892,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:city:ae86": {
@@ -13682,6 +13698,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "time:city:gt": {
@@ -14487,6 +14504,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "touge:coast:pod": {
@@ -15292,6 +15310,7 @@
     0
    ]
   ],
+  "events": "0 say,28.37 say,28.37 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -16102,6 +16121,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "touge:coast:gt": {
@@ -16907,6 +16927,7 @@
     0
    ]
   ],
+  "events": "0 say,2.55 popup",
   "result": null
  },
  "touge:r_suzuka:pod": {
@@ -17712,6 +17733,7 @@
     0
    ]
   ],
+  "events": "0 say,18.25 say,18.25 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -18522,6 +18544,7 @@
     0
    ]
   ],
+  "events": "0 say,13.03 damage,13.8 popup,14.15 damage",
   "result": null
  },
  "touge:r_suzuka:gt": {
@@ -19327,6 +19350,7 @@
     0
    ]
   ],
+  "events": "0 say,4.92 popup,8.17 damage,8.92 popup,25.72 popup",
   "result": null
  },
  "touge:city:pod": {
@@ -20132,6 +20156,7 @@
     0
    ]
   ],
+  "events": "0 say,13.38 say,13.38 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -20942,6 +20967,7 @@
     0
    ]
   ],
+  "events": "0 say,20.77 say,20.77 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -21752,6 +21778,7 @@
     0
    ]
   ],
+  "events": "0 say,2.55 popup,2.62 damage,22.03 say,22.03 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -22562,6 +22589,7 @@
     0
    ]
   ],
+  "events": "0 say,8.28 damage",
   "result": null
  },
  "duel:coast:ae86": {
@@ -23367,6 +23395,7 @@
     0
    ]
   ],
+  "events": "0 say,9.45 damage",
   "result": null
  },
  "duel:coast:gt": {
@@ -24172,6 +24201,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "duel:r_suzuka:pod": {
@@ -24977,6 +25007,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "duel:r_suzuka:ae86": {
@@ -25782,6 +25813,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "duel:r_suzuka:gt": {
@@ -26587,6 +26619,7 @@
     0
    ]
   ],
+  "events": "0 say,15.62 damage,32.43 popup",
   "result": null
  },
  "duel:city:pod": {
@@ -27392,6 +27425,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "duel:city:ae86": {
@@ -28197,6 +28231,7 @@
     0
    ]
   ],
+  "events": "0 say,10.22 damage",
   "result": null
  },
  "duel:city:gt": {
@@ -29002,6 +29037,7 @@
     0
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "elim:coast:pod": {
@@ -29807,6 +29843,7 @@
     0
    ]
   ],
+  "events": "0 say,1.38 damage,2.2 popup,2.53 popup,2.98 popup,3.07 damage,3.17 popup,5.62 damage",
   "result": null
  },
  "elim:coast:ae86": {
@@ -30612,6 +30649,7 @@
     0
    ]
   ],
+  "events": "0 say,1.55 damage,2.17 damage,3.22 damage",
   "result": null
  },
  "elim:coast:gt": {
@@ -31417,6 +31455,7 @@
     0
    ]
   ],
+  "events": "0 say,1.25 damage,1.87 damage,2.97 damage,4.3 damage,7.12 popup,7.38 damage,9.28 damage,9.92 damage,11.07 damage,12.25 popup,22.77 damage,23.78 damage,25.35 damage,26.37 damage,27.43 damage,28.8 damage,30.25 damage,31.23 damage,32.98 damage,34.98 damage,36.1 damage",
   "result": null
  },
  "elim:r_suzuka:pod": {
@@ -32222,6 +32261,7 @@
     0
    ]
   ],
+  "events": "0 say,1.63 damage",
   "result": null
  },
  "elim:r_suzuka:ae86": {
@@ -33027,6 +33067,7 @@
     0
    ]
   ],
+  "events": "0 say,2.18 popup,2.67 popup,2.88 popup,10 popup,22.3 popup,30.22 damage,31.07 popup,33.9 popup",
   "result": null
  },
  "elim:r_suzuka:gt": {
@@ -33832,6 +33873,7 @@
     0
    ]
   ],
+  "events": "0 say,1.77 damage,3.32 popup,3.6 popup,9.9 popup,11.1 popup,11.4 popup,11.47 popup,30.57 damage,31.83 popup",
   "result": null
  },
  "elim:city:pod": {
@@ -34637,6 +34679,7 @@
     0
    ]
   ],
+  "events": "0 say,1.38 damage,3.05 damage",
   "result": null
  },
  "elim:city:ae86": {
@@ -35442,6 +35485,7 @@
     0
    ]
   ],
+  "events": "0 say,1.82 damage,3.65 damage,4.25 damage",
   "result": null
  },
  "elim:city:gt": {
@@ -36247,6 +36291,7 @@
     0
    ]
   ],
+  "events": "0 say,1.25 damage,2.18 popup,2.35 popup,7.67 damage,8.9 damage,9.87 damage",
   "result": null
  },
  "arcade:coast:pod": {
@@ -37052,6 +37097,7 @@
     14.2167
    ]
   ],
+  "events": "0 say,1.38 damage,3.33 damage,18.2 popup,19.15 popup,21.4 popup,22.98 damage,29.37 popup,29.48 damage,30.77 damage,31.58 damage,32.38 damage,33.33 damage",
   "result": null
  },
  "arcade:coast:ae86": {
@@ -37857,6 +37903,7 @@
     14.2167
    ]
   ],
+  "events": "0 say,1.82 damage,5.63 damage,8.38 popup,14.28 damage,17.88 popup,19.28 popup,23.27 damage,24.1 damage,24.97 damage,25.77 damage,26.62 damage,27.48 damage,28.35 damage,29.23 damage,30 damage,30.85 damage,31.7 damage,32.57 damage,33.45 damage,34.32 damage,35.18 damage,36.05 damage",
   "result": null
  },
  "arcade:coast:gt": {
@@ -38662,6 +38709,7 @@
     31.2167
    ]
   ],
+  "events": "0 say,1.1 damage,1.8 damage,3.6 damage,5.55 damage,6.07 damage,10.25 damage,11.2 damage,13.8 damage,16.23 popup,16.92 popup,19.05 popup,19.67 popup,20.5 popup,21.62 popup,22.23 popup,27.87 popup,28.18 popup,28.95 popup,29.83 popup,33.05 popup",
   "result": null
  },
  "arcade:r_suzuka:pod": {
@@ -39467,6 +39515,7 @@
     25.2167
    ]
   ],
+  "events": "0 say,1.77 damage,9.75 popup,13.43 popup,15.67 damage,25.05 popup,27.15 popup,27.15 popup",
   "result": null
  },
  "arcade:r_suzuka:ae86": {
@@ -40272,6 +40321,7 @@
     25.2167
    ]
   ],
+  "events": "0 say,1.63 damage,13.17 damage,28.53 popup,31.03 popup",
   "result": null
  },
  "arcade:r_suzuka:gt": {
@@ -41077,6 +41127,7 @@
     25.2167
    ]
   ],
+  "events": "0 say,1.77 damage,3.03 damage,4.08 damage,5.25 damage,9.73 damage,25.87 damage,32.23 damage",
   "result": null
  },
  "arcade:city:pod": {
@@ -41882,6 +41933,7 @@
     11.2167
    ]
   ],
+  "events": "0 say,15.6 damage,16.77 damage,17.93 damage,19.1 damage,19.73 popup,20.28 damage,23.75 damage,25.6 damage,26.78 damage,28.58 damage,35.6 damage",
   "result": null
  },
  "arcade:city:ae86": {
@@ -42687,6 +42739,7 @@
     27.2167
    ]
   ],
+  "events": "0 say,9.62 damage,10.13 damage,13.72 popup,17.33 popup,34.25 popup",
   "result": null
  },
  "arcade:city:gt": {
@@ -43492,6 +43545,7 @@
     27.2167
    ]
   ],
+  "events": "0 say,1.27 damage,2.4 damage,3.4 damage,4 damage,6.68 popup,16.78 popup,27.22 damage,29.9 damage,30.92 damage,33.32 popup,33.42 damage,34.05 damage,36.37 popup,36.65 popup",
   "result": null
  },
  "chase:coast:pod": {
@@ -44297,6 +44351,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,21 damage,21.92 damage,22.85 damage,23.78 damage,24.73 damage,25.6 damage,26.53 damage,30.23 popup",
   "result": null
  },
  "chase:coast:ae86": {
@@ -45102,6 +45157,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,18.08 damage,24.78 popup,25.25 popup,26.22 popup,31.95 popup,32.33 damage",
   "result": null
  },
  "chase:coast:gt": {
@@ -45907,6 +45963,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,4.1 damage,4.92 damage,12.37 damage,13.22 damage,14.22 damage,15.22 damage,16.22 damage,26.85 popup,28.7 popup,34.53 damage,35.25 damage,35.97 damage,36.7 damage",
   "result": null
  },
  "chase:r_suzuka:pod": {
@@ -46712,6 +46769,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,6.35 popup,9.37 popup,23.8 damage,26.38 popup",
   "result": null
  },
  "chase:r_suzuka:ae86": {
@@ -47517,6 +47575,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,6.1 popup,22.18 popup,22.58 popup,25.02 damage,26.08 damage,27.13 damage,29.43 popup",
   "result": null
  },
  "chase:r_suzuka:gt": {
@@ -48322,6 +48381,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,10.38 popup,10.98 popup,12.12 popup,12.82 popup,28.5 popup,33 popup",
   "result": null
  },
  "chase:city:pod": {
@@ -49127,6 +49187,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,35.2 damage",
   "result": null
  },
  "chase:city:ae86": {
@@ -49932,6 +49993,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,12.92 popup,26.75 damage,27.52 damage,30.45 damage",
   "result": null
  },
  "chase:city:gt": {
@@ -50737,6 +50799,7 @@
     83.2167
    ]
   ],
+  "events": "0 say,4.38 popup,6.47 damage,15.7 damage,35.67 popup",
   "result": null
  },
  "traffic:coast:pod": {
@@ -51542,6 +51605,7 @@
     0
    ]
   ],
+  "events": "0 say,1.48 damage,3.15 damage,9.57 popup,12.05 damage,12.8 damage,17.03 popup,18.35 popup,19.72 damage,20 popup,21.02 popup,21.78 popup,25.63 damage,29.1 popup,31.65 damage,32.83 popup,35.75 damage,36.52 damage",
   "result": null
  },
  "traffic:coast:ae86": {
@@ -52347,6 +52411,7 @@
     0
    ]
   ],
+  "events": "0 say,1.58 damage,3.5 damage,7.15 damage,8 damage,9.08 damage,10.17 damage,11.25 damage,12.32 damage,20 popup,21.97 popup,22.4 popup,25.92 popup,27.07 damage,28.17 damage,29.32 damage,30.47 damage,31.63 damage",
   "result": null
  },
  "traffic:coast:gt": {
@@ -53152,6 +53217,7 @@
     0
    ]
   ],
+  "events": "0 say,5.53 damage,6.58 popup,9.9 damage,10.53 damage,13.3 damage,15.5 popup,17.03 damage,17.93 damage,18.6 damage,19.32 damage,20 popup,22.52 popup,22.97 popup,25.88 damage,28.73 popup,30.87 popup,31.03 popup,31.82 damage,33.6 damage,34.28 damage,35 damage,35.7 damage",
   "result": null
  },
  "traffic:r_suzuka:pod": {
@@ -53957,6 +54023,7 @@
     0
    ]
   ],
+  "events": "0 say,4.62 popup,9.07 damage,10 damage,14.57 popup,14.9 popup,15.52 popup,15.58 popup,20 popup,26.63 popup,27.45 popup,31.85 damage,33.17 popup,33.38 damage,36 damage",
   "result": null
  },
  "traffic:r_suzuka:ae86": {
@@ -54762,6 +54829,7 @@
     0
    ]
   ],
+  "events": "0 say,8.12 popup,9.78 damage,13.27 popup,20 popup,21.12 popup,21.2 damage,22.55 damage,25.83 damage,29.17 damage,30.25 damage,31.33 damage,32.42 damage,33.5 damage,34.58 damage,35.68 damage,36.77 damage",
   "result": null
  },
  "traffic:r_suzuka:gt": {
@@ -55567,6 +55635,7 @@
     0
    ]
   ],
+  "events": "0 say,3.85 popup,7.6 popup,9.23 popup,9.87 popup,10.18 popup,11.75 damage,14.03 popup,16.1 damage,20 popup,22.07 damage,24.95 popup,25.97 popup,26.6 popup,28.1 damage,32.27 popup,32.35 damage,33.35 damage",
   "result": null
  },
  "traffic:city:pod": {
@@ -56372,6 +56441,7 @@
     0
    ]
   ],
+  "events": "0 say,6.53 damage,9.83 popup,17 popup,18.68 damage,20 popup,21.37 popup,21.62 damage,23.15 damage,24.28 damage,25.37 damage,26.35 damage,27.33 damage,35.32 popup",
   "result": null
  },
  "traffic:city:ae86": {
@@ -57177,6 +57247,7 @@
     0
    ]
   ],
+  "events": "0 say,6.18 damage,7.17 damage,8.17 damage,13.6 damage,16.57 popup,19.15 popup,19.62 damage,20 popup,23.58 popup,29.87 damage,30.83 damage,33.88 damage,34.78 damage,35.72 damage,36.53 damage",
   "result": null
  },
  "traffic:city:gt": {
@@ -57982,6 +58053,7 @@
     0
    ]
   ],
+  "events": "0 say,6.13 popup,9.22 damage,10.18 damage,14.83 damage,15.63 damage,17.33 damage,17.95 damage,18.58 damage,19.22 damage,19.85 damage,20 popup,20.48 damage,21.12 damage,25.97 popup,31.78 popup,35.28 popup,36.53 damage",
   "result": null
  },
  "coins:coast:pod": {
@@ -58787,6 +58859,7 @@
     23.2167
    ]
   ],
+  "events": "0 say,8.08 damage",
   "result": null
  },
  "coins:coast:ae86": {
@@ -59592,6 +59665,7 @@
     23.2167
    ]
   ],
+  "events": "0 say,9.9 damage",
   "result": null
  },
  "coins:coast:gt": {
@@ -60397,6 +60471,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "coins:r_suzuka:pod": {
@@ -61202,6 +61277,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "coins:r_suzuka:ae86": {
@@ -62007,6 +62083,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "coins:r_suzuka:gt": {
@@ -62812,6 +62889,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "coins:city:pod": {
@@ -63617,6 +63695,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "coins:city:ae86": {
@@ -64422,6 +64501,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "coins:city:gt": {
@@ -65227,6 +65307,7 @@
     23.2167
    ]
   ],
+  "events": "0 say",
   "result": null
  },
  "sp:coast:pod": {
@@ -66032,6 +66113,7 @@
     0
    ]
   ],
+  "events": "0 say,6.63 popup,7.95 damage,12.78 damage,14.52 damage,18.2 popup,23.25 say,23.25 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -66842,6 +66924,7 @@
     0
    ]
   ],
+  "events": "0 say,4.67 popup,6.6 damage,14.52 popup,15.3 popup,19.1 popup,22.17 popup,22.43 damage,27.13 say,27.13 end,28.02 damage",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -67652,6 +67735,7 @@
     0
    ]
   ],
+  "events": "0 say,4.2 damage,4.83 damage,5.53 damage,8.2 popup,11.97 damage,14.73 popup,22.78 say,22.78 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -68462,6 +68546,7 @@
     0
    ]
   ],
+  "events": "0 say,1.4 damage,3.6 popup,16.73 damage,28.18 say,28.18 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -69272,6 +69357,7 @@
     0
    ]
   ],
+  "events": "0 say,5.17 popup,9.22 popup,13.12 damage,13.95 damage,15.17 damage,25 damage,25.05 say,25.05 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -70082,6 +70168,7 @@
     0
    ]
   ],
+  "events": "0 say,26.23 popup,32.45 damage,33.35 damage,36.27 say,36.27 end",
   "result": null
  },
  "sp:city:pod": {
@@ -70887,6 +70974,7 @@
     0
    ]
   ],
+  "events": "0 say,15.27 damage,15.98 damage,16.73 damage,17.5 damage,20.55 say,20.55 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -71697,6 +71785,7 @@
     0
    ]
   ],
+  "events": "0 say,7.32 popup,27.15 say,27.15 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -72507,6 +72596,7 @@
     0
    ]
   ],
+  "events": "0 say,3.5 popup,7.32 damage,8.27 damage,21.83 popup,23.8 popup,25.62 say,25.62 end",
   "result": {
    "place": 2,
    "reason": "finish",
@@ -73317,6 +73407,7 @@
     0
    ]
   ],
+  "events": "0 say,1.93 popup,1.93 popup,2.55 popup,3.07 popup,3.5 popup,3.93 popup,3.93 popup,4.35 popup,4.37 popup,4.78 popup,4.78 popup,5.2 popup,5.22 popup,5.63 popup,6.08 popup,6.55 popup,7 popup,7 popup,7.42 popup,7.85 popup,8.28 popup,8.7 popup,8.7 popup,9.13 popup,9.13 popup,9.55 popup,9.98 popup,10.4 popup,10.83 popup,10.83 popup,11.25 popup,11.68 popup,12.12 popup,12.53 popup,12.53 popup,12.97 popup,12.97 popup,13.38 popup,13.82 popup,14.23 popup,14.67 popup,14.67 popup,15.08 popup,15.52 popup,15.95 popup,16.37 popup,16.37 popup,16.8 popup,16.8 popup,17.28 popup,17.87 popup,18.43 popup,18.9 popup,18.9 popup,19.33 popup,19.33 popup,19.75 popup,19.77 popup,20.18 popup,20.18 popup,20.6 popup,21.08 popup,21.1 popup,21.68 popup,22.22 popup,22.23 popup,22.68 popup,22.68 popup,23.1 popup,23.12 popup,23.52 say,23.52 end",
   "result": {
    "place": 1,
    "reason": "finish",
@@ -74127,6 +74218,7 @@
     0
    ]
   ],
+  "events": "0 say,1.93 popup,1.93 popup,2.57 popup,3.08 popup,3.52 popup,3.93 popup,3.93 popup,4.33 popup,4.33 popup,4.75 popup,4.75 popup,5.15 popup,5.15 popup,5.57 popup,5.97 popup,6.38 popup,6.78 popup,6.8 popup,7.2 popup,7.6 popup,8.02 popup,8.42 popup,8.43 popup,8.83 popup,8.83 popup,9.23 popup,9.65 popup,10.05 popup,10.47 popup,10.47 popup,10.87 popup,11.28 popup,11.68 popup,12.1 popup,12.1 popup,12.5 popup,12.52 popup,12.92 popup,13.32 popup,13.73 popup,14.13 popup,14.15 popup,14.55 popup,14.95 popup,15.37 popup,15.77 popup,15.78 popup,16.18 popup,16.18 popup,16.6 popup,17.08 popup,17.53 popup,17.95 popup,17.95 popup,18.35 popup,18.37 popup,18.77 popup,18.77 popup,19.17 popup,19.18 popup,19.58 popup,20 popup,20.02 popup,20.48 popup,20.92 popup,20.93 popup,21.33 popup,21.33 popup,21.73 popup,21.75 popup,22.13 say,22.13 end",
   "result": {
    "place": 1,
    "reason": "finish",
@@ -74937,6 +75029,7 @@
     0
    ]
   ],
+  "events": "0 say,1.8 popup,1.8 popup,2.37 popup,2.85 popup,3.25 popup,3.62 popup,3.63 popup,3.98 popup,4 popup,4.35 popup,4.35 popup,4.72 popup,4.72 popup,5.07 popup,5.47 popup,5.9 popup,6.28 popup,6.3 popup,6.65 popup,7.02 popup,7.38 popup,7.73 popup,7.75 popup,8.1 popup,8.1 popup,8.47 popup,8.82 popup,9.18 popup,9.55 popup,9.55 popup,9.9 popup,10.27 popup,10.63 popup,10.98 popup,11 popup,11.35 popup,11.35 popup,11.72 popup,12.07 popup,12.43 popup,12.78 popup,12.8 popup,13.15 popup,13.52 popup,13.88 popup,14.23 popup,14.25 popup,14.6 popup,14.6 popup,15.03 popup,15.57 popup,16.07 popup,16.5 popup,16.5 popup,16.88 popup,16.88 popup,17.23 popup,17.25 popup,17.6 popup,17.62 popup,17.97 popup,18.42 popup,18.42 popup,18.95 popup,19.42 popup,19.43 popup,19.83 popup,19.85 popup,20.2 popup,20.22 popup,20.57 say,20.57 end",
   "result": {
    "place": 1,
    "reason": "finish",
@@ -75747,6 +75840,7 @@
     0
    ]
   ],
+  "events": "0 say,9.18 popup,9.18 end",
   "result": {
    "place": 1,
    "reason": "stopped",
@@ -76557,6 +76651,7 @@
     0
    ]
   ],
+  "events": "0 say,9.05 popup,9.05 end",
   "result": {
    "place": 1,
    "reason": "stopped",
@@ -77367,6 +77462,7 @@
     0
    ]
   ],
+  "events": "0 say,8.45 popup,8.45 end",
   "result": {
    "place": 1,
    "reason": "stopped",
@@ -78177,6 +78273,7 @@
     0
    ]
   ],
+  "events": "0 say,0.52 popup,0.78 popup,1.12 popup,1.52 popup,7.48 say,7.48 end",
   "result": {
    "place": 1,
    "reason": "finish",
@@ -78987,6 +79084,7 @@
     0
    ]
   ],
+  "events": "0 say,0.53 popup,0.82 popup,1.17 popup,1.58 popup,7.27 say,7.27 end",
   "result": {
    "place": 1,
    "reason": "finish",
@@ -79797,6 +79895,7 @@
     0
    ]
   ],
+  "events": "0 say,0.53 popup,0.82 popup,1.15 popup,1.58 popup,6.58 say,6.58 end",
   "result": {
    "place": 1,
    "reason": "finish",

@@ -27,7 +27,7 @@ async function golden(page) {
       const tl = mode === 'gymkhana' || mode === 'brake' || mode === 'drag' ? [tracks[0]] : tracks;
       tl.forEach(track => cars.forEach(carId => {
         window.__seed(1234 + (k++) * 7919);
-        const cfg = cfgFor(mode, track, carId);
+        const cfg = cfgFor(mode, track, carId); cfg.recordEvents = true;
         const c0 = R.car(carId); cfg.car = { id: carId, body: c0.body, color: '#c33', stats: R.effStats(c0, {}) };
         const s = R.Session(cfg); s.W = 480; s.H = 270;
         R.auto = true;
@@ -39,7 +39,7 @@ async function golden(page) {
         }
         R.auto = false;
         const res = s.result ? s.result() : null;
-        out[mode + ':' + track + ':' + carId] = { rec: rec, result: res ? { place: res.place, reason: res.reason, time: res.time !== null && res.time !== undefined ? rnd(res.time) : null, score: res.score } : null };
+        out[mode + ':' + track + ':' + carId] = { rec: rec, events: s.events().length ? s.events().map(e => e[0] + ' ' + e[1]).join(',') : '', result: res ? { place: res.place, reason: res.reason, time: res.time !== null && res.time !== undefined ? rnd(res.time) : null, score: res.score } : null };
         s.stop();
       }));
     });
