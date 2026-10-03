@@ -397,7 +397,7 @@
     var PL = R.worldPlaces();
     var startId = PL[opts.start] ? opts.start : 'hm_eki';
     var node = PL[startId].node;
-    var h = -1, exits = [], hist = [], turn = 0, line = null, curSpec = null, dest = opts.dest || null, navExitH = -1;
+    var h = -1, exits = [], hist = [], turn = 0, line = null, curSpec = null, dest = opts.dest || null, navExitH = -1, tailPref = -1, tailIdx = -1, navIdx = -1, defIdx = -1;
     var placeAt = {};
     Object.keys(PL).forEach(function (k) { placeAt[PL[k].node] = k; });
 
@@ -419,11 +419,21 @@
       // 曲がる道は、先読みにせず「側道」として描く。道が勝手に曲がって見えないようにする
       var tail = -1, tn = targetNode(), navH = -1;
       if (tn >= 0 && tn !== M.to(h)) { var rt0 = M.route(M.to(h), tn); if (rt0 && rt0.hs.length) navH = rt0.hs[0]; }
-      var straightEx = exits.length ? exits.reduce(function (a2, b2) { return Math.abs(b2.ang) < Math.abs(a2.ang) ? b2 : a2; }) : null;
-      if (straightEx && Math.abs(straightEx.ang) < 0.62) tail = straightEx.h;
-      else if (navH >= 0) tail = navH;
-      else if (straightEx) tail = straightEx.h;
       navExitH = navH;
+      // 出口の決め方は実際の運転と同じ: ウインカー > ナビ > 同じ道の続き > 直進 > 左折。走っている位置では決めない
+      navIdx = -1; defIdx = -1;
+      var cur = M.roadName(h), bs = 1e9;
+      exits.forEach(function (ex, i) {
+        if (ex.h === navH) navIdx = i;
+        if (ex.dir === 'uturn' && exits.length > 1) return;
+        var sc = Math.abs(ex.ang), nm = M.roadName(ex.h);
+        if (nm === cur && !/^(市道|県道|国道|連絡路|ランプ|高速道路)$/.test(nm)) sc -= 1.2;
+        if (ex.ang < -0.62) sc += 0.5;   // 右折は左折より後
+        if (sc < bs) { bs = sc; defIdx = i; }
+      });
+      if (defIdx < 0 && exits.length) defIdx = 0;
+      tailIdx = tailPref >= 0 && tailPref < exits.length ? tailPref : navIdx >= 0 ? navIdx : defIdx;
+      if (tailIdx >= 0) tail = exits[tailIdx].h;
       var branches = exits.filter(function (ex) { return ex.h !== tail; }).map(function (ex) { return { ang: ex.ang, dir: ex.dir, name: exitLabel(ex), nav: ex.h === navH }; });
       var sp = M.edgeSpec(h, { turn: turn, junction: jn, fork: forks, tail: tail, branches: branches });
       sp.limit = limitOf(e);
@@ -434,12 +444,11 @@
     function trafficFor(e) { return ({ 0: 9, 1: 8, 2: 7, 3: 5, 4: 3, 5: 2 })[e.c] || 2; }
     function cfgFor(start) {
       var sp = spec(), e = M.edgeOf(h), s = R.load();
-      var dflt = 0, best = 9, navI = -1;
-      exits.forEach(function (ex, i) { if (Math.abs(ex.ang) < best) { best = Math.abs(ex.ang); dflt = i; } if (ex.h === navExitH) navI = i; });
+      var dflt = Math.max(0, defIdx), navI = navIdx;
       return {
         track: sp, mode: 'world', laps: Infinity, weather: opts.weather || 'clear', field: [],
         traffic: trafficFor(e), car: playerCar(s, carId), levelMul: 1,
-        exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitNames: exits.map(exitLabel),
+        exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitAngs: exits.map(function (x) { return x.ang; }), tailChoice: tailIdx, exitNames: exits.map(exitLabel),
         canBack: hist.length > 0, start: start,
         hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo,
         onViolation: violation, onBusted: busted, onEscape: escaped
@@ -590,7 +599,7 @@
       g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(x + size - 10, y + 17); g.lineTo(x + size - 10, y + 24); g.stroke();
     }
 
-    function go(newH, tn) { if (h >= 0) { hist.push(h); if (hist.length > 30) hist.shift(); } h = newH; turn = tn || 0; }
+    function go(newH, tn) { tailPref = -1; if (h >= 0) { hist.push(h); if (hist.length > 30) hist.shift(); } h = newH; turn = tn || 0; }
     w.first = function () {
       if (w.job) newOrder(node);
       var outs = M.nodes[node].out.slice(), tn = targetNode(), pickH = -1;
@@ -602,6 +611,10 @@
       return cfgFor(null);
     };
     w.next = function (carry) {
+      if (carry.retail) {   // 同じ道のまま、曲がる先（先読み）だけ作り直す
+        tailPref = carry.choice;
+        return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: carry.damage, total: carry.total, carry: carry.snap, lockedExit: carry.locked ? carry.choice : -1 });
+      }
       if (carry.back) {   // バックで前の道へ戻る
         var pv = hist.pop();
         if (pv === undefined) return null;
@@ -623,8 +636,9 @@
         return cfgFor({ speed: carry.speed * 0.3, x: -carry.x, nitro: carry.nitro, damage: carry.damage, total: 0 });
       }
       var ci = Math.min(carry.choice || 0, exits.length - 1), ex = exits[ci] || exits[0];
-      go(ex.h, ex.ang);
-      return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: fixed ? 0 : carry.damage, total: 0, copGap: carry.copGap });
+      var baked = ex.h === (tailIdx >= 0 && exits[tailIdx] ? exits[tailIdx].h : -2);   // 曲がる弧は前の道の中でもう描いてある
+      go(ex.h, baked ? ex.ang * 0.5 : ex.ang);
+      return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: fixed ? 0 : carry.damage, total: 0, copGap: carry.copGap, carry: carry.snap ? Object.assign({}, carry.snap, { shift: carry.edgeLen }) : null });
     };
     w.summary = function () {
       var out = [];

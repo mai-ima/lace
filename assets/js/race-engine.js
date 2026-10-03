@@ -1571,6 +1571,20 @@
     if (spec.train) traffic.push({ body: 'train', color: spec.train === 'entetsu' ? '#d32f2f' : '#eceff1', traffic: true, train: true, wm: 1.35,
                                    total: pz() + SEG * 60, offset: spec.water === 'left' ? 2.6 : -2.6, speed: MAX * 0.28, cruise: MAX * 0.28, dir: 1, passed: true });
 
+    /* 前の道（同じ交差点の手前の作り直しも含む）から、一般車とパトカーを引き継ぐ */
+    var carryIn = cfg.start && cfg.start.carry;
+    if (carryIn && mode === 'world') {
+      var sh = carryIn.shift || 0, keepT = traffic.filter(function (t) { return t.train; });
+      traffic = keepT.concat((carryIn.traffic || []).map(function (t) { var c = Object.assign({}, t); c.total = t.total - sh; return c; })
+        .filter(function (t) { return t.total > P.total - SEG * 12 && t.total < P.total + SEG * 420; }));
+      if (carryIn.cops && carryIn.cops.length) {
+        cops = carryIn.cops.map(function (c) { var o = Object.assign({}, c); o.total = c.total - sh; return o; });
+        wantedT = carryIn.wantedT || 0; escapeT = carryIn.escapeT || 0; bustHits = carryIn.bustHits || 0;
+        if (!sirenA && R.sirenAudio) sirenA = R.sirenAudio();
+      }
+      if (!sh && carryIn.sigT !== undefined) sig.t = carryIn.sigT;   // 同じ交差点なら信号の位相も続ける
+    }
+
     /* --- 状態 --- */
     var state = demo || cfg.start ? 'race' : 'count', countT = 3.2, raceT = 0, keys = {};
     var msg = { text: '', t: 0 }, popups = [], parts = [], dyn = [];
@@ -1598,21 +1612,29 @@
     function canReverse() { return mode !== 'drag' && mode !== 'brake' && !P.finished && state === 'race'; }
     /* ウインカー: -1 左 / 0 なし / 1 右。交差点ではこれで曲がる方向を決める */
     P.blink = 0;
-    function chooseExit() {
-      var d = cfg.exitDirs, i, best = -1;
-      if (P.blink < 0) { for (i = 0; i < d.length; i++) if (d[i] === 'left' || d[i] === 'uturn') { best = i; break; } }
-      else if (P.blink > 0) { for (i = d.length - 1; i >= 0; i--) if (d[i] === 'right' || d[i] === 'uturn') { best = i; break; } }
-      if (best < 0) {
-        if (P.blink === 0 && cfg.exitNav >= 0 && cfg.exitNav < d.length) return cfg.exitNav;   // ウインカーなしなら、ナビの道
-        best = d.indexOf('straight');
-        if (best < 0) {
-          // 直進が無いとき: 走っている位置（左寄り・右寄り）で選ぶ。真ん中ならもっとも真っすぐに近い道
-          if (P.blink === 0 && d.length >= 2 && Math.abs(P.x) > 0.3) best = P.x < 0 ? 0 : d.length - 1;
-          else best = cfg.exitDefault !== undefined ? cfg.exitDefault : 0;
-        }
-        if (P.blink < 0) best = 0; else if (P.blink > 0) best = d.length - 1;
+    var lockedExit = cfg.start && cfg.start.lockedExit >= 0 ? cfg.start.lockedExit : -1, retailCool = 0;
+    function pickExit() {   // 実際の運転と同じ: ウインカー > ナビ > 同じ道の続き・直進・左折（走っている位置では決めない）
+      var d = cfg.exitDirs, A = cfg.exitAngs || [], i, best = -1;
+      if (P.blink !== 0) {
+        var want = P.blink < 0 ? 'left' : 'right';
+        for (i = 0; i < d.length; i++) if (d[i] === want && (best < 0 || Math.abs(A[i] || 0) < Math.abs(A[best] || 0))) best = i;
       }
+      if (best < 0) best = cfg.exitNav >= 0 && cfg.exitNav < d.length ? cfg.exitNav : (cfg.exitDefault || 0);
       return best;
+    }
+    function chooseExit() { return lockedExit >= 0 ? lockedExit : pickExit(); }
+    /* 停止線の約 30m 手前で出口を確定し、曲がる先（先読み）を作り直す。確定後はウインカーを変えても変わらない */
+    function watchExit(dt) {
+      if (retailCool > 0) retailCool -= dt;
+      if (mode !== 'world' || edgeDone || !cfg.exitDirs || cfg.exitDirs.length < 2 || !spec.stopSeg || !cfg.onEdgeEnd) return;
+      var zl = spec.stopSeg * SEG - pz();
+      if (zl < SEG * 22 && lockedExit < 0) lockedExit = pickExit();
+      var want = chooseExit();
+      if (want !== cfg.tailChoice && zl > SEG * 4 && retailCool <= 0) {
+        retailCool = 0.5; edgeDone = true;
+        var ok = cfg.onEdgeEnd({ retail: true, choice: want, locked: lockedExit >= 0, total: P.total, speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, snap: sess.snapshot() });
+        if (ok === false) { edgeDone = false; cfg.tailChoice = want; }
+      }
     }
     sess.exitChoice = function () { return cfg.exitDirs ? chooseExit() : null; };
     function cv(sg) { return sg.phys !== undefined ? sg.phys : sg.curve; }   // 物理で使うカーブ（実在の道は別に持つ）
@@ -1788,6 +1810,7 @@
       P.x = clamp(P.x, -2.6, 2.6);
       if (P.bump > 0) P.bump -= dt;
       topKmh = Math.max(topKmh, kmh(P.speed));
+      watchExit(dt);
 
       var move = P.speed * dt;
       if (move < 0 && P.total + move < 0) {
@@ -1810,11 +1833,11 @@
       if (mode === 'world' && !edgeDone && P.total >= edgeLen - SEG * 3) {
         edgeDone = true;
         var nx = cfg.exits || 1, ch = 0;
-        if (cfg.exitDirs) ch = chooseExit();   // ウインカーで選ぶ（車線はそのまま）
+        if (cfg.exitDirs) ch = lockedExit >= 0 ? lockedExit : pickExit();   // ウインカー・ナビ・道の続きで決まる（走っている位置では決めない）
         else if (nx === 2) ch = P.x < 0 ? 0 : 1;
         else if (nx >= 3) ch = P.x < -0.3 ? 0 : P.x > 0.3 ? 2 : 1;
         if (sirenA) { sirenA.stop(); sirenA = null; }
-        if (cfg.onEdgeEnd && cfg.onEdgeEnd({ speed: P.speed, x: clamp(P.x, -0.9, 0.9), nitro: P.nitro, damage: P.damage, choice: ch,
+        if (cfg.onEdgeEnd && cfg.onEdgeEnd({ speed: P.speed, x: clamp(P.x, -0.9, 0.9), nitro: P.nitro, damage: P.damage, choice: ch, edgeLen: edgeLen, snap: sess.snapshot(),
                                            copGap: cops.length ? clamp(pz() - cops[0].total, SEG * 5, SEG * 200) : 0 }) === false) {
           edgeDone = false; P.speed = 0; P.total = Math.max(0, edgeLen - SEG * 6);   // 進めない（行き止まり）: 手前で止める
         }
@@ -3025,7 +3048,7 @@
       }
     }
 
-    if (cfg.start && cfg.start.copGap && mode === 'world') startPursuit(cfg.start.copGap);
+    if (cfg.start && cfg.start.copGap && mode === 'world' && !cops.length) startPursuit(cfg.start.copGap);
 
     /* --- 外に見せるもの --- */
     sess.W = W; sess.H = H;
@@ -3043,6 +3066,10 @@
     sess.state = function () { return state; };
     sess.result = function () { return result; };
     // 交差点で次の道へ移るとき、エンジン音を切らずに引き継ぐ（音の途切れをなくす）
+    sess.snapshot = function () {
+      return { traffic: traffic.filter(function (t) { return !t.train && t.total > -1e8; }).map(function (t) { return Object.assign({}, t); }),
+               cops: cops.map(function (c) { return Object.assign({}, c); }), wantedT: wantedT, escapeT: escapeT, bustHits: bustHits, sigT: sig.t };
+    };
     sess.detachAudio = function () { keepAudio = true; return eng; };
     sess.stop = function () { if (!keepAudio) eng.stop(); if (sirenA) { sirenA.stop(); sirenA = null; } };
     sess.track = T;

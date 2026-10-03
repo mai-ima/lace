@@ -676,7 +676,7 @@
       }
       return { i: 1, x: p[0], z: p[1], y: p[2] };
     }
-    var m = q.length / 3;
+    var m = q.length / 3, N0 = { x: p[(n - 1) * 3], z: p[(n - 1) * 3 + 1] };
     function fwdPt(dist) {
       var d = 0;
       for (var i = 1; i < m; i++) {
@@ -686,6 +686,9 @@
       }
       return { i: m - 1, x: q[(m - 1) * 3], z: q[(m - 1) * 3 + 1], y: q[(m - 1) * 3 + 2] };
     }
+    // 曲がる角度に応じて弧の大きさを変える（左折は小回り、右折は大回り）。向きは終端の 10m 手前と、次の道の 10m 先から
+    var pa = backPt(10), qb = fwdPt(10), turnA = wrap(Math.atan2(qb.x - N0.x, qb.z - N0.z) - Math.atan2(N0.x - pa.x, N0.z - pa.z)), tk = Math.min(1, Math.abs(turnA) / 1.5);
+    R2 = turnA < 0 ? 12 + 8 * tk : 10 + 5 * tk;
     var a = backPt(Math.min(R2, 0.3 * lenOf(p))), b = fwdPt(Math.min(R2, 0.3 * lenOf(q)));
     var out = [], ost = [];
     for (var i = 0; i < a.i; i++) { out.push(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]); if (i < a.i - 1) ost.push(st[i] || 0); }
@@ -697,9 +700,8 @@
       out.push(u * u * a.x + 2 * u * t * N.x + t * t * b.x, u * u * a.z + 2 * u * t * N.z + t * t * b.z, u * u * a.y + 2 * u * t * N.y + t * t * b.y);
       ost.push(0);
     }
-    // 交差点（弧の真ん中）までの距離
-    var lenA = lenOf(new Float32Array(out.slice(0, out.length - 8 * 3 + 3)));
-    jd = lenA + Math.hypot(N.x - a.x, N.z - a.z) * 0.9;
+    // 交差点（弧の真ん中）までの距離。曲がる先が違っても同じ位置になるよう、もとの道の長さから決める（停止線がずれない）
+    jd = lenOf(p) - 0.9;
     var d2 = 0;
     for (var j = b.i; j < m && d2 < maxLen; j++) {
       d2 += Math.hypot(q[j * 3] - q[j * 3 - 3], q[j * 3 + 1] - q[j * 3 - 2]);
