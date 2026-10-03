@@ -731,7 +731,8 @@
     /* --- キー --- */
     function onKey(k) {
       if (app.keyHook && app.keyHook(k) !== false) return;
-      if (app.mode === 'race' && app.sess) {
+      if (app.mode === 'race' && app.paused && (k === 'Backspace' || k === 'q' || k === 'Q')) { resume(); return; }   // 一時停止中のメニューは、運転ではなくメニューの操作
+      if (app.mode === 'race' && app.sess && !app.paused) {
         if (k === 'Escape' || k === 'p' || k === 'P') { pause(); return; }
         if (k === 'o' || k === 'O' || k === 'F2') { pause(); adminOverlay(); return; }
         if (R.ENABLE_3D && (k === 'v' || k === 'V')) { R.edit(function (s) { s.r3d = !s.r3d; }); if (R.load().r3d) attach3D(); else detach3D(); return; }

@@ -1648,6 +1648,7 @@
       if (best < 0) best = cfg.exitNav >= 0 && cfg.exitNav < d.length ? cfg.exitNav : (cfg.exitDefault || 0);
       return best;
     }
+    var wantPrev = cfg.tailChoice, wantT = 0;
     function chooseExit() { return lockedExit >= 0 ? lockedExit : pickExit(); }
     /* 停止線の約 30m 手前で出口を確定し、曲がる先（先読み）を作り直す。確定後はウインカーを変えても変わらない */
     function watchExit(dt) {
@@ -1656,7 +1657,8 @@
       var zl = spec.stopSeg * SEG - pz();
       if (zl < SEG * 22 && lockedExit < 0) lockedExit = pickExit();
       var want = chooseExit();
-      if (want !== cfg.tailChoice && zl > SEG * 4 && retailCool <= 0) {
+      if (want !== wantPrev) { wantPrev = want; wantT = 0; } else wantT += dt;   // ウインカーを切り替え続けている間は作り直さない（約 0.35 秒変わらなければ）
+      if (want !== cfg.tailChoice && zl > SEG * 4 && retailCool <= 0 && (wantT >= 0.35 || lockedExit >= 0)) {
         retailCool = 0.5; edgeDone = true;
         var ok = cfg.onEdgeEnd({ retail: true, choice: want, locked: lockedExit >= 0, blink: P.blink, total: P.total, speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, snap: sess.snapshot() });
         if (ok === false) { edgeDone = false; cfg.tailChoice = want; }
