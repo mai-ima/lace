@@ -397,7 +397,7 @@
     var PL = R.worldPlaces();
     var startId = PL[opts.start] ? opts.start : 'hm_eki';
     var node = PL[startId].node;
-    var h = -1, exits = [], hist = [], turn = 0, line = null, curSpec = null, dest = opts.dest || null, navExitH = -1, tailPref = -1, tailIdx = -1, navIdx = -1, defIdx = -1;
+    var h = -1, exits = [], hist = [], turn = 0, line = null, curSpec = null, dest = opts.dest || null, navExitH = -1, tailPref = -1, tailIdx = -1, navIdx = -1, defIdx = -1, deadAt = -1;
     var placeAt = {};
     Object.keys(PL).forEach(function (k) { placeAt[PL[k].node] = k; });
 
@@ -616,7 +616,7 @@
     w.next = function (carry) {
       if (carry.retail) {   // 同じ道のまま、曲がる先（先読み）だけ作り直す
         tailPref = carry.choice;
-        return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: carry.damage, total: carry.total, carry: carry.snap, lockedExit: carry.locked ? carry.choice : -1 });
+        return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: carry.damage, total: carry.total, carry: carry.snap, blink: carry.blink, lockedExit: carry.locked ? carry.choice : -1 });
       }
       if (carry.back) {   // バックで前の道へ戻る
         var pv = hist.pop();
@@ -630,14 +630,15 @@
         go(rv, 0);
         return cfgFor({ speed: 0, x: carry.x, nitro: carry.nitro, damage: carry.damage, frac: 1 - carry.frac });
       }
-      var fixed = arrive(M.to(h));
-      if (!exits.length) {   // 行き止まり: 戻れる道があれば U ターン、無ければ止まる
+      if (!exits.length) {   // 行き止まり: 戻れる道があれば U ターン、無ければ止まる（到着の処理は 1 度だけ）
+        if (deadAt !== h) { deadAt = h; arrive(M.to(h)); }
         var dv = M.rev(h);
         if (dv < 0) { w.flash = { text: L('行き止まりです（R で戻れません）', 'Dead end'), t: 3 }; return null; }
         go(dv, 0);
         w.flash = { text: L('行き止まり: 引き返します', 'Dead end: turning back'), t: 3 };
         return cfgFor({ speed: carry.speed * 0.3, x: -carry.x, nitro: carry.nitro, damage: carry.damage, total: 0 });
       }
+      var fixed = arrive(M.to(h));
       var ci = Math.min(carry.choice || 0, exits.length - 1), ex = exits[ci] || exits[0];
       var baked = ex.h === (tailIdx >= 0 && exits[tailIdx] ? exits[tailIdx].h : -2);   // 曲がる弧は前の道の中でもう描いてある
       go(ex.h, baked ? ex.ang * 0.5 : ex.ang);
@@ -1337,8 +1338,8 @@
           });
           row.appendChild(mc);
           var info = el('div', 'rx-info');
-          info.appendChild(el('div', 'rx-s', L('交差点で曲がるときは Q（左）／ E（右）でウインカーを出します。出していなければ直進。ナビの矢印（← → ↑）に従うと目的地へ。↓を押し続けると停止後バック、R で U ターン。地図はドラッグで移動・ホイールで拡大。',
-                                                 'At junctions signal with Q (left) / E (right); no signal = straight. Follow the nav arrows. Hold ↓ after stopping to reverse, R to U-turn. Drag / wheel the map.')));
+          info.appendChild(el('div', 'rx-s', L('交差点で曲がるときは Q（左）／ E（右）でウインカーを出します（停止線の約 30m 手前で確定）。出していなければ、ナビがあればナビの道、なければ同じ道の続き・直進、直進が無い T 字は左折。↓を押し続けると停止後バック、R で U ターン。地図はドラッグで移動・ホイールで拡大。',
+                                                 'At junctions signal with Q (left) / E (right); locked ~30 m before the stop line. No signal: nav route, else the continuing road / straight, else left at a T-junction. Hold ↓ after stopping to reverse, R to U-turn. Drag / wheel the map.')));
           if (job === 'taxi') info.appendChild(el('div', 'rx-s', L('タクシーの車で走ります。', 'You drive the company taxi.')));
           var keys = Object.keys(PL);
           var rows = [];

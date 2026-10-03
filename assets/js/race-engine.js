@@ -1637,8 +1637,8 @@
     function kmh(v) { return Math.round(Math.abs(v) / MAX * 280); }
     function canReverse() { return mode !== 'drag' && mode !== 'brake' && !P.finished && state === 'race'; }
     /* ウインカー: -1 左 / 0 なし / 1 右。交差点ではこれで曲がる方向を決める */
-    P.blink = 0;
-    var lockedExit = cfg.start && cfg.start.lockedExit >= 0 ? cfg.start.lockedExit : -1, retailCool = 0;
+    P.blink = cfg.start && cfg.start.blink ? cfg.start.blink : 0;   // 先読みの作り直しでもウインカーは点けたまま
+    var lockedExit = cfg.start && cfg.start.lockedExit >= 0 ? cfg.start.lockedExit : -1, retailCool = cfg.start && cfg.start.lockedExit !== undefined ? 0.5 : 0;
     function pickExit() {   // 実際の運転と同じ: ウインカー > ナビ > 同じ道の続き・直進・左折（走っている位置では決めない）
       var d = cfg.exitDirs, A = cfg.exitAngs || [], i, best = -1;
       if (P.blink !== 0) {
@@ -1658,7 +1658,7 @@
       var want = chooseExit();
       if (want !== cfg.tailChoice && zl > SEG * 4 && retailCool <= 0) {
         retailCool = 0.5; edgeDone = true;
-        var ok = cfg.onEdgeEnd({ retail: true, choice: want, locked: lockedExit >= 0, total: P.total, speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, snap: sess.snapshot() });
+        var ok = cfg.onEdgeEnd({ retail: true, choice: want, locked: lockedExit >= 0, blink: P.blink, total: P.total, speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, snap: sess.snapshot() });
         if (ok === false) { edgeDone = false; cfg.tailChoice = want; }
       }
     }
