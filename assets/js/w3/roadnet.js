@@ -98,6 +98,25 @@ export function build(D, heightAt) {
     if (f.highway === 'stop') { const j = nearJ(F.p[0], F.p[1], 25); if (j) j.stop = true; }
   });
 
+  // 近い交差点をまとめる（osm2streets の consolidate intersections に相当）。上下線が分かれた大通りどうしの交差点は、
+  // OSM では 2〜4 個の点と短い道でできているので、信号のある交差点で 28m 未満の道でつながる点を 1 つの交差点として扱う
+  const parent = new Map(), find = i => { while (parent.get(i) !== i) { parent.set(i, parent.get(parent.get(i))); i = parent.get(i); } return i; };
+  nodes.forEach(n => parent.set(n.id, n.id));
+  edges.forEach(e => {
+    const A = nodes.get(e.a), B = nodes.get(e.b);
+    if (A.arms.length >= 3 && B.arms.length >= 3 && e.len < 28 && e.pr.rank <= 6 && (A.sig || B.sig)) { e.internal = true; parent.set(find(e.a), find(e.b)); }
+  });
+  const clusters = new Map();
+  nodes.forEach(n => { const r = find(n.id); if (!clusters.has(r)) clusters.set(r, []); clusters.get(r).push(n); });
+  const groups = [];
+  clusters.forEach(ms => {
+    if (ms.length < 2) return;
+    const C = { members: ms, x: 0, z: 0, sig: ms.some(m => m.sig), cross: ms.some(m => m.cross), id: ms[0].id };
+    ms.forEach(m => { C.x += m.x / ms.length; C.z += m.z / ms.length; });
+    ms.forEach(m => { m.cluster = C; m.sig = C.sig; m.cross = m.cross || C.sig; });
+    groups.push(C);
+  });
+
   // 腕（交差点から出ていく向き）の情報
   function armInfo(n, arm) {
     const e = arm.e, pts = arm.end === 0 ? e.pts : e.pts.slice().reverse();
@@ -165,6 +184,18 @@ export function build(D, heightAt) {
     n.poly = poly; n.A = A;
     junctions.push(n);
   });
+  // まとめた交差点: 外へ出る腕の切り口を包む多角形（凸包）と、外へ出る腕の一覧（中心からの距離と横のずれ）
+  groups.forEach(C => {
+    const pts = [], A = [];
+    C.members.forEach(n => (n.A || []).forEach(a => {
+      if (a.arm.e.internal) return;
+      const nm = [a.d[1], -a.d[0]], np = [-a.d[1], a.d[0]], ex = n.x + a.d[0] * a.trim, ez = n.z + a.d[1] * a.trim;
+      pts.push([ex + nm[0] * a.hw, ez + nm[1] * a.hw], [ex + np[0] * a.hw, ez + np[1] * a.hw]);
+      // 中心から見た切り口までの距離と、腕の中心線の横のずれ（+ 側 = d を +90 度回した向き）
+      A.push(Object.assign({}, a, { trim: (ex - C.x) * a.d[0] + (ez - C.z) * a.d[1], lat: (n.x - C.x) * np[0] + (n.z - C.z) * np[1], node: n }));
+    }));
+    C.poly = hull2(pts); C.A = A;
+  });
   // 道路の帯（切り戻したあと）
   edges.forEach(e => {
     const P2 = cut(e.pts, e.trimA, e.len - e.trimB);
@@ -178,7 +209,16 @@ export function build(D, heightAt) {
     const bx = t[0][0] - t[1][0], bz = t[0][1] - t[1][1], bl = len2(bx, bz) || 1;   // 0 番の腕の向き（外向き）の平均
     n.arms.forEach((arm, k) => { const s = k === 0 ? 1 : -1; arm.e[arm.end === 0 ? 'dirA' : 'dirB'] = [s * bx / bl * (arm.end === 0 ? 1 : -1), s * bz / bl * (arm.end === 0 ? 1 : -1)]; });
   });
-  return { nodes, edges, junctions, MARK };
+  return { nodes, edges, junctions, groups, MARK };
+}
+
+function hull2(P) {
+  if (P.length < 3) return P;
+  P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
 }
 
 /** 折れ線の [from, to] の区間を切り出す */
@@ -251,16 +291,19 @@ export function markings(net) {
   }
   net.edges.forEach(e => {
     const pr = e.pr, Ltot = lineLen(e.line);
-    if (pr.rank >= 7 || Ltot < 2) return;   // 住宅地の細い道・私道には線を引かない
+    if (e.internal || Ltot < 2) return;   // まとめた交差点の中の短い道には線を引かない
     const jA = net.nodes.get(e.a), jB = net.nodes.get(e.b);
+    const minor = pr.rank >= 7;   // 住宅地の細い道・私道は、区画線は引かず、信号のある交差点の停止線と横断歩道だけ
     const nearA = jA && jA.arms.length >= 3 ? M.solidNear : 0, nearB = jB && jB.arms.length >= 3 ? M.solidNear : 0;
     const nl = pr.fw + pr.bw, x0 = -pr.hw + pr.edge;   // 車道の端（− 側）
+    const cOff = x0 + pr.fw * pr.lw;
+    junctionMarks0(e, jA, jB, Ltot, pr, x0, cOff, minor);
+    if (minor) return;
     // 外側線
     quadAlong(e, -pr.hw + pr.edge * 0.5, M.edge, 0, Ltot, 'w');
     quadAlong(e, pr.hw - pr.edge * 0.5, M.edge, 0, Ltot, 'w');
     // 中央線（両方向の道）: 4 車線以上は実線、2 車線は破線（交差点の手前 30m は実線）
     // 左側通行: 進行方向（a→b）の車線は − 側（座標の向きで「進行方向の左」は − 側）
-    const cOff = x0 + pr.fw * pr.lw;
     if (pr.centerLine) {
       if (nl >= 4) quadAlong(e, cOff, M.centerWide, 0, Ltot, 'w');
       else dashed(e, cOff, M.center, M.centerDash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2));
@@ -268,9 +311,12 @@ export function markings(net) {
     // 車線境界線（同じ向きの車線の間）
     for (let k = 1; k < pr.fw; k++) dashed(e, x0 + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2));
     for (let k = 1; k < pr.bw; k++) dashed(e, cOff + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2));
-    // 交差点の手前: 横断歩道と停止線（信号か横断歩道のある交差点）
+  });
+  return out;
+  // 交差点の手前: 横断歩道と停止線（信号か横断歩道のある交差点）
+  function junctionMarks0(e, jA, jB, Ltot, pr, x0, cOff, minor) {
     [[jA, 0, 1], [jB, Ltot, -1]].forEach(([j, s, dir]) => {
-      if (!j || j.arms.length < 3 || !(j.sig || j.cross)) return;
+      if (!j || j.arms.length < 3 || !(j.sig || (j.cross && !minor))) return;
       const cw0 = s + dir * 0.5, cw1 = s + dir * (0.5 + M.cwLen);
       // 横断歩道（車道の全幅、縞は道路の進行方向と平行）
       for (let o = -pr.hw + 0.3; o + M.cwStripe <= pr.hw - 0.3; o += M.cwStripe + M.cwGap) quadAlong(e, o + M.cwStripe / 2, M.cwStripe, Math.min(cw0, cw1), Math.max(cw0, cw1), 'w');
@@ -280,18 +326,20 @@ export function markings(net) {
       if (dir === 1 && pr.bw > 0) quadAlong(e, cOff + pr.bw * pr.lw / 2, pr.bw * pr.lw, s0, s1, 'w');
       if (dir === -1 && pr.fw > 0) quadAlong(e, x0 + pr.fw * pr.lw / 2, pr.fw * pr.lw, s0, s1, 'w');
     });
-  });
-  return out;
+  }
 }
 export function lineLen(L) { let s = 0; for (let i = 1; i < L.length; i++) s += len2(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]); return s; }
 
 /** 信号機の置き場所: 交差点へ向かう車線ごとに、交差点の向こう側の左の角（日本の一般的な配置） */
 export function signals(net) {
   const out = [];
-  net.junctions.forEach(n => {
-    if (!n.sig) return;
+  // 信号の単位: まとめた交差点（外へ出る腕だけ）と、ふつうの交差点
+  const units = net.groups.filter(C => C.sig).map(C => ({ x: C.x, z: C.z, A: C.A, id: C.id }))
+    .concat(net.junctions.filter(n => n.sig && !n.cluster).map(n => ({ x: n.x, z: n.z, A: n.A, id: n.id })));
+  units.forEach(n => {
     // 現示のグループ: いちばん格の高い腕の向きと平行な腕は主道路（0）、それ以外は従道路（1）
     let main = n.A[0]; n.A.forEach(a => { if (a.arm.e.pr.rank < main.arm.e.pr.rank) main = a; });
+    if (!main) return;
     const art = main.arm.e.pr.rank <= 2;   // 幹線（国道・主要地方道）は黄 4 秒
     n.A.forEach(a => {
       const grp = Math.abs(a.d[0] * main.d[0] + a.d[1] * main.d[1]) > Math.SQRT1_2 ? 0 : 1;
@@ -303,7 +351,11 @@ export function signals(net) {
       let far = 0; n.A.forEach(b => { if (b !== a) far = Math.max(far, b.trim * Math.max(0, b.d[0] * tx + b.d[1] * tz)); });
       far = Math.max(far, a.trim * 0.8);
       const lx = tz, lz = -tx;
-      out.push({ x: n.x + tx * (far + 2) + lx * (pr.hw + 1.2), z: n.z + tz * (far + 2) + lz * (pr.hw + 1.2), face: Math.atan2(-tx, -tz), arm: Math.max(2.0, Math.min(6.0, 1.2 + pr.edge + inLanes * pr.lw * 0.5))   /* 灯器を進入車線の中央の上に */, junction: n.id, grp, art });
+      // 腕の中心線の横のずれ（a.lat は d の +90 度側。運転者の左 = d の −90 度側なので符号が逆）
+      const side = -(a.lat || 0) + pr.hw + 1.2;
+      out.push({ x: n.x + tx * (far + 2) + lx * side, z: n.z + tz * (far + 2) + lz * side, face: Math.atan2(-tx, -tz),
+        arm: Math.max(2.0, Math.min(6.0, 1.2 + pr.edge + inLanes * pr.lw * 0.5)),   /* 灯器を進入車線の中央の上に */
+        junction: n.id, grp, art });
     });
   });
   return out;

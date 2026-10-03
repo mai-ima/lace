@@ -106,7 +106,7 @@ export function buildWorld(scene, W, gfx) {
     const pr = e.pr;
     let g = strip(ribbon(e, -pr.hw, pr.hw), 0.05, true);
     roadGeos.push(g);
-    if (pr.walk > 0) [[-1], [1]].forEach(([s]) => {
+    if (pr.walk > 0 && !e.internal) [[-1], [1]].forEach(([s]) => {
       const a = s < 0 ? -pr.hw - pr.walk : pr.hw, b = s < 0 ? -pr.hw : pr.hw + pr.walk;
       walkGeos.push(strip(ribbon(e, a, b), 0.2, true));
       const R = ribbon(e, s < 0 ? -pr.hw : pr.hw, s < 0 ? -pr.hw : pr.hw);
@@ -118,6 +118,14 @@ export function buildWorld(scene, W, gfx) {
     let cx = 0, cz = 0; P.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= m; cz /= m;
     pos.set([cx, terr.at(cx, cz) + 0.055, cz], 0);
     P.forEach((p, i) => { pos.set([p[0], terr.at(p[0], p[1]) + 0.055, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
+    roadGeos.push(upGeo(pos, ix));
+  });
+  // まとめた交差点（上下線が分かれた大通りどうし）: 外へ出る腕の切り口を包む面。中央分離帯の切れ目も舗装にする
+  net.groups.forEach(C => {
+    const P = C.poly, m = P.length; if (m < 3) return;
+    const pos = new Float32Array((m + 1) * 3), ix = [];
+    pos.set([C.x, terr.at(C.x, C.z) + 0.045, C.z], 0);
+    P.forEach((p, i) => { pos.set([p[0], terr.at(p[0], p[1]) + 0.045, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
     roadGeos.push(upGeo(pos, ix));
   });
   const roadMat = new THREE.MeshStandardMaterial({ map: asph, color: 0xa4a6aa, roughness: 0.9, metalness: 0 });
@@ -171,7 +179,9 @@ export function buildWorld(scene, W, gfx) {
     [[0.86, 0.84, 0.8], [0.8, 0.78, 0.72]]];
   const ROOF = [[[0.36, 0.37, 0.39], [0.3, 0.24, 0.2], [0.3, 0.36, 0.42], [0.5, 0.3, 0.24], [0.48, 0.48, 0.46]],
     [[0.62, 0.62, 0.6]], [[0.58, 0.58, 0.56], [0.5, 0.52, 0.54]], [[0.7, 0.72, 0.72], [0.52, 0.58, 0.64], [0.6, 0.6, 0.58]], [[0.6, 0.6, 0.58]]];
-  const col = new Float32Array(B.pos.length), roof = new Float32Array(B.pos.length), bi = new Float32Array(B.pos.length);
+  const col = new Float32Array(B.pos.length), roof = new Float32Array(B.pos.length), bi = new Float32Array(B.pos.length), cen = new Float32Array(B.bid.length * 2);
+  const bcx = new Float64Array(nb), bcz = new Float64Array(nb), bcn = new Uint32Array(nb);
+  for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v]; bcx[k] += B.pos[v * 3]; bcz[k] += B.pos[v * 3 + 2]; bcn[k]++; }
   const hash = (k, s2) => (((k + 1) * 2654435761 ^ (s2 * 40503)) >>> 0) / 4294967296;
   for (let v = 0; v < B.bid.length; v++) {
     const k = B.bid[v], inf = B.info[k] || {}, h = yHi[k] - yLo[k];
@@ -181,24 +191,28 @@ export function buildWorld(scene, W, gfx) {
     const w = wl[Math.floor(hash(k, 1) * wl.length)], r = rf[Math.floor(hash(k, 2) * rf.length)], j = 0.94 + hash(k, 3) * 0.1;
     col.set([w[0] * j, w[1] * j, w[2] * j], v * 3); roof.set([r[0] * j, r[1] * j, r[2] * j], v * 3);
     bi.set([yLo[k], yHi[k], kind + hash(k, 4) * 0.5], v * 3);
+    cen.set([Math.round(bcx[k] / bcn[k]), Math.round(bcz[k] / bcn[k])], v * 2);
   }
   bg.setAttribute('color', new THREE.BufferAttribute(col, 3));
   bg.setAttribute('aRoof', new THREE.BufferAttribute(roof, 3));
   bg.setAttribute('aBld', new THREE.BufferAttribute(bi, 3));
+  bg.setAttribute('aCen', new THREE.BufferAttribute(cen, 2));
   const bmat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02, flatShading: true });
   // 窓（シェーダー）: 階の高さは種類ごと（戸建て 2.9m・共同住宅 2.9m・事務所 3.6m）、1 階は店の大きなガラス、屋上の手すり部分は窓なし
   bmat.onBeforeCompile = sh => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld;\nfloat h21(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen;\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
         vec3 wdx = dFdx(vWP), wdy = dFdy(vWP); vec3 fn = normalize(cross(wdx, wdy));
         float kind = floor(vBld.z), rel = vWP.y - vBld.x, top = vBld.y - vBld.x;
         if (abs(fn.y) > 0.3) { diffuseColor.rgb = vRoof; }
         else {
           float fh = kind < 1.5 ? 2.9 : 3.6, bay = kind < 0.5 ? 3.4 : kind < 1.5 ? 3.0 : kind < 2.5 ? 1.8 : 6.0;
-          float u = dot(vWP.xz, normalize(vec2(-fn.z, fn.x)));
-          float fl = floor(rel / fh), fy = fract(rel / fh), fu = fract(u / bay), cell = h21(vec2(floor(u / bay), fl) + vBld.z * 7.0);
+          // 壁に沿った座標（建物の中心を原点にして、法線の微小な誤差で値がぶれないようにする）
+          vec2 wd = normalize(vec2(-fn.z, fn.x)); wd = normalize(floor(wd * 512.0 + 0.5));
+          float u = dot(vWP.xz - vCen, wd);
+          float fl = floor(rel / fh), fy = fract(rel / fh), fu = fract(u / bay), cell = h21(vec2(floor(u / bay), fl) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0);   // 建物ごとの値は補間の誤差を丸めてから使う
           float wy0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.32 : 0.22, wy1 = kind < 1.5 ? 0.78 : 0.86;
           float wu0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.12 : 0.04, wu1 = 1.0 - wu0;
           float win = step(wy0, fy) * step(fy, wy1) * step(wu0, fu) * step(fu, wu1);
@@ -212,7 +226,7 @@ export function buildWorld(scene, W, gfx) {
           vec3 glass = mix(vec3(0.1, 0.12, 0.14), sky, 0.35 + 0.4 * cell);
           if (shop > 0.5) glass = mix(vec3(0.18, 0.17, 0.15), vec3(0.42, 0.4, 0.36), cell);
           // 遠くでは窓の格子がちらつくので、画素あたりの格子の大きさに応じて平均の色へ寄せる
-          float fw = max(fwidth(u / bay), fwidth(rel / fh)), far2 = smoothstep(0.18, 0.5, fw);
+          float fw = max(length(fwidth(vWP.xz)) / bay, fwidth(vWP.y) / fh), far2 = smoothstep(0.18, 0.5, fw);
           float cover = (wy1 - wy0) * (wu1 - wu0) * (kind > 2.5 && kind < 3.5 ? 0.1 : kind < 0.5 ? 0.75 : 1.0);
           win = mix(win * (1.0 - mull * 0.8), cover, far2);
           diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
@@ -233,7 +247,7 @@ export function buildWorld(scene, W, gfx) {
   }
   out.buildingMeshes = [];
   chunks.forEach(ix => {
-    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
+    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
     g.setIndex(new THREE.BufferAttribute(new Uint32Array(ix), 1));
     const sp = new THREE.Sphere(), V = new THREE.Vector3(), box = new THREE.Box3();
     for (let i = 0; i < ix.length; i++) box.expandByPoint(V.fromArray(B.pos, ix[i] * 3));
