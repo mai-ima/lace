@@ -74,12 +74,34 @@ export function buildWorld(scene, W, gfx) {
     out.ortho.colorSpace = THREE.SRGBColorSpace; out.ortho.anisotropy = 8;
   });
   const groundMat = new THREE.MeshStandardMaterial({ map: out.ortho, roughness: 0.95, metalness: 0 });
+  // 近くで航空写真のぼけを隠す: 写真の色から「緑（草）」か「それ以外（土・舗装）」かを見て、細かい質感（2.5m 周期）を明るさだけ重ねる。
+  // 遠くでは重ねない（繰り返し模様が見えないように）
+  const grassT = photoTex('grass', 1, true), dirtT = photoTex('asphalt', 1, true);
+  if (grassT && dirtT) {
+    groundMat.onBeforeCompile = sh => {
+      sh.uniforms.tGrass = { value: grassT }; sh.uniforms.tDirt = { value: dirtT };
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP; uniform sampler2D tGrass; uniform sampler2D tDirt;')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          float dist = length(vGP - cameraPosition), near = 1.0 - smoothstep(25.0, 140.0, dist);
+          if (near > 0.0) {
+            vec3 o = diffuseColor.rgb; float green = clamp((o.g - max(o.r, o.b)) * 8.0 + 0.2, 0.0, 1.0);
+            vec3 g1 = texture2D(tGrass, vGP.xz / 1.6).rgb * 0.5 + texture2D(tGrass, vGP.xz / 7.0).rgb * 0.5, d1 = texture2D(tDirt, vGP.xz / 2.2).rgb * 0.6 + texture2D(tGrass, vGP.xz / 9.0).rgb * 0.4;
+            float lg = dot(g1, vec3(0.333)) / 0.118, ld = dot(d1, vec3(0.333)) / 0.106;   // 質感の明るさ（線形の色で平均を 1 に）
+            float detail = mix(ld, lg, green);
+            detail = 1.0 + (detail - 1.0) * 1.6;   // 質感の濃淡を強める（写真の素材は濃淡が小さい）
+            diffuseColor.rgb = mix(o, o * clamp(detail, 0.5, 1.6), near * 0.9);
+          }`);
+    };
+  }
   terrGeos.forEach(g => { const m = new THREE.Mesh(g, groundMat); m.receiveShadow = true; out.group.add(m); });
 
   /* --- 道路網 --- */
   const net = build(W.roads, (x, z) => terr.at(x, z));
   out.net = net;
-  const asph = photoTex('asphalt', 1, true), conc = photoTex('concrete', 1, true);
+  const asph = photoTex('asphalt', 1, true);
+  // 面の向きで UV を変える（上向きの面は xz、壁は「水平の位置 × 高さ」。縦に引き伸ばされない）
+  function boxUV(g, s) { const p = g.attributes.position, nn = g.attributes.normal, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { const up = Math.abs(nn.getY(i)) > 0.5; uv[i * 2] = (up ? p.getX(i) : p.getX(i) * Math.abs(nn.getZ(i)) + p.getZ(i) * Math.abs(nn.getX(i))) / s; uv[i * 2 + 1] = (up ? p.getZ(i) : p.getY(i)) / s; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return g; }
   function worldUV(g, s) { const p = g.attributes.position, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getX(i) / s; uv[i * 2 + 1] = p.getZ(i) / s; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return g; }
   const roadGeos = [], walkGeos = [];
   function strip(R, y0, side) {   // R: ribbon の結果。2 本の縁の間の面
@@ -102,7 +124,7 @@ export function buildWorld(scene, W, gfx) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g;
   }
   net.edges.forEach(e => {
-    if (e.line.length < 2) return;
+    if (e.line.length < 2 || e.hidden) return;
     const pr = e.pr;
     let g = strip(ribbon(e, -pr.hw, pr.hw), 0.05, true);
     roadGeos.push(g);
@@ -148,7 +170,7 @@ export function buildWorld(scene, W, gfx) {
   out.roadTris = fn => roadGeos.forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) fn(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
   const roads = new THREE.Mesh(worldUV(mergeGeometries(roadGeos), 6), roadMat); roads.receiveShadow = true; out.group.add(roads);
   if (walkGeos.length) {
-    const walk = new THREE.Mesh(worldUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: conc, color: 0xb8b6ae, roughness: 0.9, side: THREE.DoubleSide }));
+    const walk = new THREE.Mesh(boxUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: asph, color: 0xd6d4ce, roughness: 0.9, side: THREE.DoubleSide })   /* 歩道: 明るめのアスファルト舗装 */);
     walk.receiveShadow = true; out.group.add(walk);
   }
   /* --- 路面表示 --- */
@@ -254,6 +276,41 @@ export function buildWorld(scene, W, gfx) {
     box.getBoundingSphere(sp); g.boundingSphere = sp; g.boundingBox = box;
     const m = new THREE.Mesh(g, bmat); m.castShadow = true; m.receiveShadow = true; out.group.add(m); out.buildingMeshes.push(m);
   });
+
+  /* --- 鉄道の高架橋（東海道新幹線・東海道本線・遠州鉄道。OSM では全区間が bridge）。
+         桁（幅 5m・厚さ 1.4m）、壁高欄（高さ 1.0m）、橋脚（10m ごと）。レール面の高さは路線ごとの目安 --- */
+  const railGeos = [];
+  out.pierTris = [];
+  const railH = t => (/新幹線/.test(t.name || '') ? 11 : /遠州/.test(t.name || '') ? 8.5 + (+(t.layer || 1) - 1) * 5 : 8.5);
+  const RP = W.roads.p;
+  W.roads.ways.forEach(w => {
+    if (w.k !== 'rail' || !(w.t.bridge && w.t.bridge !== 'no')) return;
+    const H = railH(w.t), pts = w.n.map(i => [RP[i * 3], RP[i * 3 + 1]]);
+    // 3m ごとに分けて、地面の高さを長い範囲でならした上に置く（地面の細かい起伏で桁が波打たないように）
+    const L = []; for (let k = 1; k < pts.length; k++) { const a = pts[k - 1], b = pts[k], l = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.ceil(l / 3)); for (let j = k === 1 ? 0 : 1; j <= m; j++) L.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]); }
+    if (L.length < 2) return;
+    const yy = L.map(p => terr.at(p[0], p[1])), ys = yy.map((_, i) => { let s0 = 0, c = 0; for (let k = Math.max(0, i - 15); k <= Math.min(yy.length - 1, i + 15); k++) { s0 += yy[k]; c++; } return s0 / c + H; });
+    const hw = 2.5, n = L.length;
+    const side = (off) => L.map((p, i) => { const q = L[Math.min(n - 1, i + 1)], r = L[Math.max(0, i - 1)], dx = q[0] - r[0], dz = q[1] - r[1], l = Math.hypot(dx, dz) || 1; return [p[0] - dz / l * off, p[1] + dx / l * off]; });
+    const A = side(-hw), Bs = side(hw);
+    const quadStrip = (P, Q, yA, yB) => { const pos = new Float32Array(n * 6), ix = []; for (let i = 0; i < n; i++) { pos.set([P[i][0], yA(i), P[i][1], Q[i][0], yB(i), Q[i][1]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g; };
+    railGeos.push(quadStrip(A, Bs, i => ys[i], i => ys[i]));                       // 上面
+    railGeos.push(quadStrip(A, Bs, i => ys[i] - 1.4, i => ys[i] - 1.4));           // 下面
+    railGeos.push(quadStrip(A, A, i => ys[i] + 1.0, i => ys[i] - 1.4));            // 側面と壁高欄
+    railGeos.push(quadStrip(Bs, Bs, i => ys[i] + 1.0, i => ys[i] - 1.4));
+    // 橋脚（10m ごと、1.6m 角）
+    for (let i = 0; i < n; i += 3) {
+      const p = L[i], gy = terr.at(p[0], p[1]), h = ys[i] - 1.4 - gy; if (h < 1) continue;
+      const g = new THREE.BoxGeometry(1.6, h, 1.6); g.translate(p[0], gy + h / 2, p[1]); railGeos.push(g);
+      out.pierTris.push([p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8], [p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8, p[0] - 0.8, p[1] + 0.8]);
+    }
+  });
+  if (railGeos.length) {
+    const rg = mergeGeometries(railGeos.map(g => { g.deleteAttribute('uv'); g.deleteAttribute('normal'); return g; }));
+    rg.computeVertexNormals();
+    const rmat = new THREE.MeshStandardMaterial({ color: 0xb4b2ac, roughness: 0.9, side: THREE.DoubleSide });   // 打ち放しコンクリートの明るい灰色
+    const rail = new THREE.Mesh(boxUV(rg, 4), rmat); rail.castShadow = true; rail.receiveShadow = true; out.group.add(rail);
+  }
 
   /* --- 信号機（LED 薄型の横型 3 灯、φ250、フードなし）。下端 5.6m、柱は進んでくる車の左、アームは車線の上へ。
          すべてインスタンス描画（部品ごとに 1 回の描画）で、灯の点灯はインスタンスの色で切り替える --- */

@@ -99,7 +99,7 @@ export function makeCar(spec) {
  * （L 字やコの字の建物でも、外形の内側の空きに見えない壁ができない。上空の通路やひさしは当たらない）。
  * 車は車体の形の長方形（8 点）で調べる。
  */
-export function makeColliders(B, ext, makeGrid, freeTris) {
+export function makeColliders(B, ext, makeGrid, freeTris, blockTris) {
   const g = makeGrid(ext.x0, ext.z0, ext.size, 0.5), nb = B.info.length, lo = new Float32Array(nb).fill(1e9);
   for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v]; if (B.pos[v * 3 + 1] < lo[k]) lo[k] = B.pos[v * 3 + 1]; }
   const P = B.pos, I = B.idx;
@@ -110,6 +110,8 @@ export function makeColliders(B, ext, makeGrid, freeTris) {
   }
   // 車道（OSM）の上は走れることを優先する（バスターミナルの屋根などが地面まで続く立体として入っている所がある）
   if (freeTris) { g.clear = true; freeTris((ax, az, bx, bz, cx, cz) => g.tri(ax, az, bx, bz, cx, cz)); g.clear = false; }
+  // 道路の上でも当たるもの（高架橋の橋脚など）
+  (blockTris || []).forEach(t => g.tri(t[0], t[1], t[2], t[3], t[4], t[5]));
   const HL = 2.2, HW = 0.88, SAMP = [[HL, HW], [HL, -HW], [-HL, HW], [-HL, -HW], [HL, 0], [-HL, 0], [0, HW], [0, -HW]];
   function collide(st) {
     const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw), lx = fz, lz = -fx;   // 前と左

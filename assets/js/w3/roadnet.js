@@ -201,6 +201,13 @@ export function build(D, heightAt) {
     const P2 = cut(e.pts, e.trimA, e.len - e.trimB);
     e.line = resample(P2, 3.0);
     e.line.forEach(p => { p[2] = heightAt(p[0], p[1]); });
+    // 地下の道（トンネル・地下駐車場の出入口）は地上に描かない
+    if (e.pr.tunnel || e.pr.layer < 0) e.hidden = true;
+    // 橋: 下の川や水路で路面がたわまないように、両端の高さを直線でつなぐ
+    if (e.pr.bridge && e.line.length > 2) {
+      const L = e.line, n = L.length, h0 = L[0][2], h1 = L[n - 1][2], tot = lineLen(L); let acc = 0;
+      for (let i = 1; i < n; i++) { acc += len2(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]); L[i][2] = h0 + (h1 - h0) * acc / tot; }
+    }
   });
   // 継ぎ目の向き（2 本の平均）
   nodes.forEach(n => {
@@ -291,7 +298,7 @@ export function markings(net) {
   }
   net.edges.forEach(e => {
     const pr = e.pr, Ltot = lineLen(e.line);
-    if (e.internal || Ltot < 2) return;   // まとめた交差点の中の短い道には線を引かない
+    if (e.internal || e.hidden || Ltot < 2) return;   // まとめた交差点の中の短い道と、地下の道には線を引かない
     const jA = net.nodes.get(e.a), jB = net.nodes.get(e.b);
     const minor = pr.rank >= 7;   // 住宅地の細い道・私道は、区画線は引かず、信号のある交差点の停止線と横断歩道だけ
     const nearA = jA && jA.arms.length >= 3 ? M.solidNear : 0, nearB = jB && jB.arms.length >= 3 ? M.solidNear : 0;
