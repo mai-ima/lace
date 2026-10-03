@@ -1598,7 +1598,7 @@
                                    total: pz() + SEG * 60, offset: spec.water === 'left' ? 2.6 : -2.6, speed: MAX * 0.28, cruise: MAX * 0.28, dir: 1, passed: true });
 
     /* 前の道（同じ交差点の手前の作り直しも含む）から、一般車とパトカーを引き継ぐ */
-    var carryIn = cfg.start && cfg.start.carry;
+    var carryIn = cfg.start && cfg.start.carry, skCarry = null;
     if (carryIn && mode === 'world') {
       var sh = carryIn.shift || 0, keepT = traffic.filter(function (t) { return t.train; });
       traffic = keepT.concat((carryIn.traffic || []).map(function (t) { var c = Object.assign({}, t); c.total = t.total - sh; return c; })
@@ -1608,6 +1608,7 @@
         wantedT = carryIn.wantedT || 0; escapeT = carryIn.escapeT || 0; bustHits = carryIn.bustHits || 0;
         if (!sirenA && R.sirenAudio) sirenA = R.sirenAudio();
       }
+      if (carryIn.sk) skCarry = carryIn.sk;   // スキルチェーンは交差点をまたいでも続く
       if (!sh && carryIn.sigT !== undefined) sig.t = carryIn.sigT;   // 同じ交差点なら信号の位相も続ける
     }
 
@@ -1647,6 +1648,30 @@
       }
       if (best < 0) best = cfg.exitNav >= 0 && cfg.exitNav < d.length ? cfg.exitNav : (cfg.exitDefault || 0);
       return best;
+    }
+    /* リワインド（巻き戻し）: 直近約 12 秒の自車の状態を 0.2 秒ごとに記録し、約 3 秒前へ戻る（フリー走行） */
+    var rwHist = [], rwT = 0, rwCool = 0;
+    function recordRewind(dt) {
+      if (mode !== 'world' || demo || state !== 'race' || P.finished) return;
+      rwT -= dt; if (rwCool > 0) rwCool -= dt;
+      if (rwT > 0) return;
+      rwT = 0.2;
+      rwHist.push({ t: raceT, total: P.total, pos: P.pos, x: P.x, speed: P.speed, damage: P.damage, nitro: P.nitro, rev: !!P.rev });
+      if (rwHist.length > 60) rwHist.shift();
+    }
+    function rewind() {
+      if (mode !== 'world' || demo || state !== 'race' || edgeDone || rwCool > 0) return false;
+      var back = null, i;
+      for (i = rwHist.length - 1; i >= 0; i--) if (rwHist[i].t <= raceT - 3) { back = rwHist[i]; break; }
+      if (!back) back = rwHist[0];
+      if (!back || raceT - back.t < 0.8) { say(L('まだ巻き戻せません', 'Nothing to rewind yet'), 1.2); return false; }
+      P.total = back.total; P.pos = back.pos; P.x = back.x; P.speed = back.speed; P.damage = Math.min(P.damage, back.damage); P.nitro = back.nitro; P.rev = back.rev; P.spin = 0;
+      rwHist.length = 0; rwCool = 2; flash = 0.35;
+      stopDone = !!(spec.stopSeg && pz() > spec.stopSeg * SEG);
+      (spec.midStops || []).forEach(function (ms, mi) { midDone[mi] = pz() > ms.seg * SEG; });
+      if (spec.stopSeg && spec.stopSeg * SEG - pz() > SEG * 22) lockedExit = -1;
+      pop(L('巻き戻し', 'REWIND'), '#7fd6ff'); sfx('boost');
+      return true;
     }
     var wantPrev = cfg.tailChoice, wantT = 0;
     function chooseExit() { return lockedExit >= 0 ? lockedExit : pickExit(); }
@@ -1866,6 +1891,8 @@
       if (P.bump > 0) P.bump -= dt;
       topKmh = Math.max(topKmh, kmh(P.speed));
       watchExit(dt);
+      recordRewind(dt);
+      skillTick(dt);
 
       var move = P.speed * dt;
       if (move < 0 && P.total + move < 0) {
@@ -1992,7 +2019,23 @@
       }
     }
 
+    /* スキルチェーン（フリー走行）: ニアミス・ドリフトをつなげると倍率が上がる。止まるか 3.5 秒途切れると獲得、ぶつかると失う */
+    var sk = skCarry ? Object.assign({ drift: 0 }, skCarry) : { pts: 0, n: 0, mult: 1, t: 0, drift: 0 };
+    function skillAdd(base) {
+      if (mode !== 'world' || demo) return;
+      sk.n++; sk.mult = Math.min(8, 1 + Math.floor(sk.n / 3)); sk.pts += base * sk.mult; sk.t = 3.5;
+    }
+    function skillBank() {
+      if (sk.pts > 0) { var got = Math.round(sk.pts); pop(L('スキルチェーン +', 'SKILL CHAIN +') + got, '#ffd93d'); sfx('coin'); if (cfg.onSkill) cfg.onSkill(got); }
+      sk.pts = 0; sk.n = 0; sk.mult = 1; sk.t = 0;
+    }
+    function skillTick(dt) {
+      if (mode !== 'world' || demo || state !== 'race') return;
+      if (P.skid && P.speed > MAX * 0.4 && Math.abs(P.x) < 1) { sk.drift += dt; if (sk.drift >= 0.5) { sk.drift = 0; skillAdd(60); } } else sk.drift = 0;
+      if (sk.t > 0) { sk.t -= dt; if (sk.t <= 0 || P.speed < MAX * 0.05) skillBank(); }
+    }
     function hurt(n) {
+      if (mode === 'world' && sk.pts > 0 && n >= 0.015) { pop(L('チェーン切れ', 'CHAIN LOST'), '#ff8a80'); sk.pts = 0; sk.n = 0; sk.mult = 1; sk.t = 0; }
       P.damage = Math.min(1.2, P.damage + n * dmgK);
       if (mode === 'sp') spg.me -= n * 60;
       if (mode === 'traffic' && P.damage >= 1 && !P.finished) end('wrecked');
@@ -2071,6 +2114,7 @@
           var pts = 250 * combo;
           if (mode === 'traffic') score += pts;
           P.nitro = Math.min(1, P.nitro + 0.08);
+          skillAdd(100);
           pop(L('ニアミス ×', 'NEAR MISS ×') + combo + (mode === 'traffic' ? '  +' + pts : ''), '#ffd93d');
           sfx('coin');
         }
@@ -3065,6 +3109,12 @@
             text(g, exn.slice(0, 14) + (auto ? L('（ナビ）', ' (nav)') : P.blink ? L('（ウインカー）', ' (signal)') : ''), W - nw2 + 4, ny + 22, 10, '#ffe14d');
           }
         }
+        if (sk.pts > 0) {   // スキルチェーン（途切れるまでの残り時間つき）
+          panel(g, 8, 78, 150, 40);
+          text(g, L('スキルチェーン ×', 'SKILL CHAIN ×') + sk.mult, 14, 94, 10, '#ffd93d');
+          text(g, String(Math.round(sk.pts)), 14, 110, 14, '#ffffff');
+          g.fillStyle = 'rgba(255,217,61,.85)'; g.fillRect(14, 114, 138 * clamp(sk.t / 3.5, 0, 1), 2);
+        }
         if (limitKmh) {
           circle(g, 112, H - 70, 15, '#d32f2f'); circle(g, 112, H - 70, 12, '#ffffff');
           text(g, String(limitKmh), 112, H - 66, 11, '#1a47a0', 'center');
@@ -3141,7 +3191,7 @@
     // 交差点で次の道へ移るとき、エンジン音を切らずに引き継ぐ（音の途切れをなくす）
     sess.snapshot = function () {
       return { traffic: traffic.filter(function (t) { return !t.train && t.total > -1e8; }).map(function (t) { return Object.assign({}, t); }),
-               cops: cops.map(function (c) { return Object.assign({}, c); }), wantedT: wantedT, escapeT: escapeT, bustHits: bustHits, sigT: sig.t };
+               sk: Object.assign({}, sk), cops: cops.map(function (c) { return Object.assign({}, c); }), wantedT: wantedT, escapeT: escapeT, bustHits: bustHits, sigT: sig.t };
     };
     sess.detachAudio = function () { keepAudio = true; return eng; };
     sess.stop = function () { if (!keepAudio) eng.stop(); if (sirenA) { sirenA.stop(); sirenA = null; } };
@@ -3154,6 +3204,7 @@
       if (m) keys[m] = down;
       if (down && (k === 'q' || k === 'Q' || k === 'z' || k === 'Z' || k === ',')) { P.blink = P.blink === -1 ? 0 : -1; sfx('click'); return true; }
       if (down && (k === 'e' || k === 'E' || k === 'c' || k === 'C' || k === '.')) { P.blink = P.blink === 1 ? 0 : 1; sfx('click'); return true; }
+      if (down && (k === 'b' || k === 'B' || k === 'Backspace')) { rewind(); return true; }
       if ((k === 'r' || k === 'R') && down && mode === 'world' && !edgeDone && P.speed < MAX * 0.15 && cfg.onEdgeEnd) {
         edgeDone = true;
         if (cfg.onEdgeEnd({ speed: 0, x: -P.x, nitro: P.nitro, damage: P.damage, reverse: true, frac: clamp(P.total / edgeLen, 0, 1) }) === false) edgeDone = false;
@@ -3163,7 +3214,7 @@
     };
     sess.releaseKeys = function () { for (var k in keys) keys[k] = false; };
     // テスト・見本用に中の値を少しだけ読めるように
-    sess.info = function () { return { state: state, lap: P.lap, place: P.finished && P.place ? P.place : rank(), speed: P.speed, x: P.x, damage: P.damage, raceT: raceT, timer: timer, score: score, r0: cars[0] ? { t: Math.round((cars[0].total - pz()) / SEG), v: +(cars[0].speed / MAX).toFixed(2), o: +cars[0].offset.toFixed(2), m: +(cars[0].max / MAX).toFixed(2) } : null, tgap: targetCar ? Math.round((targetCar.total - pz()) / SEG) : null, thp: targetCar ? targetCar.hp : null, tspd: targetCar ? targetCar.speed / MAX : null, pspd: P.speed / MAX }; };
+    sess.info = function () { return { total: P.total, state: state, lap: P.lap, place: P.finished && P.place ? P.place : rank(), speed: P.speed, x: P.x, damage: P.damage, raceT: raceT, timer: timer, score: score, r0: cars[0] ? { t: Math.round((cars[0].total - pz()) / SEG), v: +(cars[0].speed / MAX).toFixed(2), o: +cars[0].offset.toFixed(2), m: +(cars[0].max / MAX).toFixed(2) } : null, tgap: targetCar ? Math.round((targetCar.total - pz()) / SEG) : null, thp: targetCar ? targetCar.hp : null, tspd: targetCar ? targetCar.speed / MAX : null, pspd: P.speed / MAX }; };
     return sess;
   };
 
@@ -3199,7 +3250,7 @@
   R.makePad = function (sess, world) {
     var pad = document.createElement('div');
     pad.className = 'race-pad' + (world ? ' world' : '');
-    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR']] : []).concat([['N₂O', ' ', 'nitro'], ['BRK', 'ArrowDown', 'down'], ['GAS', 'ArrowUp', 'up']]).forEach(function (p) {
+    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR'], ['巻き戻し', 'b', 'rewind']] : []).concat([['N₂O', ' ', 'nitro'], ['BRK', 'ArrowDown', 'down'], ['GAS', 'ArrowUp', 'up']]).forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = p[0]; b.className = 'rbtn ' + p[2];
       function on(e) { e.preventDefault(); (typeof sess === 'function' ? sess() : sess).key(p[1], true); }

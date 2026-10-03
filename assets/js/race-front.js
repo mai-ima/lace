@@ -454,10 +454,17 @@
         exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitAngs: exits.map(function (x) { return x.ang; }), tailChoice: tailIdx, exitNames: exits.map(exitLabel),
         canBack: hist.length > 0, start: start,
         hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo,
-        onViolation: violation, onBusted: busted, onEscape: escaped
+        onViolation: violation, onBusted: busted, onEscape: escaped, onSkill: skill
       };
     }
 
+    /* --- スキルチェーン（ニアミス・ドリフトの得点 → 所持金） --- */
+    w.skillPts = 0; w.skillBest = 0;
+    function skill(pts) {
+      var pay = Math.round(pts / 8);
+      R.edit(function (s) { s.money += pay; s.stats.skill = (s.stats.skill || 0) + pts; });
+      w.skillPts += pts; w.skillBest = Math.max(w.skillBest, pts); w.earned += pay;
+    }
     /* --- 違反・警察 --- */
     w.fines = 0; w.violations = 0;
     function fine(n, why) {
@@ -648,7 +655,8 @@
       var out = [];
       if (w.job) out.push(L('完了 ', 'Jobs done ') + w.trips + L(' 件　稼ぎ ', '  earned ') + yen(w.earned));
       else out.push(L('訪れた場所 ', 'Places visited ') + (w.visited.map(function (n) { return t(R.NODES[n].name); }).join('・') || '—'));
-      if (!w.job && w.earned) out.push(L('初訪問ボーナス +', 'First-visit bonus +') + yen(w.earned));
+      if (!w.job && w.earned + w.fines) out.push(L('初訪問・スキルの報酬 +', 'Visit & skill rewards +') + yen(w.earned + w.fines));
+      if (w.skillPts) out.push(L('スキルポイント ', 'Skill points ') + w.skillPts + L('（最高チェーン ', '  (best chain ') + w.skillBest + L('）', ')'));
       if (w.violations) out.push(L('違反 ', 'Violations ') + w.violations + L(' 回　反則金 ', '  fines ') + yen(w.fines));
       out.push(L('走行距離 ', 'Distance ') + (w.dist / 1000).toFixed(1) + ' km　' + L('走行時間 ', 'Drive time ') + fmt(w.clock * 1000));
       return out;
