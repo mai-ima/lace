@@ -492,7 +492,7 @@
       return best;
     }
     function frame(j) { var w2 = segs[j].wp; return { x: w2.x, z: w2.z, fx: Math.sin(w2.h), fz: Math.cos(w2.h), rx: -Math.cos(w2.h), rz: Math.sin(w2.h) }; }
-    var used = {};
+    var used = {}, occ = [new Uint8Array(n + 12), new Uint8Array(n + 12)];   // 道の左右で、実在の建物がふさいでいる区間
     // 実在の建物
     if (!hwy || opt.city) {
       var cand = {};
@@ -523,6 +523,7 @@
         var sd = lat > 0 ? 1 : -1;
         segs[j0].sprites.push({ kind: 'bldg', offset: sd * near / hw, off2: sd * Math.min(far, near + 60) / hw, len: depth, hm: lv * 3.1 + (st.roof === 'gable' ? 0.4 : 0.8), c: st.c, win: st.win, roof: st.roof, rc: st.rc, seed: Math.floor(seed * 1000), city: true });
         used[j0 + ':' + sd] = 1;
+        if (near < hw + 22) for (var oc = j0; oc <= Math.min(n - 1, j0 + depth); oc++) occ[sd < 0 ? 0 : 1][oc] = 1;
       });
     }
     // 土地利用からの飾り（建物データのない場所は家を生成）
@@ -562,12 +563,15 @@
         var lu = sd < 0 ? groundL[0] : groundR[0], lu2 = sd < 0 ? groundL[1] : groundR[1];
         var px2 = F2.x + F2.rx * sd * (hw + 10), pz2 = F2.z + F2.rz * sd * (hw + 10);
         var hs = hash2(px2 * 0.37 + i, pz2 * 0.41 - sd * 7);
-        if ((lu === 1 || lu === 2 || lu === 3 || lu === 10) && !M.covered(px2, pz2)) {
-          if (i % 9 === 0 && hs < 0.8 && !used[i + ':' + sd]) {
+        var oi = sd < 0 ? 0 : 1, free = true;
+        for (var oq = 0; oq < 10 && free; oq++) if (occ[oi][i + oq]) free = false;
+        if ((lu === 1 || lu === 2 || lu === 3 || lu === 10) && (!M.covered(px2, pz2) || free)) {   // 建物データの隙間（細い建物の抜け・小さな家）は、土地利用から家を補って町並みをつなぐ
+          if (i % 9 === 0 && hs < 0.8 && !used[i + ':' + sd] && free) {
             var big = lu === 2 || lu === 3, dep = big ? 14 + hs * 20 : 7 + hs * 5;
             var st2 = bldStyle(lu === 2 ? 2 : lu === 3 ? 3 : 0, big ? 2 + Math.floor(hs * 3) : 2, hs);
             var nearM = hw + 2.5 + hs * 5;
             s.sprites.push({ kind: 'bldg', offset: sd * nearM / hw, off2: sd * (nearM + dep) / hw, len: Math.round((big ? 14 : 8) / SEG_M), hm: (big ? 2 + Math.floor(hs * 3) : 2) * 3.1 + 0.4, c: st2.c, win: st2.win, roof: lu === 10 ? 'flat' : st2.roof, rc: st2.rc, seed: Math.floor(hs * 1000), city: true, gen: true });
+            for (var oz = 0; oz < Math.round((big ? 14 : 8) / SEG_M); oz++) occ[oi][i + oz] = 1;
           }
         } else if (lu === 6 || (lu === 7 && hs < 0.5)) {
           if (i % 5 === 0 && hs < 0.85) s.sprites.push({ kind: hs < 0.55 ? 'cedar' : 'broadleaf', offset: sd * (1.25 + 3 / hw + hs * 18 / hw), seed: Math.floor(hs * 1000), city: true, gen: true });

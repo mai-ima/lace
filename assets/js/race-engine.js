@@ -1493,7 +1493,7 @@
         if (spec.junction.signal && sig.phase === 'red' && sig.t > 11.5 && sig.t < 16 && (!spec.mapEdge || spec.crossBoth)) {   // 全赤の約 1 秒のあとに交差する車が出る
           sig.crossT -= dt;
           if (sig.crossT <= 0) {
-            var tt = R.TRAFFIC[Math.floor(Math.random() * R.TRAFFIC.length)];
+            var tt = pickTraffic();
             sig.cross.push({ x: Math.random() < 0.5 ? -4 : 4, v: 0, body: tt.body, color: tt.color });
             sig.cross[sig.cross.length - 1].v = sig.cross[sig.cross.length - 1].x < 0 ? 3.2 : -3.2;
             sig.crossT = 0.9 + Math.random() * 0.8;
@@ -1565,8 +1565,16 @@
     var traffic = [];
     var LANE_X = [-0.62, 0, 0.62];
     var twoWay = !!spec.twoWay, limitKmh = spec.limit || 0;
+    var LIGHT = R.TRAFFIC.filter(function (q) { return q.body !== 'truck' && q.body !== 'bus'; }), HEAVY = R.TRAFFIC.filter(function (q) { return q.body === 'truck'; }), BUS = R.TRAFFIC.filter(function (q) { return q.body === 'bus'; });
+    function pickTraffic() {   // 実際の道路に近い車種構成（軽・乗用車が主体、大型は幹線・バイパスで多い）
+      if (mode !== 'world' || cfg.heavy === undefined) return R.TRAFFIC[Math.floor(Math.random() * R.TRAFFIC.length)];
+      var r = Math.random();
+      if (r < cfg.heavy * 0.2 && cfg.bus && BUS.length) return BUS[0];
+      if (r < cfg.heavy) return HEAVY[Math.floor(Math.random() * HEAVY.length)];
+      return LIGHT[Math.floor(Math.random() * LIGHT.length)];
+    }
     function newTraffic(ahead) {
-      var t = R.TRAFFIC[Math.floor(Math.random() * R.TRAFFIC.length)];
+      var t = pickTraffic();
       var cop = spec.police && Math.random() < 0.12 * spec.police;
       var onc = twoWay && Math.random() < 0.45;
       var lim = limitKmh ? limitKmh / 280 : 0.4;

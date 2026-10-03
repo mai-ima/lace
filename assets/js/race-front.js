@@ -441,13 +441,16 @@
       curSpec = sp;
       return sp;
     }
-    function trafficFor(e) { return ({ 0: 9, 1: 8, 2: 7, 3: 5, 4: 3, 5: 2 })[e.c] || 2; }
+    // 交通量: 道路の種類 × 時間帯（朝夕のラッシュは多く、深夜は少ない）。大型車の割合は幹線・バイパスで高い
+    function hourFactor() { var hr = new Date().getHours() + new Date().getMinutes() / 60; return hr >= 7 && hr < 9.5 ? 1.35 : hr >= 16.5 && hr < 19 ? 1.3 : hr >= 23 || hr < 5 ? 0.45 : hr < 7 || hr >= 21 ? 0.7 : 1; }
+    function trafficFor(e) { return Math.max(1, Math.round((({ 0: 9, 1: 8, 2: 7, 3: 5, 4: 3, 5: 2 })[e.c] || 2) * hourFactor())); }
+    function heavyFor(e) { return ({ 0: 0.28, 1: 0.17, 2: 0.1, 3: 0.06, 4: 0.025, 5: 0.12 })[e.c] || 0.03; }
     function cfgFor(start) {
       var sp = spec(), e = M.edgeOf(h), s = R.load();
       var dflt = Math.max(0, defIdx), navI = navIdx;
       return {
         track: sp, mode: 'world', laps: Infinity, weather: opts.weather || 'clear', field: [],
-        traffic: trafficFor(e), car: playerCar(s, carId), levelMul: 1, drive: R.driveSettings(),
+        traffic: trafficFor(e), heavy: heavyFor(e), bus: e.c >= 1 && e.c <= 3, car: playerCar(s, carId), levelMul: 1, drive: R.driveSettings(),
         exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitAngs: exits.map(function (x) { return x.ang; }), tailChoice: tailIdx, exitNames: exits.map(exitLabel),
         canBack: hist.length > 0, start: start,
         hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo,
