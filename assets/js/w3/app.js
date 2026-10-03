@@ -105,6 +105,14 @@ export async function start(container, opt) {
   resize(); setupPost(); resize(); window.addEventListener('resize', resize);
   const hud = document.createElement('div'); hud.className = 'w3-hud'; container.appendChild(hud);
   hud.textContent = '読み込み中…（浜松駅周辺の地形・道路・建物）';
+  // 右下: 速度計と回転計（canvas）、左下: 回転式のミニマップ（canvas）。スマホのボタンと重ならない位置
+  const gauge = document.createElement('canvas'), mini = document.createElement('canvas');
+  const isPhone = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  // スマホは操作ボタンが下にあるので、ミニマップは左上、速度計は右のボタンの上に小さく置く
+  const GS = isPhone ? Math.round(Math.max(96, Math.min(150, window.innerHeight * 0.28))) : 170;
+  gauge.style.cssText = 'position:fixed;right:16px;bottom:' + (isPhone ? 'calc(216px + env(safe-area-inset-bottom))' : 'calc(14px + env(safe-area-inset-bottom))') + ';width:' + GS + 'px;height:' + GS + 'px;pointer-events:none';
+  mini.style.cssText = 'position:fixed;left:16px;' + (isPhone ? 'top:calc(70px + env(safe-area-inset-top))' : 'bottom:calc(14px + env(safe-area-inset-bottom))') + ';width:' + GS + 'px;height:' + GS + 'px;border-radius:50%;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.45)';
+  const DPR = Math.min(2, window.devicePixelRatio || 1); [gauge, mini].forEach(c => { c.width = c.height = 170 * DPR; container.appendChild(c); });
 
   const W = await loadWorld(opt.base || 'assets/data/world/center/');
   const sky = buildSky(scene, renderer, { shadows: gfx.shadows, far: gfx.far, elev: opt.elev, azim: opt.azim });
@@ -283,6 +291,47 @@ export async function start(container, opt) {
     if (carM.wheels) Object.values(carM.wheels).forEach(w => { w.spin.rotation.x += st.vx * dt / Math.max(0.2, w.r) * (carM.flip ? -1 : 1); if (w.front) w.steer.rotation.y = st.steer; });
     if (carM.mats) carM.mats.tail.emissiveIntensity = ctl.brake > 0.1 ? 3.0 : 0.6;
   }
+  function drawGauge() {
+    const g = gauge.getContext('2d'), S = 170 * DPR, c = S / 2, r = S * 0.44, st = car.st;
+    g.clearRect(0, 0, S, S);
+    g.fillStyle = 'rgba(10,12,16,.55)'; g.beginPath(); g.arc(c, c, r + 6 * DPR, 0, Math.PI * 2); g.fill();
+    // 回転計（下の 270 度）。レッドゾーンは最高回転の 90% から
+    const a0 = Math.PI * 0.75, span = Math.PI * 1.5, maxR = car.s.maxRpm, rr = Math.min(1, st.rpm / maxR);
+    g.lineWidth = 7 * DPR; g.lineCap = 'butt';
+    g.strokeStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.arc(c, c, r, a0, a0 + span); g.stroke();
+    g.strokeStyle = '#d33'; g.beginPath(); g.arc(c, c, r, a0 + span * 0.9, a0 + span); g.stroke();
+    g.strokeStyle = rr > 0.9 ? '#ff5040' : '#f2f2f2'; g.beginPath(); g.arc(c, c, r, a0, a0 + span * rr); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold ' + 44 * DPR + 'px system-ui,sans-serif'; g.fillText(String(car.kmh()), c, c - 4 * DPR);
+    g.font = 12 * DPR + 'px system-ui,sans-serif'; g.fillText('km/h', c, c + 26 * DPR);
+    g.font = 'bold ' + 18 * DPR + 'px system-ui,sans-serif'; g.fillText(ctl.reverse ? 'R' : String(st.gear), c, c + 50 * DPR);
+    const tags = [st.abs && 'ABS', st.tcs && 'TCS', st.esc && 'ESC'].filter(Boolean).join(' ');
+    if (tags) { g.font = 'bold ' + 11 * DPR + 'px system-ui,sans-serif'; g.fillStyle = '#ffb347'; g.fillText(tags, c, c - 40 * DPR); }
+  }
+  // ミニマップ: 進む向きが上。道路（格で太さを変える）・信号の交差点・一般車・自車
+  const miniEdges = world.net.edges.filter(e => !e.hidden && e.line.length >= 2).map(e => ({ L: e.line, w: Math.max(1.5, e.pr.hw * 0.5), r: e.pr.rank }));
+  function drawMini() {
+    const g = mini.getContext('2d'), S = 170 * DPR, c = S / 2, st = car.st, sc = S / 360;   // 半径 180m
+    g.save(); g.clearRect(0, 0, S, S);
+    g.beginPath(); g.arc(c, c, c, 0, Math.PI * 2); g.clip();
+    g.fillStyle = 'rgba(28,34,40,.85)'; g.fillRect(0, 0, S, S);
+    g.translate(c, c); g.rotate(Math.PI + st.yaw); g.scale(sc, sc); g.translate(-st.x, -st.z);   // ゲームの x 東・z 南 → 画面（進む向きが上、右は車の右）
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    miniEdges.forEach(e => {
+      const p0 = e.L[0]; if (Math.abs(p0[0] - st.x) > 400 || Math.abs(p0[1] - st.z) > 400) return;
+      g.strokeStyle = e.r <= 2 ? '#d9c27a' : e.r <= 4 ? '#e8e8e8' : '#9aa3ab'; g.lineWidth = e.w * 2;
+      g.beginPath(); e.L.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke();
+    });
+    g.fillStyle = '#5bc0ff'; if (traffic) traffic.cars.forEach(o => { if (o.P) { g.beginPath(); g.arc(o.P.x, o.P.z, 3.2, 0, Math.PI * 2); g.fill(); } });
+    g.restore();
+    // 自車（中心の矢印）
+    g.save(); g.translate(c, c); g.fillStyle = '#ff4d3d'; g.strokeStyle = '#fff'; g.lineWidth = 2 * DPR;
+    g.beginPath(); g.moveTo(0, -11 * DPR); g.lineTo(8 * DPR, 9 * DPR); g.lineTo(0, 5 * DPR); g.lineTo(-8 * DPR, 9 * DPR); g.closePath(); g.fill(); g.stroke(); g.restore();
+    g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2 * DPR; g.beginPath(); g.arc(c, c, c - DPR, 0, Math.PI * 2); g.stroke();
+  }
+  // 出典（狭い画面は短く。全文はクレジットの一覧 assets/data/world/CREDITS.txt）
+  const CREDIT = window.innerWidth < 900 ? '出典: 国交省 PLATEAU・地理院タイルを加工 / © OSM / 車: Khronos（CC BY 4.0）'
+    : '出典: 国土交通省 PLATEAU を加工して作成 / 地理院タイル（航空写真・標高）を加工して作成 / © OpenStreetMap contributors / 車: Khronos glTF Sample Assets「Car Concept」（CC BY 4.0）';
   let last = performance.now(), acc = 0, simT = 0, running = true, frames = 0, fpsT = 0, fps = 0, hitT = 0;
   const STEP = 1 / 120;
   function frame(now) {
@@ -307,9 +356,10 @@ export async function start(container, opt) {
     present();
     frames++; fpsT += dt; if (fpsT > 0.5) { fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
     const info = renderer.info.render;
-    hud.innerHTML = '<b>' + car.kmh() + '</b> km/h　' + (st.gear) + ' 速' + (st.abs ? '　ABS' : '') + (st.tcs ? '　TCS' : '') + (hitT > 0 ? '　衝突' : '') +
-      '<br><small>' + fps + ' fps　描画 ' + info.calls + '　三角形 ' + Math.round(info.triangles / 1000) + 'k　画質 ' + gfx.tier + '</small>' +
-      '<br><small>出典: 国土交通省 PLATEAU を加工して作成 / 地理院タイル（航空写真・標高）を加工して作成 / © OpenStreetMap contributors / 車: Khronos glTF Sample Assets「Car Concept」（CC BY 4.0）</small>';
+    drawGauge(); drawMini();
+    hud.innerHTML = (hitT > 0 ? '<b style="color:#ff6a50;font-size:18px">衝突</b><br>' : '') +
+      '<small>' + fps + ' fps　描画 ' + info.calls + '　三角形 ' + Math.round(info.triangles / 1000) + 'k　画質 ' + gfx.tier + '</small>' +
+      '<br><small>' + CREDIT + '</small>';
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -334,7 +384,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; drawGauge(); drawMini(); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
   return api;
