@@ -213,15 +213,22 @@ export async function start(container, opt) {
   let paused = false;
   const pauseEl = document.createElement('div');
   pauseEl.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,10,14,.55);color:#fff;font-size:18px;text-align:center;line-height:2;z-index:5';
-  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了</div>';
+  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切</small></div>';
   pauseEl.addEventListener('pointerdown', () => setPause(false));
+  { const b = document.createElement('button'); b.textContent = '横滑り防止（ESC）の入・切'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
+    b.addEventListener('pointerdown', e => { e.stopPropagation(); car.s.esc = !car.s.esc; b.textContent = '横滑り防止（ESC）: ' + (car.s.esc ? '入' : '切'); }); pauseEl.appendChild(b); }
   container.appendChild(pauseEl);
   function setPause(v) { paused = v; if (engineAudio) engineAudio.mute(v); pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
   const onKey = (e, d) => {
     if (d && e.key === 'Escape') { setPause(!paused); return; }
     if (d && paused && (e.key === 'Enter' || e.key === 'q' || e.key === 'Q')) { if (opt.onExit) opt.onExit(); return; }
+    if (d && (e.key === 'x' || e.key === 'X')) { car.s.esc = !car.s.esc; toastMsg(car.s.esc ? '横滑り防止（ESC）: 入' : '横滑り防止（ESC）: 切（ドリフトしやすい）'); return; }
     keys[e.key] = d;
   };
+  // 画面中央に短く出す通知
+  const toastEl = document.createElement('div'); toastEl.style.cssText = 'position:fixed;left:50%;top:22%;transform:translateX(-50%);padding:8px 16px;border-radius:10px;background:rgba(10,12,16,.7);color:#fff;font-size:16px;pointer-events:none;opacity:0;transition:opacity .25s;z-index:4';
+  container.appendChild(toastEl); let toastT = 0;
+  function toastMsg(t) { toastEl.textContent = t; toastEl.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => { toastEl.style.opacity = 0; }, 1600); }
   const onBlur = () => { Object.keys(keys).forEach(k => { keys[k] = false; }); };
   // エンジン音（race-audio.js の合成音。ブラウザの決まりで、最初の操作のあとに鳴らし始める）
   let engineAudio = null;
@@ -238,12 +245,15 @@ export async function start(container, opt) {
     const svg = d => '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
     const ICON = { left: svg('<path d="M15 5l-7 7 7 7"/>'), right: svg('<path d="M9 5l7 7-7 7"/>'), up: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'), down: svg('<rect x="6" y="9" width="12" height="9" rx="2"/><path d="M8 9V6h8v3"/>'), hand: svg('<path d="M12 3v10"/><circle cx="12" cy="17" r="4"/>'), exit: svg('<path d="M10 6l-6 6 6 6M4 12h16"/>') };
     const pad = document.createElement('div'); pad.className = 'w3-pad';
+    // 縦画面（幅 520px 未満）はボタンを小さくして間隔をあける。各ボタンに短い文字も添える
+    const nw = window.innerWidth < 520, B = nw ? 70 : 84, G = nw ? 8 : 12, lab = t => '<i style="position:absolute;bottom:4px;left:0;right:0;font:600 10px system-ui,sans-serif;font-style:normal;color:rgba(255,255,255,.8);text-align:center">' + t + '</i>';
+    const bb = 'calc(20px + env(safe-area-inset-bottom))';
     pad.innerHTML = '<style>.w3-pad b{position:fixed;display:flex;align-items:center;justify-content:center;border-radius:18px;background:rgba(20,24,30,.42);border:1px solid rgba(255,255,255,.28);touch-action:none;user-select:none;-webkit-user-select:none}.w3-pad b.on{background:rgba(255,255,255,.3)}</style>' +
-      '<b data-k="left" style="left:16px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:84px">' + ICON.left + '</b>' +
-      '<b data-k="right" style="left:112px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:84px">' + ICON.right + '</b>' +
-      '<b data-k="down" style="right:112px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:84px">' + ICON.down + '</b>' +
-      '<b data-k="up" style="right:16px;bottom:calc(20px + env(safe-area-inset-bottom));width:84px;height:120px">' + ICON.up + '</b>' +
-      '<b data-k="hand" style="right:16px;bottom:calc(152px + env(safe-area-inset-bottom));width:84px;height:56px">' + ICON.hand + '</b>' +
+      '<b data-k="left" style="left:16px;bottom:' + bb + ';width:' + B + 'px;height:' + B + 'px">' + ICON.left + '</b>' +
+      '<b data-k="right" style="left:' + (16 + B + G) + 'px;bottom:' + bb + ';width:' + B + 'px;height:' + B + 'px">' + ICON.right + '</b>' +
+      '<b data-k="down" style="right:' + (16 + B + G) + 'px;bottom:' + bb + ';width:' + B + 'px;height:' + B + 'px">' + ICON.down + lab('ブレーキ') + '</b>' +
+      '<b data-k="up" style="right:16px;bottom:' + bb + ';width:' + B + 'px;height:' + Math.round(B * 1.43) + 'px">' + ICON.up + lab('アクセル') + '</b>' +
+      '<b data-k="hand" style="right:16px;bottom:calc(' + (20 + Math.round(B * 1.43) + G) + 'px + env(safe-area-inset-bottom));width:' + B + 'px;height:' + Math.round(B * 0.67) + 'px">' + ICON.hand + lab('サイド') + '</b>' +
       '<b data-k="exit" style="right:16px;top:calc(12px + env(safe-area-inset-top));width:52px;height:52px">' + ICON.exit + '</b>';
     container.appendChild(pad);
     pad.querySelectorAll('b').forEach(b => {
@@ -270,14 +280,18 @@ export async function start(container, opt) {
   let firstCam = true;
   function updateCam(dt) {
     const st = car.st, fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
-    const back = 6.2 + Math.min(2.5, Math.abs(st.vx) * 0.03), up = 2.1;
+    const portrait = cam.aspect < 1;   // 縦画面は少し遠く・高くして、車が画面の下半分を占めないように
+    const back = (6.2 + Math.min(2.5, Math.abs(st.vx) * 0.03)) * (portrait ? 1.45 : 1), up = portrait ? 2.9 : 2.1;
     const want = new THREE.Vector3(st.x - fx * back, st.y + up, st.z - fz * back);
     const look = new THREE.Vector3(st.x + fx * 4, st.y + 1.1, st.z + fz * 4);
     if (firstCam) { camPos.copy(want); camLook.copy(look); firstCam = false; }
     camPos.lerp(want, Math.min(1, dt * 6)); camLook.lerp(look, Math.min(1, dt * 10));
+    // 建物・木・柱にカメラが入らないよう、車からカメラへ 0.5m ずつ調べて、ふさがる手前で止める
+    { const ox = st.x, oz = st.z, dx = camPos.x - ox, dz = camPos.z - oz, d = Math.hypot(dx, dz);
+      for (let r = 1.5; r <= d; r += 0.5) { if (collide.grid.at(ox + dx * r / d, oz + dz * r / d)) { const k = Math.max(1.2, r - 0.6) / d; camPos.x = ox + dx * k; camPos.z = oz + dz * k; camPos.y = Math.max(camPos.y, st.y + 2.6); break; } } }
     const gy = W.terrain.at(camPos.x, camPos.z) + 0.6; if (camPos.y < gy) camPos.y = gy;
     cam.position.copy(camPos); cam.lookAt(camLook);
-    cam.fov = 60 + Math.min(14, Math.hypot(st.vx, st.vy) * 0.25); cam.updateProjectionMatrix();
+    cam.fov = (portrait ? 72 : 60) + Math.min(14, Math.hypot(st.vx, st.vy) * 0.25); cam.updateProjectionMatrix();
     // 影は車の周りだけ（太陽の向きに合わせて追う）
     sky.sun.position.set(st.x, st.y, st.z).addScaledVector(sky.sunDir, 400); sky.sun.target.position.set(st.x, st.y, st.z);
   }
@@ -310,7 +324,7 @@ export async function start(container, opt) {
     g.font = 'bold ' + 44 * DPR + 'px system-ui,sans-serif'; g.fillText(String(car.kmh()), c, c - 4 * DPR);
     g.font = 12 * DPR + 'px system-ui,sans-serif'; g.fillText('km/h', c, c + 26 * DPR);
     g.font = 'bold ' + 18 * DPR + 'px system-ui,sans-serif'; g.fillText(ctl.reverse ? 'R' : String(st.gear), c, c + 50 * DPR);
-    const tags = [st.abs && 'ABS', st.tcs && 'TCS', st.esc && 'ESC'].filter(Boolean).join(' ');
+    const tags = [st.abs && 'ABS', st.tcs && 'TCS', st.esc && 'ESC', car.s.esc === false && 'ESC 切'].filter(Boolean).join(' ');
     if (tags) { g.font = 'bold ' + 11 * DPR + 'px system-ui,sans-serif'; g.fillStyle = '#ffb347'; g.fillText(tags, c, c - 40 * DPR); }
   }
   // ミニマップ: 進む向きが上。道路（格で太さを変える）・信号の交差点・一般車・自車

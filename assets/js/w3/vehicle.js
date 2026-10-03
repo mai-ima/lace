@@ -19,8 +19,8 @@ export function makeCar(spec) {
     const speed = Math.hypot(st.vx, st.vy);
     const gr = ground(st.x, st.z), mu = s.mu * (gr.mu || 1);
     // 速度に応じてハンドルの切れ角を減らす（実車の操舵感に近づける）
-    // 速さに応じて切れ角を減らす（実車はハンドル 1 回転半で、高速では小さく切る。100km/h で全切りでも約 0.15rad）
-    const steerTarget = c.steer * s.steerMax / (1 + speed * speed / 250);
+    // 速さに応じて切れ角を減らす（実車はハンドル 1 回転半で、高速では小さく切る。100km/h で全切りでも約 0.2rad）
+    const steerTarget = c.steer * s.steerMax / (1 + speed * speed / 400);
     st.steer += (steerTarget - st.steer) * Math.min(1, dt * 8);
     // 荷重（静的 + 加減速による前後移動）
     const Wt = s.mass * G, dFz = s.mass * st.ax * s.cgH / s.wb;
@@ -51,8 +51,8 @@ export function makeCar(spec) {
     let FyF = tire(aF, FzF, mu), FyR = tire(aR, FzR, mu * (s.rearMu || 1), s.rearB) * Math.sqrt(1 - usedR * usedR);
     if (c.hand > 0) FyR *= 1 - 0.7 * c.hand;
     const sgn = Math.sign(st.vx) || 1;
-    // 低速（5m/s 以下）では、タイヤの横力の式が不安定になるので、幾何学の 2 輪モデル（舵角どおりに曲がる）へ寄せる
-    const kin = Math.max(0, Math.min(1, 1 - (speed - 1.5) / 3.5));
+    // 低速（8m/s 以下）では、タイヤの横力の式が不安定になるので、幾何学の 2 輪モデル（舵角どおりに曲がる）へ寄せる
+    const kin = Math.max(0, Math.min(1, 1 - (speed - 2) / 6));   // 2〜8m/s でなめらかに切り替える
     let Fx = Fdrive - Fdrag - Fbrake * sgn - FyF * Math.sin(st.steer) * (1 - kin);
     if (Math.abs(st.vx) < 0.5 && c.throttle < 0.05 && !c.reverse) { Fx = -st.vx * s.mass * 6; }
     const Fy = FyF * Math.cos(st.steer) + FyR;
@@ -83,7 +83,7 @@ export function makeCar(spec) {
     const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
     st.x += (fx * st.vx + fz * st.vy) * dt; st.z += (fz * st.vx - fx * st.vy) * dt;
     // 4 輪の高さから、車体の高さ・縦と横の傾き
-    const rx = fz, rz = -fx, hl = s.wb / 2, ht = s.track / 2;
+    const rx = fz, rz = -fx, hl = s.wb / 2, ht = s.track / 2;   // (rx, rz) は車の左向き
     const hF = (ground(st.x + fx * hl + rx * ht, st.z + fz * hl + rz * ht).y + ground(st.x + fx * hl - rx * ht, st.z + fz * hl - rz * ht).y) / 2;
     const hB = (ground(st.x - fx * hl + rx * ht, st.z - fz * hl + rz * ht).y + ground(st.x - fx * hl - rx * ht, st.z - fz * hl - rz * ht).y) / 2;
     const hR = (ground(st.x + rx * ht, st.z + rz * ht).y), hL = (ground(st.x - rx * ht, st.z - rz * ht).y);
