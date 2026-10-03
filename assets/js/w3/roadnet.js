@@ -290,7 +290,11 @@ export function signals(net) {
   const out = [];
   net.junctions.forEach(n => {
     if (!n.sig) return;
+    // 現示のグループ: いちばん格の高い腕の向きと平行な腕は主道路（0）、それ以外は従道路（1）
+    let main = n.A[0]; n.A.forEach(a => { if (a.arm.e.pr.rank < main.arm.e.pr.rank) main = a; });
+    const art = main.arm.e.pr.rank <= 2;   // 幹線（国道・主要地方道）は黄 4 秒
     n.A.forEach(a => {
+      const grp = Math.abs(a.d[0] * main.d[0] + a.d[1] * main.d[1]) > Math.SQRT1_2 ? 0 : 1;
       const pr = a.arm.e.pr;
       const inLanes = a.arm.end === 0 ? pr.bw : pr.fw;   // この腕から交差点へ入ってくる車線
       if (!inLanes) return;
@@ -299,7 +303,7 @@ export function signals(net) {
       let far = 0; n.A.forEach(b => { if (b !== a) far = Math.max(far, b.trim * Math.max(0, b.d[0] * tx + b.d[1] * tz)); });
       far = Math.max(far, a.trim * 0.8);
       const lx = tz, lz = -tx;
-      out.push({ x: n.x + tx * (far + 2) + lx * (pr.hw + 1.2), z: n.z + tz * (far + 2) + lz * (pr.hw + 1.2), face: Math.atan2(-tx, -tz), arm: Math.min(pr.hw * 2 - 1, inLanes * pr.lw + 0.5), junction: n.id });
+      out.push({ x: n.x + tx * (far + 2) + lx * (pr.hw + 1.2), z: n.z + tz * (far + 2) + lz * (pr.hw + 1.2), face: Math.atan2(-tx, -tz), arm: Math.max(2.0, Math.min(6.0, 1.2 + pr.edge + inLanes * pr.lw * 0.5))   /* 灯器を進入車線の中央の上に */, junction: n.id, grp, art });
     });
   });
   return out;

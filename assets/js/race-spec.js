@@ -42,7 +42,7 @@
       stopToCrosswalk: 2         // 停止線は横断歩道の 2m 手前
     },
     /* 信号機（施行規則 第4条、岐阜県 施工基準、コイト電工 低コスト灯器） */
-    signalHead: { lens: 0.25, width: 1.05, height: 0.37, minBottom: 5.0, arm: 2.0, ped: [0.36, 0.708], pedBottom: 2.7 }
+    signalHead: { lens: 0.25, width: 1.05, height: 0.37, minBottom: 5.6, minBottomArrow: 5.0, arm: 2.0, armMax: 6.0, ped: [0.36, 0.708], pedBottom: 2.7 }
   };
 
   /** 信号の 1 周期（主道路側から見て 青→黄→全赤→交差道路の青→黄→全赤） */
@@ -56,7 +56,8 @@
     t = ((t % c.len) + c.len) % c.len;
     var ph = t < c.g ? 'green' : t < c.g + c.y ? 'yellow' : 'red';
     var cs = c.g + c.y + c.ar;
-    return { phase: ph, cross: t >= cs && t < cs + c.cg, t: t, len: c.len };
+    var cp = t >= cs && t < cs + c.cg ? 'green' : t >= cs + c.cg && t < cs + c.cg + c.cy ? 'yellow' : 'red';
+    return { phase: ph, cross: cp === 'green', crossPhase: cp, t: t, len: c.len };
   };
   /** OSM の maxspeed がない道の規制速度の推定（道路の種類 c と車線数） */
   SPEC.limitFor = function (e) {

@@ -131,6 +131,8 @@ export function buildWorld(scene, W, gfx) {
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, patchy);`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor - 0.08 * big, 0.6, 1.0);');
   };
+  // 車道の三角形を外へ渡す（当たり判定で「走れる所」として使う）
+  out.roadTris = fn => roadGeos.forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) fn(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
   const roads = new THREE.Mesh(worldUV(mergeGeometries(roadGeos), 6), roadMat); roads.receiveShadow = true; out.group.add(roads);
   if (walkGeos.length) {
     const walk = new THREE.Mesh(worldUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: conc, color: 0xb8b6ae, roughness: 0.9, side: THREE.DoubleSide }));
@@ -218,32 +220,42 @@ export function buildWorld(scene, W, gfx) {
   };
   const bmesh = new THREE.Mesh(bg, bmat); bmesh.castShadow = true; bmesh.receiveShadow = true; out.group.add(bmesh);
 
-  /* --- 信号機（LED 薄型の横型 3 灯、φ250、灯器の下端 5.0m 以上） --- */
-  const sigs = signals(net);
+  /* --- 信号機（LED 薄型の横型 3 灯、φ250、フードなし）。下端 5.6m、柱は進んでくる車の左、アームは車線の上へ。
+         すべてインスタンス描画（部品ごとに 1 回の描画）で、灯の点灯はインスタンスの色で切り替える --- */
+  const sigs = signals(net), NS = sigs.length;
   out.signals = sigs;
-  const poleG = new THREE.CylinderGeometry(0.13, 0.15, 6.2, 10); poleG.translate(0, 3.1, 0);
-  const armG = new THREE.BoxGeometry(0.09, 0.09, 1); armG.translate(0, 0, 0.5);
-  const headG = new THREE.BoxGeometry(1.05, 0.37, 0.12);
-  const lampG = new THREE.CircleGeometry(0.11, 16);
-  const metal = new THREE.MeshStandardMaterial({ color: 0x8f969c, roughness: 0.5, metalness: 0.6 });
-  const headM = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.6 });
-  const off = new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.3 });
-  const lampM = { green: new THREE.MeshStandardMaterial({ color: 0x0b2a22, emissive: 0x00e0b0, emissiveIntensity: 0 }), yellow: new THREE.MeshStandardMaterial({ color: 0x2a2208, emissive: 0xffb000, emissiveIntensity: 0 }), red: new THREE.MeshStandardMaterial({ color: 0x2a0b0b, emissive: 0xff2010, emissiveIntensity: 0 }) };
-  out.sigGroups = [];
-  sigs.forEach(s => {
-    const g = new THREE.Group(); g.position.set(s.x, terr.at(s.x, s.z), s.z); g.rotation.y = s.face;
-    g.add(new THREE.Mesh(poleG, metal));
-    // アームは柱から道路の上へ（進んでくる車から見て右へ伸ばす）
-    const arm = new THREE.Mesh(armG, metal); arm.scale.z = s.arm; arm.rotation.y = -Math.PI / 2; arm.position.y = 5.9; g.add(arm);
-    const head = new THREE.Group(); head.position.set(-Math.min(s.arm, 4) + 0.7, 5.6, 0.05);
-    head.add(new THREE.Mesh(headG, headM));
-    const L = {};
-    ['green', 'yellow', 'red'].forEach((c, i) => { const m = new THREE.Mesh(lampG, off); m.position.set(-0.34 + i * 0.34, 0, 0.065); head.add(m); L[c] = m; });   // 正面から見て左から青・黄・赤
-    g.add(head);
-    out.group.add(g);
-    out.sigGroups.push({ s, L });
+  const SH = (window.TB && TB.Race && TB.Race.SPEC && TB.Race.SPEC.signalHead) || { height: 0.37, width: 1.05, minBottom: 5.6 };
+  const headY = SH.minBottom + SH.height / 2, armY = headY + SH.height / 2 + 0.22, poleH = armY + 0.25;
+  const poleG = new THREE.CylinderGeometry(0.11, 0.14, 1, 10); poleG.translate(0, 0.5, 0);
+  const armG = new THREE.CylinderGeometry(0.055, 0.065, 1, 8); armG.rotateZ(Math.PI / 2); armG.translate(0.5, 0, 0);
+  const headG = new THREE.BoxGeometry(SH.width, SH.height, 0.14);
+  const brG = new THREE.BoxGeometry(0.06, 0.22, 0.06);
+  const lampG = new THREE.CircleGeometry(0.115, 20);
+  const metal = new THREE.MeshStandardMaterial({ color: 0x9aa1a7, roughness: 0.45, metalness: 0.7 });
+  const headM = new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.55, metalness: 0.2 });
+  const lampMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  const inst = (g, m, n) => { const im = new THREE.InstancedMesh(g, m, n); im.castShadow = m !== lampMat; im.receiveShadow = true; out.group.add(im); return im; };
+  const poles = inst(poleG, metal, NS), arms = inst(armG, metal, NS), heads = inst(headG, headM, NS), brs = inst(brG, metal, NS), lamps = inst(lampG, lampMat, NS * 3);
+  const M4 = new THREE.Matrix4(), base = new THREE.Matrix4(), loc = new THREE.Matrix4(), V = new THREE.Vector3(), Q = new THREE.Quaternion(), S1 = new THREE.Vector3(1, 1, 1);
+  sigs.forEach((s, k) => {
+    base.makeRotationY(s.face).setPosition(s.x, terr.at(s.x, s.z), s.z);
+    const hx = s.arm - 0.55;   // 灯器の中心（ローカル +x = 運転者から見て右 = 道路の上）
+    poles.setMatrixAt(k, M4.copy(base).multiply(loc.makeScale(1, poleH, 1)));
+    arms.setMatrixAt(k, M4.copy(base).multiply(loc.compose(V.set(0, armY, 0), Q.identity(), new THREE.Vector3(s.arm, 1, 1))));
+    brs.setMatrixAt(k, M4.copy(base).multiply(loc.makeTranslation(hx, armY - 0.11, 0)));
+    heads.setMatrixAt(k, M4.copy(base).multiply(loc.makeTranslation(hx, headY, 0)));
+    for (let i = 0; i < 3; i++) {   // 正面から見て左から青・黄・赤
+      const lx = hx - 0.34 + i * 0.34;
+      lamps.setMatrixAt(k * 3 + i, M4.copy(base).multiply(loc.makeTranslation(lx, headY, 0.071)));
+    }
   });
-  out.lampM = lampM; out.lampOff = off;
+  [poles, arms, heads, brs, lamps].forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
+  // 点灯の色（LED の青は青緑）。消灯は暗い灰
+  const LIT = { green: new THREE.Color(0.1, 1.6, 1.25), yellow: new THREE.Color(2.0, 1.25, 0.05), red: new THREE.Color(2.0, 0.12, 0.08) }, DARK = new THREE.Color(0.05, 0.055, 0.06);
+  const ORDER = ['green', 'yellow', 'red'];
+  out.setSignal = (k, phase) => { for (let i = 0; i < 3; i++) lamps.setColorAt(k * 3 + i, ORDER[i] === phase ? LIT[phase] : DARK); };
+  out.signalsDone = () => { if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true; };
+  sigs.forEach((s, k) => out.setSignal(k, 'red')); out.signalsDone();
   return out;
 }
 
@@ -268,5 +280,5 @@ export function buildSky(scene, renderer, opt) {
   const pm = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene(); const sky2 = new Sky(); sky2.scale.setScalar(1000); Object.keys(u).forEach(k => { if (sky2.material.uniforms[k]) sky2.material.uniforms[k].value = u[k].value; }); envScene.add(sky2);
   scene.environment = pm.fromScene(envScene, 0.02).texture; scene.environmentIntensity = 0.12;   // Preetham の空は値が大きいので弱める
-  return { sky, sun, sunDir, hemi };
+  return { sky, sun, sunDir, hemi, dispose() { pm.dispose(); sky2.material.dispose(); sky2.geometry.dispose(); } };
 }

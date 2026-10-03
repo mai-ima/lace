@@ -8,17 +8,19 @@ export function makeCar(spec) {
   const s = Object.assign({
     mass: 1300, wb: 2.6, cgF: 0.47, track: 1.52, cgH: 0.52, Iz: 1900,
     power: 120e3, maxRpm: 7000, idleRpm: 900, gears: [3.4, 2.1, 1.45, 1.1, 0.9, 0.75], final: 4.1, wheelR: 0.31,
-    mu: 1.05, B: 10, C: 1.9, E: 0.97, cd: 0.33, area: 2.1, rr: 0.012, brake: 1.0, drive: 'fr', steerMax: 0.62
+    mu: 1.05, B: 10, C: 1.9, E: 0.97, cd: 0.33, area: 2.1, rr: 0.012, brake: 1.0, drive: 'fr', steerMax: 0.62, rearB: 1.5, rearMu: 1.08, esc: true
   }, spec || {});
   const a = s.wb * (1 - s.cgF), b = s.wb * s.cgF;   // 重心から前軸・後軸まで
-  const st = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vy: 0, r: 0, steer: 0, gear: 1, rpm: s.idleRpm, pitch: 0, roll: 0, slipF: 0, slipR: 0, ax: 0, ay: 0, abs: false, tcs: false, onRoad: true, contact: 0 };
-  function tire(alpha, Fz, mu) { const x = alpha; return -mu * Fz * Math.sin(s.C * Math.atan(s.B * x - s.E * (s.B * x - Math.atan(s.B * x)))); }
+  const st = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vy: 0, r: 0, steer: 0, gear: 1, rpm: s.idleRpm, pitch: 0, roll: 0, slipF: 0, slipR: 0, ax: 0, ay: 0, abs: false, tcs: false, esc: false, onRoad: true, contact: 0 };
+  // 簡易マジックフォーミュラ。kB は横方向の硬さの倍率（後輪を硬くして、量産車らしい弱いアンダーステアにする）
+  function tire(alpha, Fz, mu, kB) { const B = s.B * (kB || 1), x = alpha; return -mu * Fz * Math.sin(s.C * Math.atan(B * x - s.E * (B * x - Math.atan(B * x)))); }
   function step(dt, c, ground) {
     // c: { steer -1..1, throttle 0..1, brake 0..1, hand 0..1 }  ground(x,z) → { y, mu, drag }
     const speed = Math.hypot(st.vx, st.vy);
     const gr = ground(st.x, st.z), mu = s.mu * (gr.mu || 1);
     // 速度に応じてハンドルの切れ角を減らす（実車の操舵感に近づける）
-    const steerTarget = c.steer * s.steerMax / (1 + speed * speed / 900);
+    // 速さに応じて切れ角を減らす（実車はハンドル 1 回転半で、高速では小さく切る。100km/h で全切りでも約 0.15rad）
+    const steerTarget = c.steer * s.steerMax / (1 + speed * speed / 250);
     st.steer += (steerTarget - st.steer) * Math.min(1, dt * 8);
     // 荷重（静的 + 加減速による前後移動）
     const Wt = s.mass * G, dFz = s.mass * st.ax * s.cgH / s.wb;
@@ -42,14 +44,16 @@ export function makeCar(spec) {
     if (Fdrive > mu * driveFz * 0.95) { Fdrive = mu * driveFz * 0.95; st.tcs = true; }   // TCS
     let Fbrake = c.brake * s.brake * mu * Wt * 0.95;
     st.abs = c.brake > 0.6 && speed > 3;
-    if (c.reverse) { Fdrive = -c.throttle * 3500; }
+    if (c.reverse) { Fdrive = st.vx > -20 / 3.6 ? -c.throttle * 3500 * Math.min(1, (20 / 3.6 + st.vx) / 2) : 0; }   // 後退は 20km/h まで
     const Fdrag = 0.5 * 1.2 * s.cd * s.area * st.vx * Math.abs(st.vx) + s.rr * Wt * Math.sign(st.vx) + (gr.drag || 0) * st.vx * s.mass;
     // 横力（摩擦円: 前後の力を使うほど横の力は減る）
     const usedR = Math.min(0.95, Math.abs(Fdrive) / (mu * FzR + 1));
-    let FyF = tire(aF, FzF, mu), FyR = tire(aR, FzR, mu) * Math.sqrt(1 - usedR * usedR);
+    let FyF = tire(aF, FzF, mu), FyR = tire(aR, FzR, mu * (s.rearMu || 1), s.rearB) * Math.sqrt(1 - usedR * usedR);
     if (c.hand > 0) FyR *= 1 - 0.7 * c.hand;
     const sgn = Math.sign(st.vx) || 1;
-    let Fx = Fdrive - Fdrag - Fbrake * sgn - FyF * Math.sin(st.steer);
+    // 低速（5m/s 以下）では、タイヤの横力の式が不安定になるので、幾何学の 2 輪モデル（舵角どおりに曲がる）へ寄せる
+    const kin = Math.max(0, Math.min(1, 1 - (speed - 1.5) / 3.5));
+    let Fx = Fdrive - Fdrag - Fbrake * sgn - FyF * Math.sin(st.steer) * (1 - kin);
     if (Math.abs(st.vx) < 0.5 && c.throttle < 0.05 && !c.reverse) { Fx = -st.vx * s.mass * 6; }
     const Fy = FyF * Math.cos(st.steer) + FyR;
     const ax = Fx / s.mass + st.vy * st.r, ay = Fy / s.mass - st.vx * st.r;
@@ -57,7 +61,23 @@ export function makeCar(spec) {
     if (speed < 0.6 && Math.abs(st.r) < 0.5) { st.vy *= 0.8; }
     st.ax = Fx / s.mass; st.ay = Fy / s.mass;
     st.r += (a * FyF * Math.cos(st.steer) - b * FyR) / s.Iz * dt;
-    if (speed < 1) st.r *= 0.7;
+    if (kin > 0) {
+      const rK = st.vx * Math.tan(st.steer) / s.wb;
+      st.r += (rK - st.r) * kin; st.vy += (rK * b - st.vy) * kin;
+    }
+    // 横滑り防止（ESC。運転設定で切れる）: 横滑り角が大きいときと、路面の限界を超える向きの変わり方のときに抑える
+    st.esc = false;
+    if (s.esc !== false && speed > 5) {
+      const beta = Math.atan2(st.vy, Math.abs(st.vx)), rMax = mu * G / speed * 1.15;
+      if (Math.abs(beta) > 0.1 || Math.abs(st.r) > rMax) {
+        st.esc = true;
+        const over = beta * st.r < 0;   // 後ろが外へ流れている（オーバーステア）
+        const rT = Math.max(-rMax, Math.min(rMax, st.r)) + (over ? beta * 2.0 : 0);
+        st.r += (rT - st.r) * Math.min(1, dt * 6);
+        st.vy *= 1 - Math.min(1, dt * 1.5);
+        st.vx -= Math.sign(st.vx) * Math.min(Math.abs(st.vx), 1.2 * dt) * (Math.abs(beta) > 0.1 ? 1 : 0);
+      }
+    }
     st.yaw += st.r * dt;
     // 世界座標へ（前 = (sin yaw, cos yaw)、x 東・z 南）
     const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
@@ -74,44 +94,42 @@ export function makeCar(spec) {
   return { s, st, step, kmh: () => Math.round(Math.hypot(st.vx, st.vy) * 3.6) };
 }
 
-/** 建物の外形（xz の凸包）にぶつかったら押し戻す */
-export function makeColliders(B) {
-  const n = B.info.length, pts = Array.from({ length: n }, () => []);
-  for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v]; if (pts[k].length < 400 || (v % 3 === 0)) pts[k].push([B.pos[v * 3], B.pos[v * 3 + 2]]); }
-  const hulls = pts.map(p => hull(p)), grid = new Map(), C = 40;
-  hulls.forEach((h, k) => {
-    if (h.length < 3) return;
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; h.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); });
-    for (let gx = Math.floor(x0 / C); gx <= Math.floor(x1 / C); gx++) for (let gz = Math.floor(z0 / C); gz <= Math.floor(z1 / C); gz++) { const key = gx + ',' + gz; if (!grid.has(key)) grid.set(key, []); grid.get(key).push(k); }
-  });
-  return function collide(st, rad) {
-    const list = grid.get(Math.floor(st.x / C) + ',' + Math.floor(st.z / C)); if (!list) return 0;
+/**
+ * 建物の当たり判定。建物の下の部分（下端から 3m 以内）の三角形を 0.5m の格子に塗って、実際の外形で判定する
+ * （L 字やコの字の建物でも、外形の内側の空きに見えない壁ができない。上空の通路やひさしは当たらない）。
+ * 車は車体の形の長方形（8 点）で調べる。
+ */
+export function makeColliders(B, ext, makeGrid, freeTris) {
+  const g = makeGrid(ext.x0, ext.z0, ext.size, 0.5), nb = B.info.length, lo = new Float32Array(nb).fill(1e9);
+  for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v]; if (B.pos[v * 3 + 1] < lo[k]) lo[k] = B.pos[v * 3 + 1]; }
+  const P = B.pos, I = B.idx;
+  for (let t = 0; t < I.length; t += 3) {
+    const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3, y0 = lo[B.bid[I[t]]] + 3;
+    if (P[a + 1] > y0 || P[b + 1] > y0 || P[c + 1] > y0) continue;
+    g.tri(P[a], P[a + 2], P[b], P[b + 2], P[c], P[c + 2]);
+  }
+  // 車道（OSM）の上は走れることを優先する（バスターミナルの屋根などが地面まで続く立体として入っている所がある）
+  if (freeTris) { g.clear = true; freeTris((ax, az, bx, bz, cx, cz) => g.tri(ax, az, bx, bz, cx, cz)); g.clear = false; }
+  const HL = 2.2, HW = 0.88, SAMP = [[HL, HW], [HL, -HW], [-HL, HW], [-HL, -HW], [HL, 0], [-HL, 0], [0, HW], [0, -HW]];
+  function collide(st) {
+    const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw), lx = fz, lz = -fx;   // 前と左
     let hit = 0;
-    list.forEach(k => {
-      const h = hulls[k]; let inside = true, best = Infinity, nx = 0, nz = 0;
-      for (let i = 0; i < h.length; i++) {
-        const a = h[i], b = h[(i + 1) % h.length], ex = b[0] - a[0], ez = b[1] - a[1], el = Math.hypot(ex, ez) || 1;
-        const ox = ez / el, oz = -ex / el;   // 外向き（凸包は反時計回り）
-        const d = (st.x - a[0]) * ox + (st.z - a[1]) * oz;
-        if (d > rad) { inside = false; break; }
-        if (rad - d < best) { best = rad - d; nx = ox; nz = oz; }
+    for (let it = 0; it < 3; it++) {
+      let best = null;
+      for (const [u, w] of SAMP) {
+        const e = g.escape(st.x + fx * u + lx * w, st.z + fz * u + lz * w, 2.5);
+        if (e && (!best || e.d > best.d)) best = e;
       }
-      if (inside && best < 6) {
-        st.x += nx * best; st.z += nz * best;
-        const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
-        const vwx = fx * st.vx + fz * st.vy, vwz = fz * st.vx - fx * st.vy, vn = vwx * nx + vwz * nz;
-        if (vn < 0) { const rx2 = vwx - (1.4 * vn) * nx, rz2 = vwz - (1.4 * vn) * nz; st.vx = (rx2 * fx + rz2 * fz) * 0.8; st.vy = (rx2 * fz - rz2 * fx) * 0.8; st.r *= 0.5; hit = Math.max(hit, -vn); }
+      if (!best) break;
+      st.x += best.dx; st.z += best.dz;
+      const vwx = fx * st.vx + lx * st.vy, vwz = fz * st.vx + lz * st.vy, vn = vwx * best.nx + vwz * best.nz;
+      if (vn < 0) {
+        const rx2 = (vwx - 1.3 * vn * best.nx) * 0.85, rz2 = (vwz - 1.3 * vn * best.nz) * 0.85;
+        st.vx = rx2 * fx + rz2 * fz; st.vy = rx2 * lx + rz2 * lz; st.r *= 0.5; hit = Math.max(hit, -vn);
       }
-    });
+    }
     return hit;
-  };
-}
-function hull(P) {
-  if (P.length < 3) return P;
-  P = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lo = [], up = [];
-  for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
-  for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
-  return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+  collide.grid = g;
+  return collide;
 }

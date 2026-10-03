@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { loadWorld } from './data.js';
 import { buildWorld, buildSky } from './world.js';
 import { makeCar, makeColliders } from './vehicle.js';
+import { makeGrid } from './grid.js';
 
 /** 品質の段階（GPU 名で自動判定。iPhone 17 は高、Intel 内蔵は中） */
 export function detectGfx(renderer, force) {
@@ -65,7 +66,7 @@ export async function start(container, opt) {
   const W = await loadWorld(opt.base || 'assets/data/world/center/');
   const sky = buildSky(scene, renderer, { shadows: gfx.shadows, far: gfx.far, elev: opt.elev, azim: opt.azim });
   const world = buildWorld(scene, W, gfx);
-  const collide = makeColliders(W.bldg);
+  const T0 = W.terrain, collide = makeColliders(W.bldg, { x0: T0.x0, z0: T0.z0, size: (T0.nx - 1) * T0.cell }, makeGrid, world.roadTris);
   // 車（Khronos Car Concept。高品質なリアル調の車がそろうまでの暫定）
   if (!(TB.RaceRealCars && TB.RaceRealCars.concept)) await new Promise(r => { const s = document.createElement('script'); s.src = 'assets/vendor/real-concept.js'; s.onload = s.onerror = r; document.head.appendChild(s); });
   const carM = TB.RaceRealCars && TB.RaceRealCars.concept ? decodeCar(TB.RaceRealCars.concept) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
@@ -84,11 +85,26 @@ export async function start(container, opt) {
     if (pr.one && pr.rev) car.st.yaw += Math.PI;
   }
   const ground = (x, z) => ({ y: W.terrain.at(x, z) + 0.06, mu: 1 });
+  car.st.y = ground(car.st.x, car.st.z).y;
   // 入力
   const keys = {};
-  const onKey = (e, d) => { keys[e.key] = d; if (d && (e.key === 'Escape') && opt.onExit) opt.onExit(); };
+  // Esc: 一時停止（もう一度 Esc で再開、Enter / q で終了）
+  let paused = false;
+  const pauseEl = document.createElement('div');
+  pauseEl.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,10,14,.55);color:#fff;font-size:18px;text-align:center;line-height:2;z-index:5';
+  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了</div>';
+  pauseEl.addEventListener('pointerdown', () => setPause(false));
+  container.appendChild(pauseEl);
+  function setPause(v) { paused = v; pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
+  const onKey = (e, d) => {
+    if (d && e.key === 'Escape') { setPause(!paused); return; }
+    if (d && paused && (e.key === 'Enter' || e.key === 'q' || e.key === 'Q')) { if (opt.onExit) opt.onExit(); return; }
+    keys[e.key] = d;
+  };
+  const onBlur = () => { Object.keys(keys).forEach(k => { keys[k] = false; }); };
   const kd = e => onKey(e, true), ku = e => onKey(e, false);
-  window.addEventListener('keydown', kd); window.addEventListener('keyup', ku);
+  window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('blur', onBlur);
+  document.addEventListener('visibilitychange', () => { if (document.hidden && !paused) setPause(true); });
   const ctl = { steer: 0, throttle: 0, brake: 0, hand: 0, reverse: false };
   // タッチ操作（スマホ）: 左下にハンドル（左右）、右下にアクセルとブレーキ、その上にサイドブレーキ。アイコンは SVG
   const touch = { left: 0, right: 0, up: 0, down: 0, hand: 0 };
@@ -107,7 +123,7 @@ export async function start(container, opt) {
     container.appendChild(pad);
     pad.querySelectorAll('b').forEach(b => {
       const k = b.dataset.k;
-      const on = e => { e.preventDefault(); if (k === 'exit') { if (opt.onExit) opt.onExit(); return; } touch[k] = 1; b.classList.add('on'); };
+      const on = e => { e.preventDefault(); if (k === 'exit') { setPause(true); return; } touch[k] = 1; b.classList.add('on'); };
       const offf = e => { e.preventDefault(); touch[k] = 0; b.classList.remove('on'); };
       b.addEventListener('pointerdown', on); b.addEventListener('pointerup', offf); b.addEventListener('pointercancel', offf); b.addEventListener('pointerleave', offf);
     });
@@ -142,22 +158,25 @@ export async function start(container, opt) {
   }
   // 信号（race-spec.js の公式の秒数。交差点ごとに位相をずらす）
   function updateSignals(t) {
-    world.sigGroups.forEach(({ s, L }) => {
-      const art = true, ph = R && R.SPEC ? R.SPEC.phaseAt(t + (s.junction % 97) * 1.7 + (Math.abs(Math.cos(s.face)) > 0.7 ? 0 : 17), art).phase : 'green';
-      ['green', 'yellow', 'red'].forEach(c => { L[c].material = c === ph ? world.lampM[c] : world.lampOff; });
+    // 交差点ごとに周期をずらし、主道路（grp 0）は phase、従道路（grp 1）は crossPhase（全赤を挟むので同時に青にならない）
+    world.signals.forEach((s, k) => {
+      const ph = R && R.SPEC ? R.SPEC.phaseAt(t + (s.junction * 7.3) % 33, s.art) : { phase: 'green', crossPhase: 'red' };
+      world.setSignal(k, s.grp === 0 ? ph.phase : ph.crossPhase);
     });
-    Object.values(world.lampM).forEach(m => { m.emissiveIntensity = 2.2; });
+    world.signalsDone();
   }
   let last = performance.now(), acc = 0, simT = 0, running = true, frames = 0, fpsT = 0, fps = 0, hitT = 0;
   const STEP = 1 / 120;
   function frame(now) {
     if (!running) return;
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    // 遅い端末でも実時間で進める（物理は固定刻みで最大 0.25 秒ぶんまで追いつく）
+    const dt = Math.min(0.25, (now - last) / 1000); last = now;
+    if (paused) { requestAnimationFrame(frame); return; }
     readInput(dt);
     acc += dt;
     while (acc >= STEP) {
       car.step(STEP, ctl, ground);
-      const hit = collide(car.st, 1.1); if (hit > 3) hitT = 0.4;
+      const hit = collide(car.st); if (hit > 3) hitT = 0.4;
       acc -= STEP; simT += STEP;
     }
     if (hitT > 0) hitT -= dt;
@@ -170,17 +189,31 @@ export async function start(container, opt) {
     const info = renderer.info.render;
     hud.innerHTML = '<b>' + car.kmh() + '</b> km/h　' + (st.gear) + ' 速' + (st.abs ? '　ABS' : '') + (st.tcs ? '　TCS' : '') + (hitT > 0 ? '　衝突' : '') +
       '<br><small>' + fps + ' fps　描画 ' + info.calls + '　三角形 ' + Math.round(info.triangles / 1000) + 'k　画質 ' + gfx.tier + '</small>' +
-      '<br><small>出典: 国土交通省 PLATEAU を加工して作成 / 地理院タイル / © OpenStreetMap contributors</small>';
+      '<br><small>出典: 国土交通省 PLATEAU を加工して作成 / 地理院タイル（航空写真・標高）を加工して作成 / © OpenStreetMap contributors / 車: Khronos glTF Sample Assets「Car Concept」（CC BY 4.0）</small>';
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
   const api = {
-    renderer, scene, cam, car, world, gfx, W,
-    stop() { running = false; window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', resize); renderer.dispose(); container.innerHTML = ''; },
+    renderer, scene, cam, car, world, gfx, W, collide,
+    stop() {
+      running = false;
+      window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', resize); window.removeEventListener('blur', onBlur);
+      // GPU の資源（形・材質・テクスチャ・環境マップ）を片付けて、WebGL のコンテキストも手放す
+      const seen = new Set();
+      scene.traverse(o => {
+        if (o.geometry && !seen.has(o.geometry)) { seen.add(o.geometry); o.geometry.dispose(); }
+        [].concat(o.material || []).forEach(m => { if (seen.has(m)) return; seen.add(m); Object.values(m).forEach(v => { if (v && v.isTexture && !seen.has(v)) { seen.add(v); v.dispose(); } }); m.dispose(); });
+      });
+      if (scene.environment) scene.environment.dispose();
+      if (sky.dispose) sky.dispose();
+      renderer.dispose(); renderer.forceContextLoss();
+      container.innerHTML = '';
+      if (window.W3 === api) window.W3 = null;
+    },
     keys, ready: world.orthoReady,
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
-    tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st, 1.1); simT += STEP; } },
+    tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; } },
     draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; updateCam(1 / 60); updateSignals(simT); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
