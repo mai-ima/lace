@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8"><title>RoadNet preview</title>
+<body style="margin:0;background:#222">
+<canvas id="c" width="1400" height="1400"></canvas>
+<script type="module">
+import { build, markings, signals, ribbon } from '../../assets/js/w3/roadnet.js';
+const q = new URLSearchParams(location.search), cx = +(q.get('x') || 0), cz = +(q.get('z') || 0), span = +(q.get('span') || 300), photo = q.get('photo') !== '0';
+const D = await (await fetch('../../assets/data/world/center/roads.json')).json();
+const net = build(D, () => 0);
+const c = document.getElementById('c'), g = c.getContext('2d'), S = c.width / span;
+const X = x => (x - cx) * S + c.width / 2, Z = z => (z - cz) * S + c.height / 2;
+// 航空写真（地理院 z18）を下に敷く
+if (photo) {
+  const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574, z = 18, n = 2 ** z;
+  const lon = x => LON0 + x / KX, lat = zz => LAT0 - zz / KZ;
+  const tx = l => (l + 180) / 360 * n, ty = la => (1 - Math.log(Math.tan(la * Math.PI / 180) + 1 / Math.cos(la * Math.PI / 180)) / Math.PI) / 2 * n;
+  const x0 = Math.floor(tx(lon(cx - span / 2))), x1 = Math.floor(tx(lon(cx + span / 2))), y0 = Math.floor(ty(lat(cz - span / 2))), y1 = Math.floor(ty(lat(cz + span / 2)));
+  const jobs = [];
+  for (let i = x0; i <= x1; i++) for (let j = y0; j <= y1; j++) jobs.push(new Promise(r => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => {
+    const lo0 = i / n * 360 - 180, lo1 = (i + 1) / n * 360 - 180;
+    const la = t => Math.atan(Math.sinh(Math.PI * (1 - 2 * t / n))) * 180 / Math.PI;
+    g.drawImage(im, X((lo0 - LON0) * KX), Z((LAT0 - la(j)) * KZ), (lo1 - lo0) * KX * S, ((la(j) - la(j + 1)) * KZ) * S); r(); }; im.onerror = r; im.src = `https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/${z}/${i}/${j}.jpg`; }));
+  await Promise.all(jobs);
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(0, 0, c.width, c.height);
+}
+g.globalAlpha = photo ? 0.55 : 1;
+net.edges.forEach(e => { const R = ribbon(e, -e.pr.hw, e.pr.hw); g.fillStyle = '#555a60'; g.beginPath(); R.forEach((p, i) => i ? g.lineTo(X(p[0]), Z(p[1])) : g.moveTo(X(p[0]), Z(p[1]))); for (let i = R.length - 1; i >= 0; i--) g.lineTo(X(R[i][2]), Z(R[i][3])); g.closePath(); g.fill(); });
+net.junctions.forEach(n => { g.fillStyle = n.sig ? '#6a5a5a' : '#5d6168'; g.beginPath(); n.poly.forEach((p, i) => i ? g.lineTo(X(p[0]), Z(p[1])) : g.moveTo(X(p[0]), Z(p[1]))); g.closePath(); g.fill(); });
+g.globalAlpha = 1;
+markings(net).forEach(m => { g.fillStyle = m.c === 'y' ? '#f0c020' : '#fff'; g.beginPath(); m.q.forEach((p, i) => i ? g.lineTo(X(p[0]), Z(p[1])) : g.moveTo(X(p[0]), Z(p[1]))); g.closePath(); g.fill(); });
+signals(net).forEach(s => { g.fillStyle = '#ff3030'; g.beginPath(); g.arc(X(s.x), Z(s.z), 4, 0, 7); g.fill(); g.strokeStyle = '#ff3030'; g.beginPath(); g.moveTo(X(s.x), Z(s.z)); g.lineTo(X(s.x) + Math.sin(s.face) * 14, Z(s.z) + Math.cos(s.face) * 14); g.stroke(); });
+document.title = 'done';
+</script>
