@@ -223,9 +223,15 @@
     if (!c.length) c = node.out.slice();
     var ex = c.map(function (h) { return { h: h, ang: wrap(M.headOut(h) - hin) }; });
     ex.sort(function (a, b) { return b.ang - a.ang; });   // 左（向きが増える）から
-    if (ex.length > 3) {
-      var mid = ex.slice(1, -1).reduce(function (a, b) { return Math.abs(b.ang) < Math.abs(a.ang) ? b : a; });
-      ex = [ex[0], mid, ex[ex.length - 1]];
+    if (ex.length > 3) {   // 4 本以上: 直進に近い 1 本と、左折・右折として自然な（約 90 度に近い）各 1 本を残す
+      var stx = ex.reduce(function (a, b) { return Math.abs(b.ang) < Math.abs(a.ang) ? b : a; });
+      function bestSide(sgn) {
+        var c2 = ex.filter(function (x) { return x !== stx && x.ang * sgn > 0.3 && Math.abs(x.ang) < 2.6; });
+        return c2.length ? c2.reduce(function (a, b) { return Math.abs(Math.abs(b.ang) - 1.57) < Math.abs(Math.abs(a.ang) - 1.57) ? b : a; }) : null;
+      }
+      var lx = bestSide(1), rx = bestSide(-1), pick3 = [lx, stx, rx].filter(Boolean);
+      if (pick3.length < 3) { var rest = ex.filter(function (x) { return pick3.indexOf(x) < 0; }); while (pick3.length < 3 && rest.length) pick3.push(rest.shift()); }
+      ex = pick3.sort(function (a, b) { return b.ang - a.ang; });
     }
     ex.forEach(function (x) {
       x.dir = Math.abs(x.ang) < 0.6 ? 'straight' : x.ang > 0 ? (x.ang > 2.5 ? 'uturn' : 'left') : (x.ang < -2.5 ? 'uturn' : 'right');
@@ -696,8 +702,10 @@
         (e.sig || []).forEach(function (d) {
           var dd = h & 1 ? e.len - d : d, j = Math.round(dd / r.step);
           if (j > 30 && j < jEnd - 60) {
+            var off = hash2(h * 7 + d, e.len) * 16.5;   // 途中の信号の位相（場所ごとに固定）
             segs[j].crosswalk = segs[j + 1].crosswalk = true; segs[j - 3].stopLine = true;
-            segs[j - 3].sprites.push({ kind: 'signal', offset: 1 + 0.9 / hwv, city: true, mid: true });
+            segs[j - 3].sprites.push({ kind: 'signal', offset: 1 + 0.9 / hwv, city: true, mid: true, off: off });
+            (spec.midStops = spec.midStops || []).push({ seg: j - 3, off: off });
           }
         });
         if (limit && segs[30]) segs[30].sprites.push({ kind: 'limitsign', offset: -(1 + 1.2 / hwv), n: limit });

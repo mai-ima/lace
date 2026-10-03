@@ -1460,7 +1460,7 @@
     if (mode === 'world' && spec.mapEdge !== undefined) sig.t = (((spec.sigSeed || 0) * 5.7) + Date.now() / 1000) % 16.5;   // 同じ交差点はいつも同じ位相（現実の時刻で進む）
     var cops = [], wantedT = 0, escapeT = 0, bustHits = 0, orbisDone = false,
         stopDone = !!(cfg.start && spec.stopSeg && P.total + PLAYER_Z > spec.stopSeg * SEG);   // 停止線より先から始まるなら信号は判定しない
-    segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = function () { return sig.phase; }; if (sp.kind === 'fork') sp.pick = function () { return cfg.exitDirs ? chooseExit() : -1; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
+    segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = sp.mid ? function () { return phaseAt(sig.t + (sp.off || 0)); } : function () { return sig.phase; }; if (sp.kind === 'fork') sp.pick = function () { return cfg.exitDirs ? chooseExit() : -1; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
     function violation(kind) {
       if (mode !== 'world' || demo) return;
       var seen = cops.length > 0 || traffic.some(function (t) { return t.cop && Math.abs(t.total - pz()) < SEG * (kind === 'speed' ? 30 : 90); });
@@ -1479,11 +1479,19 @@
       if (cfg.onPursuit) cfg.onPursuit(true);
     }
     var sirenA = null;
+    function phaseAt(t) { t = ((t % 16.5) + 16.5) % 16.5; return t < 8 ? 'green' : t < 10.5 ? 'yellow' : 'red'; }
+    var midDone = (spec.midStops || []).map(function (ms) { return !!(cfg.start && P.total + PLAYER_Z > ms.seg * SEG); });
     function worldRules(dt) {
       // 信号: 青 8 秒 → 黄 2.5 秒 → 赤 6 秒
+      sig.t = (sig.t + dt) % 16.5; sig.phase = phaseAt(sig.t);
+      // 途中の信号（横断歩道）: 赤で停止線を越えると信号無視
+      (spec.midStops || []).forEach(function (ms, mi) {
+        if (!midDone[mi] && pz() > ms.seg * SEG) {
+          midDone[mi] = true;
+          if (phaseAt(sig.t + ms.off) === 'red' && P.speed > MAX * 0.04) { pop(L('信号無視！', 'RAN A RED LIGHT!'), '#ff5252'); violation('signal'); }
+        }
+      });
       if (spec.stopSeg) {
-        sig.t = (sig.t + dt) % 16.5;
-        sig.phase = sig.t < 8 ? 'green' : sig.t < 10.5 ? 'yellow' : 'red';
         var stopZ = spec.stopSeg * SEG, crossZ = spec.crossSeg * SEG;
         if (!stopDone && pz() > stopZ) {
           stopDone = true;
@@ -2249,13 +2257,19 @@
     }
 
     function moveTraffic(dt) {
-      var stopZ = spec.stopSeg ? spec.stopSeg * SEG : null, holding = stopZ !== null && sig.phase !== 'green' && !!(spec.junction && spec.junction.signal);
+      var stops = [];   // 信号の停止線（交差点・途中の信号）。赤・黄では手前で止まる
+      if (spec.stopSeg && spec.junction && spec.junction.signal) stops.push({ z: spec.stopSeg * SEG, ph: sig.phase });
+      (spec.midStops || []).forEach(function (ms) { stops.push({ z: ms.seg * SEG, ph: phaseAt(sig.t + ms.off) }); });
+      var stopZ = spec.stopSeg ? spec.stopSeg * SEG : null;
       traffic.forEach(function (t) {
         if (t.train) { if (state === 'race') t.total += t.speed * dt; return; }
-        if (t.dir !== -1 && stopZ !== null) {   // 赤・黄では停止線の手前で止まる
-          var dz = stopZ - t.total;
-          if (holding && dz > 0 && dz < SEG * 14) t.speed = Math.max(0, Math.min(t.speed, (dz - SEG * 1.2) / SEG * MAX * 0.05));
-          else t.speed = Math.min(t.cruise || t.speed, t.speed + MAX * 0.25 * dt);
+        if (t.dir !== -1 && (stopZ !== null || stops.length)) {
+          var held = false;
+          for (var si = 0; si < stops.length && !held; si++) {
+            var dz = stops[si].z - t.total;
+            if (stops[si].ph !== 'green' && dz > 0 && dz < SEG * 14) { t.speed = Math.max(0, Math.min(t.speed, (dz - SEG * 1.2) / SEG * MAX * 0.05)); held = true; }
+          }
+          if (!held) t.speed = Math.min(t.cruise || t.speed, t.speed + MAX * 0.25 * dt);
         }
         if (state === 'race') t.total += t.speed * dt * (t.dir === -1 ? -1 : 1);
         if (t.train) { if (t.total < pz() - SEG * 40) t.total = pz() + SEG * (220 + Math.random() * 120); return; }
