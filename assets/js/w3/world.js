@@ -225,18 +225,19 @@ export function buildWorld(scene, W, gfx) {
   const bmat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02, flatShading: true });
   // 窓（シェーダー）: 階の高さは種類ごと（戸建て 2.9m・共同住宅 2.9m・事務所 3.6m）、1 階は店の大きなガラス、屋上の手すり部分は窓なし
   bmat.onBeforeCompile = sh => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen;\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen; vRel = vec3(transformed.x - aCen.x, transformed.y - aBld.x, transformed.z - aCen.y);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
-        vec3 wdx = dFdx(vWP), wdy = dFdy(vWP); vec3 fn = normalize(cross(wdx, wdy));
+        // 面の向きは建物の中心からの相対座標（値が小さく精度が高い）の微分で求める。ワールド座標だと数百 m の値の誤差で窓の縁がギザギザになる
+        vec3 wdx = dFdx(vRel), wdy = dFdy(vRel); vec3 fn = normalize(cross(wdx, wdy));
         float kind = floor(vBld.z), rel = vWP.y - vBld.x, top = vBld.y - vBld.x;
         if (abs(fn.y) > 0.3) { diffuseColor.rgb = vRoof; }
         else {
           float fh = kind < 1.5 ? 2.9 : 3.6, bay = kind < 0.5 ? 3.4 : kind < 1.5 ? 3.0 : kind < 2.5 ? 1.8 : 6.0;
           // 壁に沿った座標（建物の中心を原点にして、法線の微小な誤差で値がぶれないようにする）
-          vec2 wd = normalize(vec2(-fn.z, fn.x)); wd = normalize(floor(wd * 512.0 + 0.5));
-          float u = dot(vWP.xz - vCen, wd);
+          vec2 wd = normalize(vec2(-fn.z, fn.x));
+          float u = dot(vRel.xz, wd);
           float fl = floor(rel / fh), fy = fract(rel / fh), fu = fract(u / bay), cell = h21(vec2(floor(u / bay), fl) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0);   // 建物ごとの値は補間の誤差を丸めてから使う
           float wy0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.32 : 0.22, wy1 = kind < 1.5 ? 0.78 : 0.86;
           float wu0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.12 : 0.04, wu1 = 1.0 - wu0;
