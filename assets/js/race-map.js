@@ -687,14 +687,14 @@
     var lu0 = M.landuse(p[0], p[1]), mid = Math.floor(p.length / 6) * 3;
     var y0 = r.y[0];
     var kind = hwy ? 'hwy' : (lu0 === 1 || lu0 === 2 || lu0 === 3) ? 'city' : M.height(p[mid], p[mid + 1]) > 120 ? 'mount' : (lu0 === 8 || lu0 === 9) ? 'coast' : 'rural';
-    var limit = e.ms || (hwy ? 100 : e.c <= 2 ? 50 : e.c <= 4 ? 40 : 40);
+    var limit = R.SPEC.limitFor(e);   // 規制速度（OSM の値。なければ race-spec.js の推定）
     var spec = {
       id: 'map-' + h, name: { ja: M.roadName(h), en: M.roadName(h) }, pal: PALS[kind], weather: 'clear',
       custom: true, noFinish: true, wpY0: y0,
       geom: { rw: Math.max(2000, Math.round(hwv * UNITS * 2)), cw: cw, lanes: Math.min(4, g.lanes), hw: hwv },
       twoWay: !e.one && !hwy, limit: limit, police: hwy ? 1 : (kind === 'city' ? 1 : 0), orbis: hwy && r.len > 1200,
       banner: opt.banner, fork: opt.fork, junction: opt.junction || null, branches: opt.branches || [], startMark: null, endMark: null,
-      mapEdge: h, sigSeed: M.to(h), mapLen: e.len, kind: kind, hwy: hwy, jEnd: jEnd, line: r,
+      mapEdge: h, sigSeed: M.to(h), art: e.c <= 2, mapLen: e.len, kind: kind, hwy: hwy, jEnd: jEnd, line: r,
       build: function (b) { pushSegs(b, r, y0); },
       after: function (segs) {
         decorate(segs, hwv, { cls: e.c, hwy: hwy });
@@ -702,7 +702,7 @@
         (e.sig || []).forEach(function (d) {
           var dd = h & 1 ? e.len - d : d, j = Math.round(dd / r.step);
           if (j > 30 && j < jEnd - 60) {
-            var off = hash2(h * 7 + d, e.len) * 16.5;   // 途中の信号の位相（場所ごとに固定）
+            var off = hash2(h * 7 + d, e.len) * 35;   // 途中の信号の位相（場所ごとに固定）
             segs[j].crosswalk = segs[j + 1].crosswalk = true; segs[j - 3].stopLine = true;
             segs[j - 3].sprites.push({ kind: 'signal', offset: 1 + 0.9 / hwv, city: true, mid: true, off: off });
             (spec.midStops = spec.midStops || []).push({ seg: j - 3, off: off });

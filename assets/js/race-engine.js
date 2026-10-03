@@ -150,12 +150,13 @@
   function fitLoop(segs, spec, trackId) {
     var n = segs.length, K = CURVE_TURN, MS = 1.3, c0 = new Float64Array(n), tot = 0, i;
     for (i = 0; i < n; i++) { c0[i] = segs[i].curve; tot += c0[i]; }
-    if ((!spec.fitCache || spec.fitCache.n !== n) && FIT_PRESET[trackId] && FIT_PRESET[trackId].n === n) {
+    var cache = typeof trackId === 'string' ? FIT_CACHE : spec, ck = typeof trackId === 'string' ? trackId : 'fitCache';
+    if ((!cache[ck] || cache[ck].n !== n) && FIT_PRESET[trackId] && FIT_PRESET[trackId].n === n) {
       // あらかじめ計算しておいた補正（同じ結果。起動後の最初の読み込みを速くする）。閉じなければ使わず、下で計算し直す
       var pre = FIT_PRESET[trackId], pth = Float64Array.from(pre.th), pres = integ(pth, pre.H, weights(pre.wexp));
-      if (Math.hypot(pres.x[n], pres.z[n]) < 1.0) spec.fitCache = { n: n, th: pth, wexp: pre.wexp, H: pre.H };
+      if (Math.hypot(pres.x[n], pres.z[n]) < 1.0) cache[ck] = { n: n, th: pth, wexp: pre.wexp, H: pre.H };
     }
-    if (!spec.fitCache || spec.fitCache.n !== n) {
+    if (!cache[ck] || cache[ck].n !== n) {
       var hw = spec.geom && spec.geom.hw ? spec.geom.hw : (spec.touge || spec.narrow ? 1350 : 2000) / 154;
       var s0 = tot < 0 ? -1 : 1, best = null;
       var tries = [[1.5, 1, s0], [1.5, 2, s0], [0.7, 2, s0], [1.5, 3, s0], [3, 3, s0], [1.5, 1, -s0], [1.5, 2, -s0], [0.7, 3, -s0], [1.5, 4, s0], [3, 4, s0], [0.7, 4, -s0], [0, 6, s0]];
@@ -170,9 +171,9 @@
         var ok = r.clear >= hw * 5;
         if (!best || (ok && !best.ok) || (ok === best.ok && (ok ? r.rough < best.rough : r.clear > best.clear))) { best = r; best.ok = ok; }
       }
-      spec.fitCache = { n: n, th: best ? best.th : null, wexp: best ? best.wexp : 1.5, H: best ? best.H : 4 };
+      cache[ck] = { n: n, th: best ? best.th : null, wexp: best ? best.wexp : 1.5, H: best ? best.H : 4 };
     }
-    var fc = spec.fitCache;
+    var fc = cache[ck];
     if (!fc.th) return;
     var w = weights(fc.wexp);
     for (i = 0; i < n; i++) segs[i].curve = corrected(fc.th, fc.H, w, i);
@@ -281,8 +282,10 @@
     }
   }
 
+  var FIT_CACHE = {};   // 周回コースの補正の記憶（コース ID ごと。共有のコース仕様には書かない）
   function buildTrack(id, mirror, weather) {
-    var spec = typeof id === 'string' ? R.TRACKS[id] : id;
+    // 共有のコース仕様（R.TRACKS）を書き換えないよう、派生オブジェクトに書く（読み取りは元へ透過）
+    var spec = Object.create(typeof id === 'string' ? R.TRACKS[id] : id);
     id = spec.id || (typeof id === 'string' ? id : 'custom');
     var b = builder();
     for (var rp = 0; rp < (spec.reps || 1); rp++) spec.build(b);
@@ -1462,7 +1465,7 @@
     }
     var GEAR_TOP = [0.3, 0.48, 0.66, 0.84, 1.02], GEAR_ACC = [2.3, 1.75, 1.4, 1.12, 0.92];
     P.gear = 1; P.rpm = 0; P.maxSpeed = 0; P.stopT = 0;
-    var edgeDone = false, coinsGot = 0;
+    var edgeDone = false, coinsGot = 0, kmRun = 0, startEvT = 0;
     var edgeLen = spec.jEnd ? spec.jEnd * SEG : trackLen;   // 交差点（この道の終わり）までの長さ
     var p2p = !!(spec.touge || spec.p2p) || mode === 'drag';
     var goalDist = mode === 'drag' ? SEG * Math.round(402 / MPS) : (spec.finishAt ? spec.finishAt * SEG - PLAYER_Z : Infinity);
@@ -1486,16 +1489,16 @@
     }
     /* --- 交差点の信号・交差車両・警察 --- */
     var sig = { phase: 'green', t: Math.random() * 14, cross: [], crossT: 0 };
-    if (mode === 'world' && spec.mapEdge !== undefined) sig.t = (((spec.sigSeed || 0) * 5.7) + Date.now() / 1000) % 16.5;   // 同じ交差点はいつも同じ位相（現実の時刻で進む）
+    if (mode === 'world' && spec.mapEdge !== undefined) sig.t = ((spec.sigSeed || 0) * 5.7) + Date.now() / 1000;   // 同じ交差点はいつも同じ位相（現実の時刻で進む）
     var cops = [], wantedT = 0, escapeT = 0, bustHits = 0, orbisDone = false,
         stopDone = !!(cfg.start && spec.stopSeg && P.total + PLAYER_Z > spec.stopSeg * SEG);   // 停止線より先から始まるなら信号は判定しない
     segs.forEach(function (sg) { sg.sprites.forEach(function (sp) { if (sp.kind === 'signal') sp.phase = sp.mid ? function () { return phaseAt(sig.t + (sp.off || 0)); } : function () { return sig.phase; }; if (sp.kind === 'fork') sp.pick = function () { return cfg.exitDirs ? chooseExit() : -1; }; if (sp.kind === 'orbis') sig.orbis = sp; }); });
-    function violation(kind) {
+    function violation(kind, over) {
       if (mode !== 'world' || demo) return;
       var seen = cops.length > 0 || traffic.some(function (t) { return t.cop && Math.abs(t.total - pz()) < SEG * (kind === 'speed' ? 30 : 90); });
       if (kind === 'signal' && !seen && Math.random() < 0.3) seen = true;   // 信号の監視カメラ
       if (kind === 'copHit') seen = true;
-      if (cfg.onViolation) cfg.onViolation(kind, seen);
+      if (cfg.onViolation) cfg.onViolation(kind, seen, over);
       if (seen && !cops.length) startPursuit(SEG * 30);
     }
     function startPursuit(gapBack) {
@@ -1508,11 +1511,12 @@
       if (cfg.onPursuit) cfg.onPursuit(true);
     }
     var sirenA = null;
-    function phaseAt(t) { t = ((t % 16.5) + 16.5) % 16.5; return t < 8 ? 'green' : t < 10.5 ? 'yellow' : 'red'; }
+    var ART = !!(spec.art || (spec.limit && spec.limit >= 50));   // 幹線（50km/h 以上）は黄 4 秒
+    function phaseAt(t) { return R.SPEC.phaseAt(t, ART).phase; }   // 公式の秒数（race-spec.js）
     var midDone = (spec.midStops || []).map(function (ms) { return !!(cfg.start && P.total + PLAYER_Z > ms.seg * SEG); });
     function worldRules(dt) {
       // 信号: 青 8 秒 → 黄 2.5 秒 → 赤 6 秒
-      sig.t = (sig.t + dt) % 16.5; sig.phase = phaseAt(sig.t);
+      sig.t += dt; var pa0 = R.SPEC.phaseAt(sig.t, ART); sig.phase = pa0.phase; sig.crossNow = pa0.cross;
       // 途中の信号（横断歩道）: 赤で停止線を越えると信号無視
       (spec.midStops || []).forEach(function (ms, mi) {
         if (!midDone[mi] && pz() > ms.seg * SEG) {
@@ -1527,7 +1531,7 @@
           if (sig.phase === 'red' && spec.junction.signal) { pop(L('信号無視！', 'RAN A RED LIGHT!'), '#ff5252'); violation('signal'); }
         }
         // 赤の間は交差する道路を車が横切る
-        if (spec.junction.signal && sig.phase === 'red' && sig.t > 11.5 && sig.t < 16 && (!spec.mapEdge || spec.crossBoth)) {   // 全赤の約 1 秒のあとに交差する車が出る
+        if (spec.junction.signal && sig.phase === 'red' && sig.crossNow && (!spec.mapEdge || spec.crossBoth)) {   // 全赤のあと、交差道路が青の間だけ交差する車が出る
           sig.crossT -= dt;
           if (sig.crossT <= 0) {
             var tt = pickTraffic();
@@ -1547,12 +1551,12 @@
       }
       // 速度違反（パトカーの近く）・オービス
       var kmNow = kmh(P.speed);
-      if (limitKmh && kmNow > limitKmh + 35 && !cops.length && traffic.some(function (t) { return t.cop && Math.abs(t.total - pz()) < SEG * 25; })) {
-        pop(L('速度違反！', 'SPEEDING!'), '#ff5252'); violation('speed');
+      if (limitKmh && kmNow >= limitKmh + 15 && !cops.length && traffic.some(function (t) { return t.cop && Math.abs(t.total - pz()) < SEG * 25; })) {
+        pop(L('速度違反！', 'SPEEDING!'), '#ff5252'); violation('speed', kmNow - limitKmh);
       }
       if (sig.orbis && !orbisDone && pz() > spec.orbisSeg * SEG) {
         orbisDone = true;
-        if (limitKmh && kmNow > limitKmh + 40) { sig.orbis.flash = 0.3; flash = 0.25; pop(L('オービスが光った…', 'Speed camera flash!'), '#ffffff'); if (cfg.onViolation) cfg.onViolation('orbis', true, kmNow - limitKmh); }
+        if (limitKmh && kmNow >= limitKmh + (spec.hwy ? 40 : 30)) { sig.orbis.flash = 0.3; flash = 0.25; pop(L('オービスが光った…', 'Speed camera flash!'), '#ffffff'); if (cfg.onViolation) cfg.onViolation('orbis', true, kmNow - limitKmh); }
       }
       if (sig.orbis && sig.orbis.flash > 0) sig.orbis.flash -= dt;
       // 追跡
@@ -1788,6 +1792,7 @@
       t0 += dt;
       if (msg.t > 0) msg.t -= dt;
       if (radio) { radio.t -= dt; if (radio.t <= 0) radio = null; }
+      if (startEvT > 0 && state === 'race') { startEvT -= dt; if (startEvT <= 0) event('start'); }   // スタート直後の無線（ゲーム内の時間で数える。ポーズ中は進まない）
       for (var ek in evCool) if (evCool[ek] > 0) evCool[ek] -= dt;
       popups.forEach(function (p) { p.t -= dt; });
       popups = popups.filter(function (p) { return p.t > 0; });
@@ -1799,7 +1804,7 @@
         countT -= dt;
         var after = Math.ceil(countT);
         if (after !== before && after >= 1 && after <= 3) sfx('count');
-        if (countT <= 0) { state = 'race'; say('GO!', 1); sfx('go'); setTimeout(function () { event('start'); }, 700); }
+        if (countT <= 0) { state = 'race'; say('GO!', 1); sfx('go'); startEvT = 0.7; }
         eng.update({ speed: 0, throttle: keys.up, rain: weather === 'rain' });
         moveTraffic(dt);
         return;
@@ -1898,7 +1903,7 @@
           if (Math.abs(P.x - so) < sw * 0.5 + CAR_W && P.speed > MAX / 6) {
             P.speed = MAX / 6;
             hurt(0.08);
-            P.pos = Math.max(0, P.pos - SEG * 0.4);
+            var pb = Math.min(P.pos, SEG * 0.4); P.pos -= pb; P.total -= pb;   // 位置（pos）と走行距離（total）を一緒に戻す
             P.bump = 0.3; flash = 0.15;
             sfx('crash'); eng.event('crash'); spark(W / 2, H - 30, 10);
             say(L('クラッシュ！', 'CRASH!'), 1);
@@ -1936,7 +1941,7 @@
       while (P.pos >= trackLen) P.pos -= trackLen;
       while (P.pos < 0) P.pos += trackLen;
       if (!demo && state === 'race') {
-        R._km = (R._km || 0) + move / SEG * MPS / 1000;
+        kmRun += move / SEG * MPS / 1000;
       }
 
       P.maxSpeed = Math.max(P.maxSpeed, P.speed);
@@ -2319,7 +2324,7 @@
           c.laneT -= dt;
           if (c.laneT <= 0) { c.target = LANE_X[Math.floor(Math.random() * 3)]; c.laneT = 1.5 + Math.random() * 2; }
         }
-        if (!blocked && !c.isTarget && Math.random() < 0.01) c.target = clamp(-cv(cs) * 0.12 + (Math.random() - 0.5) * 0.6, -0.8, 0.8);
+        if (!blocked && !c.isTarget && Math.random() < 0.6 * dt) c.target = clamp(-cv(cs) * 0.12 + (Math.random() - 0.5) * 0.6, -0.8, 0.8);
         c.target = clamp(c.target, -0.85, 0.85);
         c.offset += clamp(c.target - c.offset, -dt * (c.boss ? 0.8 : 0.65), dt * (c.boss ? 0.8 : 0.65));
 
@@ -2395,10 +2400,9 @@
         mode: mode, track: cfg.track, place: place, list: list, reason: P.endReason,
         time: P.finishTime, best: P.bestLap, laps: P.laps.slice(), score: Math.round(score), near: nearCount,
         maxCombo: maxCombo, caught: !!(targetCar && targetCar.caught), damage: P.damage, topKmh: topKmh,
-        overtakes: overtakes, ghost: newGhost, km: R._km || 0, field: cars.length, coins: coinsGot,
+        overtakes: overtakes, ghost: newGhost, km: kmRun, field: cars.length, coins: coinsGot,
         stopDist: P.stopDist, maxKmh: kmh(P.maxSpeed), sp: { me: Math.round(spg.me), foe: Math.round(spg.foe) }, penalty: penalty, total: (mode === 'gymkhana' ? (P.finishTime || 0) + penalty : P.finishTime)
       };
-      R._km = 0;
       eng.stop();
       if (cfg.onFinish) cfg.onFinish(result);
     }
@@ -3243,7 +3247,7 @@
     };
     sess.releaseKeys = function () { for (var k in keys) keys[k] = false; };
     // テスト・見本用に中の値を少しだけ読めるように
-    sess.info = function () { return { total: P.total, state: state, lap: P.lap, place: P.finished && P.place ? P.place : rank(), speed: P.speed, x: P.x, damage: P.damage, raceT: raceT, timer: timer, score: score, r0: cars[0] ? { t: Math.round((cars[0].total - pz()) / SEG), v: +(cars[0].speed / MAX).toFixed(2), o: +cars[0].offset.toFixed(2), m: +(cars[0].max / MAX).toFixed(2) } : null, tgap: targetCar ? Math.round((targetCar.total - pz()) / SEG) : null, thp: targetCar ? targetCar.hp : null, tspd: targetCar ? targetCar.speed / MAX : null, pspd: P.speed / MAX }; };
+    sess.info = function () { return { total: P.total, pos: P.pos, trackLen: trackLen, state: state, lap: P.lap, place: P.finished && P.place ? P.place : rank(), speed: P.speed, x: P.x, damage: P.damage, raceT: raceT, timer: timer, score: score, r0: cars[0] ? { t: Math.round((cars[0].total - pz()) / SEG), v: +(cars[0].speed / MAX).toFixed(2), o: +cars[0].offset.toFixed(2), m: +(cars[0].max / MAX).toFixed(2) } : null, tgap: targetCar ? Math.round((targetCar.total - pz()) / SEG) : null, thp: targetCar ? targetCar.hp : null, tspd: targetCar ? targetCar.speed / MAX : null, pspd: P.speed / MAX }; };
     return sess;
   };
 

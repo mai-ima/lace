@@ -94,6 +94,8 @@
     return cfg;
   }
 
+  R._test = { baseCfg: function (o) { return baseCfg(o); }, miniCfg: function (k) { return miniCfg(k); } };   // 自動テスト用（tools/test）
+
   /* ---------- 物語 ---------- */
   function storyField(ev) {
     if (ev.mode === 'duel' || ev.mode === 'chase' || ev.mode === 'touge' || ev.mode === 'sp') return [R.boss(ev.boss, ev.pace)];
@@ -408,7 +410,7 @@
       var nm = pk ? t(R.NODES[pk].name) : M.roadName(ex.h);
       return nm;
     }
-    function limitOf(e) { return e.ms || (e.c === 0 ? 100 : e.c === 5 ? 60 : e.c <= 2 ? 50 : 40); }
+    function limitOf(e) { return R.SPEC.limitFor(e); }
     function spec() {
       var e = M.edgeOf(h), toN = M.nodes[M.to(h)];
       exits = M.exits(h);
@@ -475,11 +477,14 @@
     function violation(kind, seen, over) {
       w.violations++;
       if (w.order) w.order.bad = (w.order.bad || 0) + 1;
-      if (kind === 'orbis') { fine(9000 + Math.round((over || 0) * 300), L('オービス（' + Math.round(over) + 'km/h 超過）', 'Speed camera (' + Math.round(over) + ' over)')); return; }
-      var why = { signal: L('信号無視', 'Red light'), speed: L('速度違反', 'Speeding'), accident: L('事故', 'Accident'), copHit: L('パトカーに衝突', 'Hit a police car') }[kind];
-      if (!seen) w.flash = { text: why + L('（見られていない…）', ' (unseen...)'), t: 3 };
+      var hwyNow = M.edgeOf(h).c === 0, F = R.SPEC.fines;   // 反則金は道路交通法施行令 別表第六（race-spec.js）
+      if (kind === 'orbis') { fine(R.SPEC.speedFine(over || 0, hwyNow), L('オービス（' + Math.round(over) + 'km/h 超過）', 'Speed camera (' + Math.round(over) + ' over)')); return; }
+      var why = { signal: L('信号無視', 'Red light'), speed: L('速度違反（' + Math.round(over || 0) + 'km/h 超過）', 'Speeding (' + Math.round(over || 0) + ' over)'), accident: L('事故', 'Accident'), copHit: L('パトカーに衝突', 'Hit a police car') }[kind];
+      if (!seen) { w.flash = { text: why + L('（見られていない…）', ' (unseen...)'), t: 3 }; return; }
+      if (kind === 'signal') fine(F.signal, why);
+      else if (kind === 'speed') fine(R.SPEC.speedFine(over || 0, hwyNow), why);
     }
-    function busted() { fine(15000, L('確保された', 'Busted')); }
+    function busted() { fine(R.SPEC.fines.busted, L('確保された', 'Busted')); }
     function escaped() { w.flash = { text: L('警察を振り切った！', 'Lost the police!'), t: 4 }; }
 
     /* --- 仕事 --- */
