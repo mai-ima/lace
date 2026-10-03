@@ -27,5 +27,5 @@ export async function loadWorld(base) {
   const bid = new Uint16Array(bbin.slice(off, off + hdr.nv * 2));
   const pos = new Float32Array(hdr.nv * 3);
   for (let i = 0; i < pos.length; i++) pos[i] = q[i] * hdr.q;
-  return { roads, terrain, bldg: { pos, idx, bid, info: bjs.b, credit: bjs.credit } };
+  return { base, roads, terrain, bldg: { pos, idx, bid, info: bjs.b, credit: bjs.credit } };
 }

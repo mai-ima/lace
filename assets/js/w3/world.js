@@ -61,7 +61,13 @@ export function buildWorld(scene, W, gfx) {
     pa.setX(k, terr.x0 + i * terr.cell); pa.setZ(k, terr.z0 + j * terr.cell); pa.setY(k, terr.H[k] - 0.15);
   }
   geo.computeVertexNormals();
-  out.orthoReady = new Promise(r => { out.ortho = orthoTexture(terr, gfx.orthoZ || 17, r); });
+  // 同梱の航空写真（tools/world/ortho.py で作成）を使う。無ければ地理院タイルから組み立てる
+  out.orthoReady = new Promise(r => {
+    out.ortho = new THREE.TextureLoader().load(W.base + 'ortho.jpg', () => r(), undefined, () => {
+      const t = orthoTexture(terr, gfx.orthoZ || 17, r); groundMat.map = t; groundMat.needsUpdate = true; out.ortho = t;
+    });
+    out.ortho.colorSpace = THREE.SRGBColorSpace; out.ortho.anisotropy = 8;
+  });
   const groundMat = new THREE.MeshStandardMaterial({ map: out.ortho, roughness: 0.95, metalness: 0 });
   const ground = new THREE.Mesh(geo, groundMat); ground.receiveShadow = true; out.group.add(ground);
 
@@ -74,7 +80,16 @@ export function buildWorld(scene, W, gfx) {
   function strip(R, y0, side) {   // R: ribbon の結果。2 本の縁の間の面
     const n = R.length, pos = new Float32Array(n * 6), ix = [];
     for (let i = 0; i < n; i++) { pos.set([R[i][0], R[i][4] + y0, R[i][1], R[i][2], R[i][4] + y0, R[i][3]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(side ? ix.reverse() : ix); g.computeVertexNormals(); return g;
+    return upGeo(pos, ix);
+  }
+  // 面が上を向くように三角形の向きをそろえる（上から見て反時計回り）
+  function upGeo(pos, ix) {
+    for (let t = 0; t < ix.length; t += 3) {
+      const a = ix[t] * 3, b = ix[t + 1] * 3, c = ix[t + 2] * 3;
+      const ux = pos[b] - pos[a], uz = pos[b + 2] - pos[a + 2], vx = pos[c] - pos[a], vz = pos[c + 2] - pos[a + 2];
+      if (uz * vx - ux * vz < 0) { const k = ix[t + 1]; ix[t + 1] = ix[t + 2]; ix[t + 2] = k; }   // 法線の y 成分 = uz*vx - ux*vz
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g;
   }
   function wall(R, yTop, yBot, useA) {   // 縁石の側面
     const n = R.length, pos = new Float32Array(n * 6), ix = [];
@@ -98,14 +113,27 @@ export function buildWorld(scene, W, gfx) {
     let cx = 0, cz = 0; P.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= m; cz /= m;
     pos.set([cx, terr.at(cx, cz) + 0.055, cz], 0);
     P.forEach((p, i) => { pos.set([p[0], terr.at(p[0], p[1]) + 0.055, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix.reverse()); g.computeVertexNormals();
-    roadGeos.push(g);
+    roadGeos.push(upGeo(pos, ix));
   });
-  const roadMat = new THREE.MeshStandardMaterial({ map: asph, color: 0x9a9da2, roughness: 0.92, metalness: 0 });
+  const roadMat = new THREE.MeshStandardMaterial({ map: asph, color: 0xa4a6aa, roughness: 0.9, metalness: 0 });
   if (asph) asph.repeat.set(1, 1);
+  // 舗装のむら: 大きな面の明暗（補修の跡・打ち替え）と、細かいざらつき。世界座標の値で作るので継ぎ目が出ない
+  roadMat.onBeforeCompile = sh => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRP;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvRP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      varying vec3 vRP;
+      float rh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float rn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(rh(i), rh(i + vec2(1, 0)), f.x), mix(rh(i + vec2(0, 1)), rh(i + vec2(1, 1)), f.x), f.y); }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float big = rn(vRP.xz / 38.0) * 0.6 + rn(vRP.xz / 9.0) * 0.4;
+        vec2 pc = floor(vRP.xz / 7.0); float patchy = step(0.86, rh(pc)) * step(0.15, fract(vRP.x / 7.0)) * step(fract(vRP.x / 7.0), 0.85) * step(0.2, fract(vRP.z / 7.0)) * step(fract(vRP.z / 7.0), 0.75);
+        diffuseColor.rgb *= 0.84 + 0.26 * big;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, patchy);`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor - 0.08 * big, 0.6, 1.0);');
+  };
   const roads = new THREE.Mesh(worldUV(mergeGeometries(roadGeos), 6), roadMat); roads.receiveShadow = true; out.group.add(roads);
   if (walkGeos.length) {
-    const walk = new THREE.Mesh(worldUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: conc, color: 0xb8b6ae, roughness: 0.9 }));
+    const walk = new THREE.Mesh(worldUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: conc, color: 0xb8b6ae, roughness: 0.9, side: THREE.DoubleSide }));
     walk.receiveShadow = true; out.group.add(walk);
   }
   /* --- 路面表示 --- */
@@ -230,7 +258,7 @@ export function buildSky(scene, renderer, opt) {
   const S = 140; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 1200 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
   scene.add(sun); scene.add(sun.target);
-  const hemi = new THREE.HemisphereLight(0xbcd4f0, 0x5d5a50, 0.55); scene.add(hemi);
+  const hemi = new THREE.HemisphereLight(0xd4dde8, 0x6a6458, 0.55); scene.add(hemi);
   scene.fog = new THREE.Fog(0xc4d2de, 400, opt.far || 2600);
   // 空の色から環境マップ（反射と間接光）
   const pm = new THREE.PMREMGenerator(renderer);

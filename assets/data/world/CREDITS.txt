@@ -1,0 +1,10 @@
+assets/data/world/ の出典（加工して作成）
+
+- 建物（bldg.bin, bldg.json）: 国土交通省 PLATEAU（3D 都市モデル 浜松市 LOD2）を加工して作成。
+  公共データ利用規約（第 1.0 版、CC BY 4.0 互換）。tools/world/plateau.py で変換。
+- 地形（terrain.bin）: 国土地理院「標高タイル（基盤地図情報 数値標高モデル 5m メッシュ）」を加工して作成。
+  地理院コンテンツ利用規約。tools/world/build_center.py で変換。
+- 航空写真（ortho.jpg）: 国土地理院「地理院タイル 全国最新写真（シームレス）」を加工して作成。
+  地理院コンテンツ利用規約。tools/world/ortho.py で変換。
+- 道路（roads.json）: © OpenStreetMap contributors（ODbL 1.0）。tools/world/fetch_osm.py と build_center.py で変換。
+  このファイルは ODbL の「派生データベース」にあたるため、同じ ODbL で提供する。
