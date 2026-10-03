@@ -10,6 +10,11 @@ import { makeGrid } from './grid.js';
 import { loadImpostor, plantTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { makeTraffic } from './traffic.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /** 品質の段階（GPU 名で自動判定。iPhone 17 は高、Intel 内蔵は中） */
 export function detectGfx(renderer, force) {
@@ -17,7 +22,7 @@ export function detectGfx(renderer, force) {
   try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) { /* ignore */ }
   const low = /SwiftShader|llvmpipe|Software/i.test(name), intel = /Intel/i.test(name), apple = /Apple/i.test(name);
   const tier = force || (low ? 'low' : intel ? 'mid' : apple ? 'high' : 'high');
-  const T = { low: { pr: 0.75, shadows: 0, far: 1400 }, mid: { pr: 0.85, shadows: 1, far: 1500 }, high: { pr: 1, shadows: 2, far: 2600 } }[tier];
+  const T = { low: { pr: 0.75, shadows: 0, far: 1400 }, mid: { pr: 0.85, shadows: 1, far: 1300, post: 'smaa' }, high: { pr: 1, shadows: 2, far: 2600, post: 'msaa' } }[tier];
   return Object.assign({ tier, gpu: name, orthoZ: 17 }, T);
 }
 
@@ -81,9 +86,23 @@ export async function start(container, opt) {
   renderer.shadowMap.enabled = gfx.shadows > 0; renderer.shadowMap.type = THREE.PCFShadowMap;
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(62, 1, 0.3, gfx.far + 400);
-  function resize() { const w = container.clientWidth || 960, h = container.clientHeight || 600; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
-  resize(); window.addEventListener('resize', resize);
+  const cam = new THREE.PerspectiveCamera(62, 1, 0.3, gfx.far + 50);   // 霧で消える距離の少し先まで
+  // 後処理: 中は SMAA と弱いブルーム（光る物だけ）、高は 4 倍 MSAA とブルーム。低はなし（ブラウザの MSAA のみ）
+  let composer = null;
+  function setupPost() {
+    if (!gfx.post) return;
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: gfx.post === 'msaa' ? 4 : 0 });
+    composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, cam));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), gfx.post === 'msaa' ? 0.3 : 0.22, 0.35, 8.0));   // 強さ・広がり・しきい値（線形の明るさ 8 以上 = 灯火だけが光る。空は 8 未満）
+    composer.addPass(new OutputPass());
+    if (gfx.post === 'smaa') composer.addPass(new SMAAPass());
+  }
+  renderer.info.autoReset = false;   // 後処理の各段の描画をまとめて数える（性能表示と予算のテスト用）
+  function present() { renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, cam); }
+  function resize() { const w = container.clientWidth || 960, h = container.clientHeight || 600; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); } }
+  resize(); setupPost(); resize(); window.addEventListener('resize', resize);
   const hud = document.createElement('div'); hud.className = 'w3-hud'; container.appendChild(hud);
   hud.textContent = '読み込み中…（浜松駅周辺の地形・道路・建物）';
 
@@ -127,7 +146,10 @@ export async function start(container, opt) {
   }
   // 車（Khronos Car Concept。高品質なリアル調の車がそろうまでの暫定）
   if (!(TB.RaceRealCars && TB.RaceRealCars.concept)) await new Promise(r => { const s = document.createElement('script'); s.src = 'assets/vendor/real-concept.js'; s.onload = s.onerror = r; document.head.appendChild(s); });
-  const carM = TB.RaceRealCars && TB.RaceRealCars.concept ? decodeCar(TB.RaceRealCars.concept, true) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
+  // 自車: 高画質は元の形（約 18 万面）、中・低は間引いた形（約 4 万面、tools/world/car_lod.mjs）
+  let carData = TB.RaceRealCars && TB.RaceRealCars.concept;
+  if (carData && gfx.tier !== 'high') { try { carData = await fetch('assets/data/world/props/car_concept_lod0.json').then(r => r.json()); } catch (e) { /* 元の形のまま */ } }
+  const carM = carData ? decodeCar(carData, true) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
   scene.add(carM.root);
   // 一般車（自車の周り 400m に 40 台。低画質は 20 台）
   let traffic = null;
@@ -276,7 +298,7 @@ export async function start(container, opt) {
     carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll);
     carVisual(dt);
     updateCam(dt); updateSignals(simT);
-    renderer.render(scene, cam);
+    present();
     frames++; fpsT += dt; if (fpsT > 0.5) { fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
     const info = renderer.info.render;
     hud.innerHTML = '<b>' + car.kmh() + '</b> km/h　' + (st.gear) + ' 速' + (st.abs ? '　ABS' : '') + (st.tcs ? '　TCS' : '') + (hitT > 0 ? '　衝突' : '') +
@@ -306,7 +328,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
   return api;

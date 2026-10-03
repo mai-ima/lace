@@ -351,7 +351,7 @@ export function buildWorld(scene, W, gfx) {
   });
   [poles, arms, heads, brs, lamps].forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
   // 点灯の色（LED の青は青緑）。消灯は暗い灰
-  const LIT = { green: new THREE.Color(0.1, 1.6, 1.25), yellow: new THREE.Color(2.0, 1.25, 0.05), red: new THREE.Color(2.0, 0.12, 0.08) }, DARK = new THREE.Color(0.05, 0.055, 0.06);
+  const LIT = { green: new THREE.Color(0.6, 14, 10), yellow: new THREE.Color(16, 9, 0.4), red: new THREE.Color(16, 1.0, 0.6) }, DARK = new THREE.Color(0.05, 0.055, 0.06);   // 点灯は線形の明るさで強く（後処理のブルームで光って見える）
   const ORDER = ['green', 'yellow', 'red'];
   out.setSignal = (k, phase) => { for (let i = 0; i < 3; i++) lamps.setColorAt(k * 3 + i, ORDER[i] === phase ? LIT[phase] : DARK); };
   out.signalsDone = () => { if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true; };
@@ -371,11 +371,11 @@ export function buildSky(scene, renderer, opt) {
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.6); sun.position.copy(sunDir).multiplyScalar(400);
   sun.castShadow = opt.shadows > 0;
   sun.shadow.mapSize.set(opt.shadows > 1 ? 4096 : 2048, opt.shadows > 1 ? 4096 : 2048);
-  const S = 140; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
+  const S = opt.shadows > 1 ? 140 : 100; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
   scene.add(sun); scene.add(sun.target);
   const hemi = new THREE.HemisphereLight(0xd4dde8, 0x6a6458, 0.55); scene.add(hemi);
-  scene.fog = new THREE.Fog(0xc4d2de, 400, opt.far || 2600);
+  scene.fog = new THREE.Fog(0xc4d2de, Math.min(400, (opt.far || 2600) * 0.3), opt.far || 2600);
   // 空の色から環境マップ（反射と間接光）
   const pm = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene(); const sky2 = new Sky(); sky2.scale.setScalar(1000); Object.keys(u).forEach(k => { if (sky2.material.uniforms[k]) sky2.material.uniforms[k].value = u[k].value; }); envScene.add(sky2);

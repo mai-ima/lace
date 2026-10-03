@@ -13,12 +13,12 @@ globalThis.window = globalThis; globalThis.TB = {};
 const src = fs.readFileSync(new URL('../../assets/vendor/real-concept.js', import.meta.url), 'utf8');
 new Function(src)();
 const D = TB.RaceRealCars.concept, TARGET = +(targetArg || 14000);
-const share = { paint: 0.48, dark: 0.16, rim: 0.08, glass: 0.07, interior: 0.02, chrome: 0.04, tire: 0.08, head: 0.03, tail: 0.03, amber: 0.01 };
+const share = { paint: 0.48, dark: 0.16, rim: 0.08, glass: 0.07, interior: process.env.KEEP_INTERIOR ? 0.1 : 0.02, chrome: 0.04, tire: 0.08, head: 0.03, tail: 0.03, amber: 0.01 };
 const b64 = (buf) => Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength).toString('base64');
 const dec = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
 const out = { groups: {} }; let total = 0;
 for (const k of Object.keys(D.groups)) {
-  if (k === 'interior') continue;   // 車内は、色の濃いガラス越しにはほぼ見えないので一般車では省く
+  if (k === 'interior' && !process.env.KEEP_INTERIOR) continue;   // 車内は、色の濃いガラス越しにはほぼ見えないので一般車では省く（自車用は KEEP_INTERIOR=1）
   const g = D.groups[k], P = dec(g.p, Int16Array), N = dec(g.n, Int8Array), I = dec(g.i, g.i32 ? Uint32Array : Uint16Array);
   const pos = new Float32Array(P.length); for (let i = 0; i < P.length; i++) pos[i] = P[i] / 1000;
   const tris = I.length / 3, want = Math.min(tris, Math.max(12, Math.round(TARGET * (share[k] || 0.02))));
