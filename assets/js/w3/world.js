@@ -55,12 +55,14 @@ export function buildWorld(scene, W, gfx) {
   const terr = W.terrain;
   /* --- 地形 --- */
   // 地形は 200m 四方（40 マス）のチャンクに分ける（画面外は描かない）。UV は全体の航空写真に合わせる
-  const CH = 40, terrGeos = [];
+  // 格子の間隔: 低画質だけ 10m（中・高は DEM のまま 5m。粗くすると道路の下から地面が出る所がある）
+  const ST = gfx.tier === 'low' ? 2 : 1, CH = 40, terrGeos = [];
   const spanX = (terr.nx - 1) * terr.cell, spanZ = (terr.nz - 1) * terr.cell;
   for (let cj = 0; cj < terr.nz - 1; cj += CH) for (let ci = 0; ci < terr.nx - 1; ci += CH) {
-    const w = Math.min(CH, terr.nx - 1 - ci), h = Math.min(CH, terr.nz - 1 - cj), pos = new Float32Array((w + 1) * (h + 1) * 3), uv = new Float32Array((w + 1) * (h + 1) * 2), ix = [];
+    const w = Math.min(CH, terr.nx - 1 - ci) / ST | 0, h = Math.min(CH, terr.nz - 1 - cj) / ST | 0;
+    const pos = new Float32Array((w + 1) * (h + 1) * 3), uv = new Float32Array((w + 1) * (h + 1) * 2), ix = [];
     for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) {
-      const k = j * (w + 1) + i, gi = ci + i, gj = cj + j, x = terr.x0 + gi * terr.cell, z = terr.z0 + gj * terr.cell;
+      const k = j * (w + 1) + i, gi = ci + i * ST, gj = cj + j * ST, x = terr.x0 + gi * terr.cell, z = terr.z0 + gj * terr.cell;
       pos.set([x, terr.H[gj * terr.nx + gi] - 0.15, z], k * 3); uv.set([(x - terr.x0) / spanX, 1 - (z - terr.z0) / spanZ], k * 2);
       if (i < w && j < h) ix.push(k, k + w + 1, k + 1, k + 1, k + w + 1, k + w + 2);
     }
@@ -324,11 +326,11 @@ export function buildWorld(scene, W, gfx) {
   out.signals = sigs;
   const SH = (window.TB && TB.Race && TB.Race.SPEC && TB.Race.SPEC.signalHead) || { height: 0.37, width: 1.05, minBottom: 5.6 };
   const headY = SH.minBottom + SH.height / 2, armY = headY + SH.height / 2 + 0.22, poleH = armY + 0.25;
-  const poleG = new THREE.CylinderGeometry(0.11, 0.14, 1, 10); poleG.translate(0, 0.5, 0);
-  const armG = new THREE.CylinderGeometry(0.055, 0.065, 1, 8); armG.rotateZ(Math.PI / 2); armG.translate(0.5, 0, 0);
+  const poleG = new THREE.CylinderGeometry(0.11, 0.14, 1, 8, 1, true); poleG.translate(0, 0.5, 0);
+  const armG = new THREE.CylinderGeometry(0.055, 0.065, 1, 6, 1, true); armG.rotateZ(Math.PI / 2); armG.translate(0.5, 0, 0);
   const headG = new THREE.BoxGeometry(SH.width, SH.height, 0.14);
   const brG = new THREE.BoxGeometry(0.06, 0.22, 0.06);
-  const lampG = new THREE.CircleGeometry(0.115, 20);
+  const lampG = new THREE.CircleGeometry(0.115, 12);
   const metal = new THREE.MeshStandardMaterial({ color: 0x9aa1a7, roughness: 0.45, metalness: 0.7 });
   const headM = new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.55, metalness: 0.2 });
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
@@ -369,7 +371,7 @@ export function buildSky(scene, renderer, opt) {
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.6); sun.position.copy(sunDir).multiplyScalar(400);
   sun.castShadow = opt.shadows > 0;
   sun.shadow.mapSize.set(opt.shadows > 1 ? 4096 : 2048, opt.shadows > 1 ? 4096 : 2048);
-  const S = 140; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 1200 });
+  const S = 140; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
   scene.add(sun); scene.add(sun.target);
   const hemi = new THREE.HemisphereLight(0xd4dde8, 0x6a6458, 0.55); scene.add(hemi);
