@@ -870,7 +870,7 @@
         var done = Math.min(s.story, R.STORY.length);
         var items = [
           item(L('ストーリー', 'Story'), done + ' / ' + R.STORY.length, function () { go(SCREENS.story()); }, { icon: 'book' }),
-          item(L('オープンワールド', 'Open World'), L('浜松・東名・名古屋', 'Hamamatsu–Nagoya'), function () { go(SCREENS.world(null)); }, { icon: 'map' }),
+          item(L('オープンワールド', 'Open World'), L('浜松市全域・実在の道路をフリー走行', 'Free roam on every real road of Hamamatsu'), function () { go(SCREENS.world(null)); }, { icon: 'map' }),
           item(L('アルバイト', 'Part-time Jobs'), L('タクシー・宅配・出前', 'Taxi, parcels, food'), function () { go(SCREENS.jobs()); }, { icon: 'taxi' }),
           item(L('デイリーレース', 'Daily Race'), dailyLabel(s), function () { go(SCREENS.daily()); }, { icon: 'calendar' }),
           item(L('グランプリ', 'Grand Prix'), L('カップ戦', 'Cups'), function () { go(SCREENS.gp()); }, { icon: 'trophy' }),
@@ -1373,6 +1373,10 @@
               R.makeRouteTrack(a2.node, b2.node, label(start), label(dest));
               runSingle('time', 'hm_route');
             }, { icon: 'stopwatch', dis: !dest }));
+          }
+          if (!job) {
+            info.appendChild(item(L('運転設定', 'Driving settings'), L('ステアリング・ブレーキ・車重・自動減速', 'Steering, brakes, weight, auto-brake'), function () { go(SCREENS.drive()); }, { icon: 'tool' }));
+            info.appendChild(item(L('アルバイト', 'Part-time jobs'), L('タクシー・宅配・出前（同じ地図）', 'Taxi, parcels, food (same map)'), function () { go(SCREENS.jobs()); }, { icon: 'taxi' }));
           }
           info.appendChild(item(L('戻る', 'Back'), '', function () { back(); }, { icon: 'back' }));
           row.appendChild(info);
