@@ -42,7 +42,7 @@ function splitWheels(geo, mat, parent, wheels) {
     const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', P.clone()); g2.setAttribute('normal', geo.attributes.normal); g2.setIndex(ix);
     g2.translate(-c.x, -c.y, -c.z);   // 位置は輪ごとに複製してから、輪の中心を原点に
     const m = new THREE.Mesh(g2, mat); m.castShadow = true; m.receiveShadow = true;
-    if (!wheels[key]) { const steer = new THREE.Group(), spin = new THREE.Group(); steer.position.copy(c); steer.add(spin); parent.add(steer); wheels[key] = { steer, spin, key, r: (b.max.y - b.min.y) / 2 }; }
+    if (!wheels[key]) { const steer = new THREE.Group(), spin = new THREE.Group(); steer.position.copy(c); steer.add(spin); parent.add(steer); wheels[key] = { steer, spin, key, front: key[1] === 'F', r: (b.max.y - b.min.y) / 2 }; }
     wheels[key].spin.add(m);
   });
 }
@@ -199,24 +199,36 @@ export async function start(container, opt) {
   // 車: 外部の高品質なモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/vehicles.mjs で変換）
   const CARS = 'assets/data/world/cars/';
   const carInfo = await fetch(CARS + 'cars.json').then(r => r.json());
-  // 自車: スズキ スイフト型（約 13 万面、車内つき）。車輪は 4 輪に分けて回す
-  let carM;
-  try {
-    const sc = await loadGLB(CARS + (opt.carKey || 'compact_swift') + '_lod0.glb');
-    const pc = playerCar(sc, opt.carColor || 0xb3121c), wheels = {}, g = new THREE.Group(); g.add(pc.root);
-    if (pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
-    const tails = pc.tails;
-    carM = { root: g, wheels, flip: false, tails, setColor: pc.setColor };
-  } catch (e) {
-    console.warn('自車のモデルを読めませんでした', e);
-    carM = { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 4.2), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
+  // 自車（車庫）: 切り替えられる車。モデルは高画質のときは hero（面が多い）があればそれを使う。物理の値は車ごと
+  const GARAGE = [
+    { key: 'compact_swift', name: '小型ハッチバック', color: 0xb3121c, spec: {} },
+    { key: 'super_svj', name: 'スーパーカー（V12・4WD）', color: 0xe8740c, spec: { mass: 1525, wb: 2.7, track: 1.7, cgH: 0.42, Iz: 2500, power: 566e3, maxRpm: 8700, idleRpm: 1000, gears: [3.91, 2.44, 1.81, 1.46, 1.19, 0.97, 0.84], final: 3.3, wheelR: 0.35, mu: 1.28, cd: 0.36, area: 1.9, brake: 1.3, drive: '4wd', steerMax: 0.58, rearMu: 1.12, tqR: 720 / 0.35 } },
+    { key: 'sedan_mazda3', name: 'セダン', color: 0x8c1c1c, spec: { mass: 1350, wb: 2.73, power: 115e3, tqR: 213 / 0.32, drive: 'ff', wheelR: 0.32 } },
+    { key: 'suv_cx5', name: 'SUV', color: 0x2a3d66, spec: { mass: 1600, wb: 2.7, track: 1.6, cgH: 0.62, power: 140e3, tqR: 252 / 0.35, drive: '4wd', wheelR: 0.35, mu: 1.0 } },
+    { key: 'kei_van', name: '軽バン', color: 0xf4f4f2, spec: { mass: 900, wb: 2.35, track: 1.3, cgH: 0.72, Iz: 1100, power: 36e3, maxRpm: 6000, gears: [3.6, 2.2, 1.45, 1.0], final: 5.1, wheelR: 0.28, tqR: 63 / 0.28, cd: 0.42, area: 2.6, drive: 'fr', mu: 0.95 } }
+  ].filter(c => carInfo.some(i => i.key === c.key));
+  let carM = null, garageIdx = Math.max(0, GARAGE.findIndex(c => c.key === (opt.carKey || 'compact_swift')));
+  const headL = new THREE.SpotLight(0xfff2de, 70, 90, 0.42, 0.6, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22); headL.visible = false;   // 夜のヘッドライト（路面を照らす。影なし）
+  const myGlow = makeCarGlows(scene, 1); let myLay = null;
+  async function loadPlayer(G) {
+    const info = carInfo.find(i => i.key === G.key) || {}, hero = gfx.tier === 'high' && info.lods && info.lods.hero;
+    let m;
+    try {
+      const sc = await loadGLB(CARS + G.key + (hero ? '_hero' : '_lod0') + '.glb');
+      const pc = playerCar(sc, opt.carColor || G.color), wheels = {}, g = new THREE.Group(); g.add(pc.root);
+      if (pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
+      m = { root: g, wheels, flip: false, tails: pc.tails, setColor: pc.setColor };
+    } catch (e) {
+      console.warn('自車のモデルを読めませんでした', e);
+      m = { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 4.2), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
+    }
+    const size = new THREE.Box3().setFromObject(m.root).getSize(new THREE.Vector3());
+    if (carM) { scene.remove(carM.root); carM.root.traverse(o => { if (o.isMesh) { o.geometry.dispose(); } }); }
+    carM = m; scene.add(carM.root); carM.root.add(headL); carM.root.add(headL.target);
+    headL.position.set(0, Math.min(0.8, size.y * 0.5), size.z / 2 - 0.3);
+    myLay = lampLayout(size); carM.size = size;
   }
-  scene.add(carM.root);
-  // 夜のヘッドライト: 路面を照らすスポットライト（影なし）と、前後の灯の光の点
-  const headL = new THREE.SpotLight(0xfff2de, 70, 90, 0.42, 0.6, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22);
-  carM.root.add(headL); carM.root.add(headL.target); headL.visible = false;
-  const pBox = new THREE.Box3().setFromObject(carM.root), pSize = pBox.getSize(new THREE.Vector3());
-  const myGlow = makeCarGlows(scene, 1), myLay = lampLayout(pSize);
+  await loadPlayer(GARAGE[garageIdx] || { key: 'compact_swift', color: 0xb3121c, spec: {} });
   // 一般車: 6 車種。日本の交通に近い割合（軽・コンパクト・セダン・SUV）と、車種ごとの色の割合
   const W_TYPES = { kei_van: 22, compact_swift: 24, sedan_sylphy: 14, sedan_accord: 10, sedan_mazda3: 14, suv_cx5: 16 };
   const KEI_COLORS = [0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0xc9ccd0, 0x9aa0a6];
@@ -248,7 +260,24 @@ export async function start(container, opt) {
       }
     });
   }
-  const car = makeCar(opt.car);
+  const carSpec = G => Object.assign({}, (G && G.spec) || {}, opt.car || {});
+  let car = makeCar(carSpec(GARAGE[garageIdx]));
+  const setBox = () => { car.st.HL = carM.size.z / 2 - 0.05; car.st.HW = Math.max(0.7, carM.size.x / 2 - 0.12); };   // ミラーの分を少し引く
+  setBox();
+  // 車の切り替え（一時停止画面のボタンと C キー）。位置と向きは引き継いで、止まった状態から
+  let switching = false;
+  async function switchCar(step) {
+    if (switching || GARAGE.length < 2) return; switching = true;
+    garageIdx = (garageIdx + step + GARAGE.length) % GARAGE.length;
+    const G = GARAGE[garageIdx], old = car.st, esc = car.s.esc;
+    toastMsg('読み込み中: ' + G.name);
+    await loadPlayer(G);
+    car = makeCar(carSpec(G)); car.s.esc = esc;
+    Object.assign(car.st, { x: old.x, z: old.z, y: old.y, yaw: old.yaw }); setBox(); firstCam = true;
+    toastMsg('車: ' + G.name); if (carBtn) carBtn.textContent = '車: ' + G.name + '（C）';
+    switching = false;
+  }
+  let carBtn = null;
   // 出発: 浜松駅北口の前の道（いちばん近い幹線の上）
   const startAt = opt.start || { x: -40, z: -260 };
   let best = null, bd = Infinity;
@@ -275,7 +304,7 @@ export async function start(container, opt) {
   let paused = false;
   const pauseEl = document.createElement('div');
   pauseEl.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,10,14,.55);color:#fff;font-size:18px;text-align:center;line-height:2;z-index:5';
-  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切　T 時間帯</small></div>';
+  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切　T 時間帯　C 車の切り替え</small></div>';
   pauseEl.addEventListener('pointerdown', () => setPause(false));
   { const b = document.createElement('button'); b.textContent = '横滑り防止（ESC）の入・切'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
     b.addEventListener('pointerdown', e => { e.stopPropagation(); car.s.esc = !car.s.esc; b.textContent = '横滑り防止（ESC）: ' + (car.s.esc ? '入' : '切'); }); pauseEl.appendChild(b); }
@@ -283,12 +312,15 @@ export async function start(container, opt) {
   const nextTime = () => { const m = TIME_ORDER[(TIME_ORDER.indexOf(sky.mode) + 1) % 3]; sky.setTime(m); return m; };
   { const b = document.createElement('button'); b.textContent = '時間帯: ' + TIME_NAME[sky.mode] + '（T）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
     b.addEventListener('pointerdown', e => { e.stopPropagation(); b.textContent = '時間帯: ' + TIME_NAME[nextTime()] + '（T）'; }); pauseEl.appendChild(b); }
+  { const b = document.createElement('button'); carBtn = b; b.textContent = '車: ' + (GARAGE[garageIdx] ? GARAGE[garageIdx].name : '') + '（C）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(138px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
+    b.addEventListener('pointerdown', e => { e.stopPropagation(); switchCar(1); }); pauseEl.appendChild(b); }
   container.appendChild(pauseEl);
   function setPause(v) { paused = v; if (engineAudio) engineAudio.mute(v); pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
   const onKey = (e, d) => {
     if (d && e.key === 'Escape') { setPause(!paused); return; }
     if (d && paused && (e.key === 'Enter' || e.key === 'q' || e.key === 'Q')) { if (opt.onExit) opt.onExit(); return; }
     if (d && (e.key === 'x' || e.key === 'X')) { car.s.esc = !car.s.esc; toastMsg(car.s.esc ? '横滑り防止（ESC）: 入' : '横滑り防止（ESC）: 切（ドリフトしやすい）'); return; }
+    if (d && (e.key === 'c' || e.key === 'C')) { switchCar(1); return; }
     if (d && (e.key === 't' || e.key === 'T')) { toastMsg('時間帯: ' + TIME_NAME[nextTime()]); return; }
     keys[e.key] = d;
   };
@@ -333,7 +365,8 @@ export async function start(container, opt) {
   function readInput(dt) {
     const L = keys.ArrowLeft || keys.a || keys.A || touch.left, Rr = keys.ArrowRight || keys.d || keys.D || touch.right;
     const s = (L ? 1 : 0) - (Rr ? 1 : 0);   // 左が +（向きが増える）
-    ctl.steer += (s - ctl.steer) * Math.min(1, dt * (s ? 4 : 6));
+    const vk = Math.abs(car.st.vx) * 3.6, rate = s ? (s * ctl.steer < 0 ? 9 : 6.5 - Math.min(3.5, vk / 40)) : 9;   // 切り始めは低速ほど速く、高速ほどゆっくり。逆に切る・戻すときは速く
+    ctl.steer += (s - ctl.steer) * Math.min(1, dt * rate);
     const up = keys.ArrowUp || keys.w || keys.W || touch.up, dn = keys.ArrowDown || keys.s || keys.S || touch.down;
     const v = car.st.vx;
     if (dn && v < 0.5) { ctl.reverse = true; ctl.throttle = 1; ctl.brake = 0; }
@@ -348,7 +381,7 @@ export async function start(container, opt) {
   function updateCam(dt) {
     const st = car.st, fx = Math.sin(st.yaw), fz = Math.cos(st.yaw);
     const portrait = cam.aspect < 1;   // 縦画面は少し遠く・高くして、車が画面の下半分を占めないように
-    const back = (6.2 + Math.min(2.5, Math.abs(st.vx) * 0.03)) * (portrait ? 1.45 : 1), up = portrait ? 2.9 : 2.1;
+    const back = (6.2 + ((carM.size ? carM.size.z : 4) - 4) * 0.8 + Math.min(2.5, Math.abs(st.vx) * 0.03)) * (portrait ? 1.45 : 1), up = portrait ? 2.9 : 2.1;
     const want = new THREE.Vector3(st.x - fx * back, st.y + up, st.z - fz * back);
     const look = new THREE.Vector3(st.x + fx * 4, st.y + 1.1, st.z + fz * 4);
     if (firstCam) { camPos.copy(want); camLook.copy(look); firstCam = false; }
@@ -478,6 +511,8 @@ export async function start(container, opt) {
     draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     /** 時間帯 'day' | 'dusk' | 'night' */
     setTime(m) { sky.setTime(m); },
+    /** 車を切り替える（step: 1 で次の車） */
+    switchCar(step) { return switchCar(step === undefined ? 1 : step); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
   return api;

@@ -121,7 +121,7 @@ export function playerCar(scene, color) {
     const nm = m.name || '', transparent = m.transparent || m.opacity < 0.99;
     if (/wheel|tire|tyre|rim|brake(?!_?light)/i.test(nm) && !m.map) cat.wheel.push({ g, m });
     else if (nm === 'PAINT' && !m.map) cat.paint.push({ g, m });
-    else if (/LIGHTS_T|tail|stop/i.test(nm) && !m.map) cat.tail.push({ g, m });
+    else if (/LIGHTS_T|tail|stop|red_?lights?/i.test(nm) && !m.map) cat.tail.push({ g, m });
     else if (m.map) cat.tex.push({ g, m });
     else if (transparent) cat.clear.push({ g, m });
     else cat.opaque.push({ g, m });

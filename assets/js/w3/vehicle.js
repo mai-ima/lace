@@ -8,7 +8,7 @@ export function makeCar(spec) {
   const s = Object.assign({
     mass: 1300, wb: 2.6, cgF: 0.47, track: 1.52, cgH: 0.52, Iz: 1900,
     power: 120e3, maxRpm: 7000, idleRpm: 900, gears: [3.4, 2.1, 1.45, 1.1, 0.9, 0.75], final: 4.1, wheelR: 0.31,
-    mu: 1.05, B: 10, C: 1.9, E: 0.97, cd: 0.33, area: 2.1, rr: 0.012, brake: 1.0, drive: 'fr', steerMax: 0.62, rearB: 1.5, rearMu: 1.08, esc: true
+    mu: 1.05, B: 10, C: 1.9, E: 0.97, cd: 0.33, area: 2.1, rr: 0.012, brake: 1.0, drive: 'fr', steerMax: 0.62, rearB: 1.5, rearMu: 1.08, esc: true, tqR: 9000 / 14
   }, spec || {});
   const a = s.wb * (1 - s.cgF), b = s.wb * s.cgF;   // 重心から前軸・後軸まで
   const st = { x: 0, z: 0, y: 0, yaw: 0, vx: 0, vy: 0, r: 0, steer: 0, gear: 1, rpm: s.idleRpm, pitch: 0, roll: 0, slipF: 0, slipR: 0, ax: 0, ay: 0, abs: false, tcs: false, esc: false, onRoad: true, contact: 0 };
@@ -20,7 +20,7 @@ export function makeCar(spec) {
     const gr = ground(st.x, st.z), mu = s.mu * (gr.mu || 1);
     // 速度に応じてハンドルの切れ角を減らす（実車の操舵感に近づける）
     // 速さに応じて切れ角を減らす（実車はハンドル 1 回転半で、高速では小さく切る。100km/h で全切りでも約 0.2rad）
-    const steerTarget = c.steer * s.steerMax / (1 + speed * speed / 400);
+    const steerTarget = c.steer * s.steerMax / (1 + speed * speed / 200);   // 100km/h で全切り約 0.12rad（限界の横 G 付近）。半分なら約 0.7G
     st.steer += (steerTarget - st.steer) * Math.min(1, dt * 8);
     // 荷重（静的 + 加減速による前後移動）
     const Wt = s.mass * G, dFz = s.mass * st.ax * s.cgH / s.wb;
@@ -38,7 +38,7 @@ export function makeCar(spec) {
     else if (st.gear > 1 && st.rpm < s.maxRpm * 0.42) st.gear--;
     const torqueCurve = 0.62 + 0.38 * Math.sin(Math.min(1, st.rpm / s.maxRpm) * Math.PI * 0.95);
     let Fdrive = c.throttle * s.power / Math.max(4, Math.abs(st.vx)) * torqueCurve;
-    Fdrive = Math.min(Fdrive, c.throttle * 9000 * ratio / 14);
+    Fdrive = Math.min(Fdrive, c.throttle * s.tqR * ratio);   // tqR: エンジンの最大トルク ÷ タイヤの半径（N）
     const driveFz = s.drive === 'ff' ? FzF : s.drive === '4wd' ? FzF + FzR : FzR;
     st.tcs = false;
     if (Fdrive > mu * driveFz * 0.95) { Fdrive = mu * driveFz * 0.95; st.tcs = true; }   // TCS
@@ -112,8 +112,8 @@ export function makeColliders(B, ext, makeGrid, freeTris, blockTris) {
   if (freeTris) { g.clear = true; freeTris((ax, az, bx, bz, cx, cz) => g.tri(ax, az, bx, bz, cx, cz)); g.clear = false; }
   // 道路の上でも当たるもの（高架橋の橋脚など）
   (blockTris || []).forEach(t => g.tri(t[0], t[1], t[2], t[3], t[4], t[5]));
-  const HL = 2.2, HW = 0.88, SAMP = [[HL, HW], [HL, -HW], [-HL, HW], [-HL, -HW], [HL, 0], [-HL, 0], [0, HW], [0, -HW]];
   function collide(st) {
+    const HL = st.HL || 2.2, HW = st.HW || 0.88, SAMP = [[HL, HW], [HL, -HW], [-HL, HW], [-HL, -HW], [HL, 0], [-HL, 0], [0, HW], [0, -HW]];   // 車体の半分の長さ・幅（車ごと）
     const fx = Math.sin(st.yaw), fz = Math.cos(st.yaw), lx = fz, lz = -fx;   // 前と左
     let hit = 0;
     for (let it = 0; it < 3; it++) {

@@ -24,6 +24,7 @@ const CARS = [
   { key: 'sedan_accord', name: 'セダン（アコード型）', len: 4.9, paint: null, kind: 'sedan', yaw: 180 },
   { key: 'sedan_mazda3', name: 'セダン（マツダ 3 型）', len: 4.58, paint: /^material$/, kind: 'sedan', yaw: 180 },
   { key: 'suv_cx5', name: 'SUV（CX-5 型）', len: 4.545, paint: /^Main$/, kind: 'suv' },
+  { key: 'super_svj', name: 'スーパーカー（V12 ミッドシップ）', len: 4.943, paint: /^CARROSSERIE$/, kind: 'super', hero: 250000, yaw: 180 },
   { key: 'kei_van', name: '軽バン（キャリイ型）', len: 3.3, paint: /^S_Boya$/, drop: /^Zemin$/, kind: 'kei', yaw: 180 }
 ];
 const OUT = new URL('../../assets/data/world/cars/', import.meta.url).pathname;
@@ -36,7 +37,7 @@ const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
 for (const C of CARS) {
   if (only && !only.includes(C.key)) continue;
   const M = meta.find(m => m.key === C.key);
-  const LODS = [['lod0', 1], ['lod1', null], ['lod2', null]];
+  const LODS = [['lod0', 1], ['lod1', null], ['lod2', null]].concat(C.hero ? [['hero', null]] : []);   // hero: 高画質の自車用（面を多めに残す）
   const sizes = {};
   for (const [lod] of LODS) {
     const doc = await io.read(path.join(SRC, C.key + '.glb'));
@@ -110,9 +111,9 @@ for (const C of CARS) {
     }
     for (const { p } of prims) { const a = p.getAttribute('POSITION'), v = [0, 0, 0]; for (let i = 0; i < a.getCount(); i++) { a.getElement(i, v); b2 = [Math.min(b2[0], v[0]), Math.max(b2[1], v[0]), Math.min(b2[2], v[2]), Math.max(b2[3], v[2]), Math.max(b2[4], v[1])]; } }
     sizes.w = +(b2[1] - b2[0]).toFixed(2); sizes.l = +(b2[3] - b2[2]).toFixed(2); sizes.h = +b2[4].toFixed(2);
-    // エンブレム・車名の文字を消す（商標のため）: 前後の端から 0.5m 以内・高さ 0.3〜1.4m にある、つながった小さな部品
+    // エンブレム・車名の文字を消す（STRIP_BADGE=1 のときだけ。既定は元のまま残す）: 前後の端から 0.5m 以内・高さ 0.3〜1.4m にある、つながった小さな部品
     //  （最大の寸法 0.32m 未満）を消す。灯火・ガラス・塗装の部品は対象外。センサーなどの小部品も一緒に消えるが見た目への影響は小さい
-    {
+    if (process.env.STRIP_BADGE === '1') {
       let nb = 0;
       for (const m of root.listMeshes()) for (const p of m.listPrimitives()) {
         const mat = p.getMaterial(), mn = mat ? mat.getName() : '';
@@ -142,8 +143,8 @@ for (const C of CARS) {
     // 面を間引く（LOD）。目標: lod0 は元のまま（12 万面を超えるときは 12 万）、lod1 は約 1.4 万、lod2 は約 3 千
     let tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3;
     // 一般車（lod1・lod2）は車内を省く（色の濃いガラス越しにはほぼ見えない）
-    if (lod !== 'lod0') { for (const m of root.listMeshes()) for (const p of m.listPrimitives()) { const mat = p.getMaterial(); if (mat && /interior|seat|dash|steer/i.test(mat.getName())) p.dispose(); } await doc.transform(fn.prune()); tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3; }
-    const target = lod === 'lod0' ? Math.min(tris, 120000) : lod === 'lod1' ? 30000 : 6000;
+    if (lod !== 'lod0' && lod !== 'hero') { for (const m of root.listMeshes()) for (const p of m.listPrimitives()) { const mat = p.getMaterial(); if (mat && /interior|seat|dash|steer/i.test(mat.getName())) p.dispose(); } await doc.transform(fn.prune()); tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3; }
+    const target = lod === 'hero' ? Math.min(tris, C.hero) : lod === 'lod0' ? Math.min(tris, 120000) : lod === 'lod1' ? 30000 : 6000;
     if (target < tris) await doc.transform(fn.simplify({ simplifier: MeshoptSimplifier, ratio: target / tris, error: lod === 'lod2' ? 0.02 : 0.004, lockBorder: false }), fn.prune());
     // 細かい部品が多くて減らないときは、部品の形を保たない間引き（sloppy）を材質ごとに使う
     {
@@ -169,7 +170,7 @@ for (const C of CARS) {
     await io.write(file, doc);
     sizes[lod] = { tris: Math.round(t2), kb: Math.round(fs.statSync(file).size / 1024) };
   }
-  out.push({ key: C.key, name: C.name, kind: C.kind, size: { w: sizes.w, l: sizes.l, h: sizes.h }, lods: { lod0: sizes.lod0, lod1: sizes.lod1, lod2: sizes.lod2 }, paint: !!C.paint,
+  out.push({ key: C.key, name: C.name, kind: C.kind, size: { w: sizes.w, l: sizes.l, h: sizes.h }, lods: Object.assign({ lod0: sizes.lod0, lod1: sizes.lod1, lod2: sizes.lod2 }, sizes.hero ? { hero: sizes.hero } : {}), paint: !!C.paint,
     source: { title: M.name, author: M.user, license: M.lic === 'by' ? 'CC BY 4.0' : M.lic, url: M.url, via: 'Objaverse (allenai/objaverse)', modified: '縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮' } });
   console.log(C.key, JSON.stringify(out[out.length - 1].size), JSON.stringify(out[out.length - 1].lods));
 }
