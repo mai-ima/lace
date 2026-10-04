@@ -48,10 +48,32 @@ export function profile(t) {
 }
 
 /**
+ * 実測の道幅（PLATEAU の道路の範囲を中心線から直角に測った幅 m・中心のずれ m）に断面を合わせる。
+ * 道路の範囲は車道と歩道を含むので、歩道のある道（幹線と 2 車線の道で幅 9m 以上）は幅の 2 割（1.5〜4.5m）を両側の歩道にし、
+ * 残りを車道にする。車線数は OSM の値を使い、無ければ車道の幅から決める。上下線が分かれた道（片側の一方通行で中心が大きくずれる）は使わない。
+ */
+export function fitWidth(pr, m) {
+  if (!m) return pr;
+  const [W, off] = m;
+  if (W < 3 || W > 60 || (pr.one && Math.abs(off) > 2.5) || W < pr.hw * 2 * 0.55) return pr;
+  const q = Object.assign({}, pr);
+  let walk = (pr.rank <= 4 && W >= 9) ? Math.max(1.5, Math.min(4.5, W * 0.2)) : 0;
+  let car = W - walk * 2;
+  const nl = pr.fw + pr.bw;
+  if (car < nl * 2.6 + 2 * pr.edge && walk > 0) { walk = Math.max(0, (W - nl * 2.6 - 2 * pr.edge) / 2); car = W - walk * 2; }
+  q.walk = walk;
+  q.lw = Math.max(2.5, Math.min(3.75, (car - 2 * pr.edge) / Math.max(1, nl)));
+  q.hw = (nl * q.lw + 2 * pr.edge) / 2;
+  q.shift = Math.max(-3, Math.min(3, off));   // 中心線を実測の道路の中央へ寄せる（+ 側へ）
+  q.measured = W;
+  return q;
+}
+
+/**
  * データ（roads.json）から道路網を作る。
  * 返り値: { nodes:[{x,z,y,arms:[], sig, kind}], edges:[{a,b,pts:[[x,z,y]...], pr, trimA, trimB}], junctions:[...], marks:[], signals:[] }
  */
-export function build(D, heightAt) {
+export function build(D, heightAt, widths) {
   const P = D.p, N = P.length / 3;
   const pos = i => [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]];
   const roads = D.ways.filter(w => w.k === 'road');
@@ -62,13 +84,14 @@ export function build(D, heightAt) {
   function node(i) { if (!nodes.has(i)) { const p = pos(i); nodes.set(i, { id: i, x: p[0], z: p[1], y: p[2], arms: [], sig: false, cross: false, stop: false }); } return nodes.get(i); }
   const edges = [];
   roads.forEach(w => {
-    const pr = profile(w.t);
+    const pr = fitWidth(profile(w.t), widths && widths[w.id]);
     let start = 0;
     for (let j = 1; j < w.n.length; j++) {
       if (use[w.n[j]] >= 2 || j === w.n.length - 1) {
         const seq = w.n.slice(start, j + 1);
         if (seq.length >= 2) {
           const pts = seq.map(pos);
+          if (pr.shift) shiftLine(pts, pr.shift);
           let L = 0; for (let k = 1; k < pts.length; k++) L += len2(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
           if (L > 0.5) {
             const e = { id: edges.length, way: w.id, a: seq[0], b: seq[seq.length - 1], pts, len: L, pr, trimA: 0, trimB: 0 };
@@ -226,6 +249,17 @@ function hull2(P) {
   for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
   for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
   return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+
+/** 折れ線を横（+ 側）へずらす。端の点（交差点）は動かさず、内側の点だけ（道の接続を保つ） */
+function shiftLine(pts, d) {
+  const n = pts.length; if (n < 3) return;
+  const src = pts.map(p => p.slice());
+  for (let i = 1; i < n - 1; i++) {
+    const a = src[i - 1], b = src[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], l = len2(dx, dz) || 1;
+    const k = Math.min(1, Math.min(i, n - 1 - i) / 2);   // 端に近いほど少なく
+    pts[i][0] = src[i][0] - dz / l * d * k; pts[i][1] = src[i][1] + dx / l * d * k;
+  }
 }
 
 /** 折れ線の [from, to] の区間を切り出す */

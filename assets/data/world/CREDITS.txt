@@ -21,3 +21,5 @@ assets/data/world/ の出典（加工して作成）
   - セダン（マツダ 3 型）: 「Mazda-3」 作者 David_Holiday（CC BY 4.0） https://sketchfab.com/3d-models/0811f0d3785243a5ad05bd1b84457273
   - 軽バン（キャリイ型）: 「Suzuki Carry Minivan」 作者 ProPolyModels（CC BY 4.0） https://sketchfab.com/3d-models/5c0007c0c6ed4d298b8c80646efa09d2
   実在の車名・エンブレムは商標のため、ゲーム内では車名を使わない（車種は「小型ハッチバック」などの一般名で扱う）。
+- 道路の範囲・車道と歩道・縁石（center/road_area.json）と実測の道幅（center/road_width.json）: 国土交通省 PLATEAU
+  （浜松市 交通（道路）モデル LOD1、2023 年度）を tools/world/build_tran.py で加工して作成（OSM の道路網と組み合わせ）。

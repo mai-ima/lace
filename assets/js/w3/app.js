@@ -134,9 +134,10 @@ export async function start(container, opt) {
           const u = (next - acc) / sl, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl;
           [-1, 1].forEach(sd => {
             const off = pr.hw + pr.walk * 0.5, tx = x - dz * off * sd, tz = z + dx * off * sd;
-            if (collide.grid.at(tx, tz) || world.onRoadPt(tx, tz) || sigNear(tx, tz) || world.underViaduct(tx, tz, 4)) return;   // 高架の下（4m 以内）には植えない
+            if (collide.grid.at(tx, tz) || sigNear(tx, tz) || world.underViaduct(tx, tz, 4)) return;
+            if (W.roadArea && W.roadArea.walk ? !world.walkG.at(tx, tz) : world.onRoadPt(tx, tz)) return;   // 実測の歩道の上だけに植える   // 高架の下（4m 以内）には植えない
             const r = hsh(tx, tz);
-            spots.push({ x: tx, y: W.terrain.at(tx, tz) + 0.15, z: tz, h: 8 + r * 4, yaw: r * 6.283 });
+            spots.push({ x: tx, y: W.terrain.at(tx, tz) + 0.14, z: tz, h: 8 + r * 4, yaw: r * 6.283 });
           });
           next += 11 + hsh(x, z) * 3;
         }
@@ -217,7 +218,7 @@ export async function start(container, opt) {
   const ground = (x, z) => {
     const by = world.bridgeY(x, z); if (by !== null) return { y: by + 0.05, mu: 1 };
     const t = W.terrain.at(x, z), onR = world.onRoadPt(x, z);
-    if (world.walkG.at(x, z)) return { y: t + 0.2, mu: 1 };   // 歩道（0.5m 格子）を車道（1m 格子）より優先
+    if (world.walkG.at(x, z)) return { y: t + 0.17, mu: 1 };   // 歩道（高さ 15cm。0.5m 格子）を車道（1m 格子）より優先
     return onR ? { y: t + 0.06, mu: 1 } : { y: t + 0.02, mu: 0.8, drag: 0.08 };
   };
   car.st.y = ground(car.st.x, car.st.z).y;

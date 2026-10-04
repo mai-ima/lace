@@ -100,7 +100,7 @@ export function buildWorld(scene, W, gfx) {
   terrGeos.forEach(g => { const m = new THREE.Mesh(g, groundMat); m.receiveShadow = true; out.group.add(m); });
 
   /* --- 道路網 --- */
-  const net = build(W.roads, (x, z) => terr.at(x, z));
+  const net = build(W.roads, (x, z) => terr.at(x, z), W.roadWidth);   // 道幅は PLATEAU の道路の範囲で実測した値（tools/world/build_tran.py）
   out.net = net;
   const asph = photoTex('asphalt', 1, true);
   // 面の向きで UV を変える（上向きの面は xz、壁は「水平の位置 × 高さ」。縦に引き伸ばされない）
@@ -131,7 +131,7 @@ export function buildWorld(scene, W, gfx) {
     const pr = e.pr;
     let g = strip(ribbon(e, -pr.hw, pr.hw), 0.05, true);
     roadGeos.push(g);
-    if (pr.walk > 0 && !e.internal) [[-1], [1]].forEach(([s]) => {
+    if (pr.walk > 0 && !e.internal && !(W.roadArea && W.roadArea.walk)) [[-1], [1]].forEach(([s]) => {   // 実測の歩道（PLATEAU）があるときは使わない
       const a = s < 0 ? -pr.hw - pr.walk : pr.hw, b = s < 0 ? -pr.hw : pr.hw + pr.walk;
       const wg = strip(ribbon(e, a, b), 0.2, true); walkGeos.push(wg); (out.walkTopGeos = out.walkTopGeos || []).push(wg);
       const R = ribbon(e, s < 0 ? -pr.hw : pr.hw, s < 0 ? -pr.hw : pr.hw);
@@ -169,9 +169,51 @@ export function buildWorld(scene, W, gfx) {
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.78, patchy);`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor - 0.08 * big, 0.6, 1.0);');
   };
+  // 道路の範囲（PLATEAU、測量に基づく道路縁）を舗装として敷く。交差点の角・道幅・接続の形が実際どおりになる
+  const triGeo = (T, dy) => { const n = T.v.length / 2, pos = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const x = T.v[i * 2] * W.roadArea.q, z = T.v[i * 2 + 1] * W.roadArea.q; pos.set([x, terr.at(x, z) + dy, z], i * 3); } return upGeo(pos, Array.from(T.i)); };
+  const WALK_H = 0.15;   // 歩道の高さ（縁石の段）
+  if (W.roadArea) {
+    const A = W.roadArea;
+    out.areaGeo = triGeo(A.car || A, 0.035);   // 車道（下で、車道の帯より奥に描く別のメッシュにする）
+    if (A.walk) out.walkAreaGeo = triGeo(A.walk, WALK_H);
+  }
   // 車道の三角形を外へ渡す（当たり判定で「走れる所」として使う）
-  out.roadTris = fn => roadGeos.forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) fn(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
+  const triEach = (gs, fn) => gs.forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) fn(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
+  out.roadTris = fn => triEach(roadGeos.concat([out.areaGeo, out.walkAreaGeo].filter(Boolean)), fn);   // 走れる所（車道と歩道）
+  out.carTris = fn => triEach(roadGeos.concat([out.areaGeo].filter(Boolean)), fn);   // 車道だけ
   const roads = new THREE.Mesh(worldUV(mergeGeometries(roadGeos), 6), roadMat); roads.receiveShadow = true; out.group.add(roads);
+  if (out.areaGeo) {
+    // 車道（PLATEAU の道路の範囲から歩道を除いた部分）: 車道の帯と同じアスファルト。帯より奥に描く
+    const am = roadMat.clone(); am.onBeforeCompile = roadMat.onBeforeCompile; am.customProgramCacheKey = () => 'roadArea';
+    am.polygonOffset = true; am.polygonOffsetFactor = 2; am.polygonOffsetUnits = 2;
+    const area = new THREE.Mesh(worldUV(out.areaGeo, 6), am); area.receiveShadow = true; out.group.add(area);
+  }
+  if (out.walkAreaGeo) {
+    // 歩道・広場: 明るい灰色のブロック舗装（30cm 角を 1 枚ずつ明るさを変える）。高さ 15cm
+    const wm = new THREE.MeshStandardMaterial({ color: 0xb9b6b0, roughness: 0.9, metalness: 0 });
+    wm.onBeforeCompile = sh => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vWXZ;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vWXZ;\nfloat wh(vec2 p) { p = mod(p, 251.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          vec2 t = vWXZ / vec2(0.3, 0.15); t.x += floor(t.y) * 0.5;   // 互い違いのブロック
+          vec2 f = fract(t), fw = fwidth(t);
+          float joint = (1.0 - smoothstep(0.0, max(fw.x, 0.02) * 1.5, f.x) * smoothstep(0.0, max(fw.y, 0.02) * 1.5, f.y));
+          float far = smoothstep(0.3, 0.8, max(fw.x, fw.y));
+          float tone = 0.9 + 0.16 * wh(floor(t));
+          diffuseColor.rgb *= mix(tone * (1.0 - joint * 0.35), 0.96, far);`);
+    };
+    const walkM = new THREE.Mesh(out.walkAreaGeo, wm); walkM.receiveShadow = true; out.group.add(walkM);
+    // 縁石: 歩道の縁で車道に接する所に、高さ 15cm の側面
+    const C = W.roadArea.curb || [], q = W.roadArea.q, cp = [], ci = [];
+    for (let k = 0; k < C.length; k += 4) {
+      const ax = C[k] * q, az = C[k + 1] * q, bx = C[k + 2] * q, bz = C[k + 3] * q, ya = terr.at(ax, az), yb = terr.at(bx, bz), b = cp.length / 3;
+      cp.push(ax, ya + WALK_H, az, bx, yb + WALK_H, bz, ax, ya + 0.02, az, bx, yb + 0.02, bz); ci.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
+    }
+    if (cp.length) {
+      const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3)); cg.setIndex(ci); cg.computeVertexNormals();
+      const curb = new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.85, side: THREE.DoubleSide })); curb.receiveShadow = true; out.group.add(curb);
+    }
+  }
   if (walkGeos.length) {
     const walk = new THREE.Mesh(boxUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: asph, color: 0xd6d4ce, roughness: 0.9, side: THREE.DoubleSide })   /* 歩道: 明るめのアスファルト舗装 */);
     walk.receiveShadow = true; out.group.add(walk);
@@ -288,11 +330,11 @@ export function buildWorld(scene, W, gfx) {
   out.underViaduct = (x, z, m) => { m = m || 0; for (let a = -m; a <= m; a += 1) for (let b = -m; b <= m; b += 1) if (viaG.at(x + a, z + b)) return true; return false; };
   // 道路の範囲（1m 格子）。高架橋は道路をまたぐので、道路の上（と 1.5m 以内）には橋脚を置かない
   const roadG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
-  out.roadTris((ax, az, bx, bz, cx, cz) => roadG.tri(ax, az, bx, bz, cx, cz));
+  out.carTris((ax, az, bx, bz, cx, cz) => roadG.tri(ax, az, bx, bz, cx, cz));   // 車道だけ（歩道は信号柱・橋脚を立てられる所）
   out.onRoadPt = (x, z) => roadG.at(x, z) === 1;
   // 歩道の上面（0.5m 格子）。接地の高さ（縁石 +0.2m）に使う
   out.walkG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 0.5);
-  (out.walkTopGeos || []).forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) out.walkG.tri(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
+  (out.walkTopGeos || []).concat(out.walkAreaGeo ? [out.walkAreaGeo] : []).forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) out.walkG.tri(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
   // 橋（路面の高さが地形と違う所）: 線と半幅
   out.bridges = net.edges.filter(e => e.pr.bridge && !e.hidden && e.line.length >= 2).map(e => {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; e.line.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); });
