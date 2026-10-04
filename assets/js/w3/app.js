@@ -166,7 +166,7 @@ export async function start(container, opt) {
       real.trees.forEach(([x, z, r]) => {
         if (collide.grid.at(x, z) || world.onRoadPt(x, z) || sigNear(x, z) || world.underViaduct(x, z, 3)) return;
         const k = hsh(x, z);
-        spots.push({ x, y: W.terrain.at(x, z) + (world.walkG.at(x, z) ? 0.14 : 0), z, h: Math.max(5, Math.min(14, 4 + r * 1.7)) * (0.9 + k * 0.2), yaw: k * 6.283 });
+        spots.push({ x, y: world.walkG.at(x, z) ? W.terrain.atRoad(x, z) + 0.14 : W.terrain.at(x, z), z, h: Math.max(5, Math.min(14, 4 + r * 1.7)) * (0.9 + k * 0.2), yaw: k * 6.283 });
       });
     }
     world.trees = plantTrees(scene, imp, spots, { shadows: gfx.shadows > 0 });
@@ -191,13 +191,13 @@ export async function start(container, opt) {
         m.head = { x: hx - 0.3, y: hy - 0.02 }; };
       models = { pole: await load('utility_pole_jp', m => tint(m, 0.74, 0.73, 0.70)), light: await load('streetlight_curve', m => { armX(m); tint(m, 0.62, 0.64, 0.66); }) };
     } catch (e) { console.warn('付属物のモデルを読めませんでした', e); }
-    world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, { models, lightFar: gfx.tier === 'high' ? 300 : 220, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
+    world.props = buildProps(scene, world.net, (x, z) => world.walkG.at(x, z) ? W.terrain.atRoad(x, z) + 0.15 : W.terrain.at(x, z), free, { models, inBld: (x, z) => collide.grid.at(x, z), lightFar: gfx.tier === 'high' ? 300 : 220, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
     // 並べ直しは毎フレームの更新で（自車の位置が決まってから）
     // 夕方・夜の灯り: 街灯（LED、白に近い）と防犯灯の光の点、真下の地面の光だまり
     { const P = world.props;
       makeGlowPoints(scene, P.lightHeads || [], [16, 15, 13], 0.42);
       makeGlowPoints(scene, P.secLamps || [], [13, 13.5, 14], 0.22);
-      makeLightPools(scene, (P.lightHeads || []).map(h => ({ x: h.x, y: h.gy - 0.15, z: h.z, r: 12 })), [0.42, 0.38, 0.32]);
+      makeLightPools(scene, (P.lightHeads || []).map(h => ({ x: h.x, y: W.terrain.atRoad(h.x, h.z), z: h.z, r: 12 })), [0.42, 0.38, 0.32]);
       makeLightPools(scene, (P.secLamps || []).map(h => ({ x: h.x, y: W.terrain.at(h.x, h.z), z: h.z, r: 6.5 })), [0.22, 0.22, 0.23]); }
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }

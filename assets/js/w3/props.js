@@ -51,15 +51,15 @@ export function buildProps(scene, net, at, free, opt) {
   net.edges.forEach(e => {
     const pr = e.pr; if (e.internal || e.hidden || e.offArea || e.line.length < 2) return;
     const mid = e.line[Math.floor(e.line.length / 2)], r = Math.hypot(mid[0], mid[1]);
-    // 電柱: 住宅地・その他の道（rank 4〜8）。中心部（半径 1km）は 1 割だけ
-    if (pr.rank >= 4 && pr.rank <= 8 && (r > 1000 || hsh(mid[0], mid[1]) < 0.1)) {
+    // 電柱: 住宅地・その他の道（rank 4〜8）。駅から 600m 以内（ビル街・無電柱化）は 15%、600m〜1km は半分
+    if (pr.rank >= 4 && pr.rank <= 8 && (r > 1000 || hsh(mid[0], mid[1]) < (r < 600 ? 0.15 : 0.5))) {
       const side = hsh(e.id, 3) < 0.5 ? -1 : 1, off = pr.hw + (pr.walk > 0 ? pr.walk - 0.4 : 0.35);
       let prev = null;
       walkLine(e.line, 6, () => 28 + hsh(e.id, prev ? prev.x : 0) * 6, (x, z, dx, dz) => {
         const px = x - dz * off * side, pz = z + dx * off * side;
         if (!free(px, pz)) { prev = null; return; }
-        const p = { x: px, z: pz, y: at(px, pz), yaw: Math.atan2(dx, dz), tr: hsh(px, pz) < 0.22, out: [-dz * side, dx * side] };
-        poleSpots.push(p); if (prev && Math.hypot(prev.x - px, prev.z - pz) < 45) spans.push([prev, p]); prev = p;
+        const p = { x: px, z: pz, y: at(px, pz), yaw: Math.atan2(dx, dz), tr: hsh(px, pz) < 0.22, out: [-dz * side, dx * side], e: e.id, deg: 0 };
+        poleSpots.push(p); if (prev && Math.hypot(prev.x - px, prev.z - pz) < 45) { spans.push([prev, p]); prev.deg++; p.deg++; } prev = p;
       });
     }
     // 街灯（道路照明）: 歩道のある道（rank ≤ 6）。両側に互い違いに約 32m ごと。柱は歩道の車道側（縁石から 0.6m）
@@ -74,6 +74,29 @@ export function buildProps(scene, net, at, free, opt) {
       });
     }
   });
+  // 道の端の電柱（つながりが 1 本以下）は、別の道の近くの電柱へ電線を渡す（交差点の角・道をまたぐ引込み）。
+  // 42m 以内でいちばん近いもの（格子の 2 つ隣まで探す）。途中（1/4・1/2・3/4）が建物の中なら渡さない
+  {
+    const G = new Map(), key = (x, z) => Math.floor(x / 42) + ',' + Math.floor(z / 42);
+    poleSpots.forEach(p => { const k = key(p.x, p.z); if (!G.has(k)) G.set(k, []); G.get(k).push(p); });
+    const linked = new Set(spans.map(([a, b]) => a.x + ',' + a.z + '|' + b.x + ',' + b.z));
+    const link = (p, maxD, sameEdge) => {
+      const gx = Math.floor(p.x / 42), gz = Math.floor(p.z / 42);
+      let best = null, bd = maxD;
+      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) (G.get((gx + i) + ',' + (gz + j)) || []).forEach(q => {
+        if (q === p || (!sameEdge && q.e === p.e) || q.deg > 2) return;
+        const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < 6 || d >= bd) return;
+        if (linked.has(p.x + ',' + p.z + '|' + q.x + ',' + q.z) || linked.has(q.x + ',' + q.z + '|' + p.x + ',' + p.z)) return;
+        if (opt.inBld && [0.25, 0.5, 0.75].some(u => opt.inBld(p.x + (q.x - p.x) * u, p.z + (q.z - p.z) * u))) return;
+        best = q; bd = d;
+      });
+      if (best) { spans.push([p, best]); p.deg++; best.deg++; linked.add(p.x + ',' + p.z + '|' + best.x + ',' + best.z); }
+    };
+    poleSpots.forEach(p => { if (p.deg <= 1) link(p, 42, false); });
+    // まだ電線の無い電柱は、同じ道の離れた電柱も含めて 60m まで探す。それでも無ければ電柱を置かない（電線の無い電柱は無い）
+    poleSpots.forEach(p => { if (p.deg === 0) link(p, 60, true); });
+    for (let i = poleSpots.length - 1; i >= 0; i--) if (poleSpots[i].deg === 0) poleSpots.splice(i, 1);
+  }
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(1, 1, 1), V = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
   const conc = new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.85 });
   const steel = new THREE.MeshStandardMaterial({ color: 0x6f7378, roughness: 0.55, metalness: 0.6 });
@@ -91,7 +114,6 @@ export function buildProps(scene, net, at, free, opt) {
     out.lods = [];
     if (opt.models.pole) out.lods.push(lodInstancer(scene, opt.models.pole, poleSpots, { near: 45, far: 260 }));
     if (opt.models.light) out.lods.push(lodInstancer(scene, opt.models.light, lightSpots, { near: 55, far: opt.lightFar || 300 }));
-    out.update = (cx, cz) => out.lods.forEach(l => l.update(cx, cz));
   }
   const WH = opt.models && opt.models.pole ? opt.models.pole.h : 10;   // 電線をつなぐ高さの基準（電柱の地上高）
   // 電柱（地上 10m、上へ細くなる）
@@ -110,23 +132,73 @@ export function buildProps(scene, net, at, free, opt) {
   const trG = new THREE.CylinderGeometry(0.28, 0.28, 0.85, 10); trG.translate(0, 0, 0);
   inst(trG, trans, poleSpots.filter(p => p.tr), p => { at0(p, 7.0); M.multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.42)); return M; });
   }
-  // 電線（たるみ 2%）: 高圧 3 本 + 低圧 2 本 + 通信 1 本
-  const lines = [], wires = [[-0.8, WH * 0.95], [0, WH * 0.95], [0.8, WH * 0.95], [-0.45, WH * 0.82], [0.45, WH * 0.82], [0.3, WH * 0.62]];
+  // 電線（たるみ 2%）: 高圧 3 本 + 低圧 2 本 + 通信 1 本。
+  // 1 本ずつ細い帯にして、太さは実寸（直径 2cm）。遠くで 1 画素より細くなる所は 1 画素の幅で薄く描く（線の覆う割合を不透明度で表す）。
+  // 区間は 100m の格子に分け、カメラの周り（WIRE_R）の格子だけを描く（描画は 1 回）
+  const wires = [[-0.8, WH * 0.95], [0, WH * 0.95], [0.8, WH * 0.95], [-0.45, WH * 0.82], [0.45, WH * 0.82], [0.3, WH * 0.62]];
+  const WC = 100, WIRE_R = 280, cells = new Map(), segA = [], segB = [];
   spans.forEach(([a, b]) => {
-    const len = Math.hypot(b.x - a.x, b.z - a.z), sag = len * 0.02;
+    const len = Math.hypot(b.x - a.x, b.z - a.z), sag = len * 0.02, K = Math.max(4, Math.min(10, Math.round(len / 4)));
     wires.forEach(([o, h]) => {
       const ax = a.x + Math.cos(a.yaw) * o, az = a.z - Math.sin(a.yaw) * o, bx = b.x + Math.cos(b.yaw) * o, bz = b.z - Math.sin(b.yaw) * o;
-      const K = 8; let px = ax, py = a.y + h, pz = az;
+      let px = ax, py = a.y + h, pz = az;
       for (let k = 1; k <= K; k++) {
         const u = k / K, x = ax + (bx - ax) * u, z = az + (bz - az) * u, y = a.y + h + (b.y - a.y) * u - 4 * sag * u * (1 - u);
-        lines.push(px, py, pz, x, y, z); px = x; py = y; pz = z;
+        const ck = Math.floor((px + x) / 2 / WC) + ',' + Math.floor((pz + z) / 2 / WC);
+        if (!cells.has(ck)) cells.set(ck, []); cells.get(ck).push(segA.length / 3);
+        segA.push(px, py, pz); segB.push(x, y, z); px = x; py = y; pz = z;
       }
     });
   });
-  if (lines.length) {
-    const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
-    const wl = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x1c1d20, transparent: true, opacity: 0.85 }));
-    scene.add(wl);
+  const nSeg = segA.length / 3;
+  if (nSeg) {
+    const P = new Float32Array(nSeg * 12), B = new Float32Array(nSeg * 12), C = new Float32Array(nSeg * 8);
+    for (let i = 0; i < nSeg; i++) for (let v = 0; v < 4; v++) {
+      for (let c = 0; c < 3; c++) { P[(i * 4 + v) * 3 + c] = segA[i * 3 + c]; B[(i * 4 + v) * 3 + c] = segB[i * 3 + c]; }
+      C[(i * 4 + v) * 2] = v < 2 ? 0 : 1; C[(i * 4 + v) * 2 + 1] = v % 2 ? 1 : -1;
+    }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.BufferAttribute(P, 3)); wg.setAttribute('aB', new THREE.BufferAttribute(B, 3)); wg.setAttribute('aC', new THREE.BufferAttribute(C, 2));
+    const idx = new THREE.BufferAttribute(new Uint32Array(nSeg * 6), 1); idx.setUsage(THREE.DynamicDrawUsage); wg.setIndex(idx); wg.setDrawRange(0, 0);
+    const res = new THREE.Vector2(1, 1);
+    const wm = new THREE.ShaderMaterial({
+      uniforms: { uRes: { value: res }, uW: { value: 0.02 }, uFar: { value: WIRE_R - 40 } }, transparent: true, depthWrite: false,
+      vertexShader: `
+        attribute vec3 aB; attribute vec2 aC; uniform vec2 uRes; uniform float uW; uniform float uFar; varying float vA;
+        void main() {
+          vec4 va = viewMatrix * vec4(position, 1.0), vb = viewMatrix * vec4(aB, 1.0);
+          // カメラの後ろへ出る端は、近い面（0.1m）で切る
+          if (va.z > -0.1 && vb.z > -0.1) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); vA = 0.0; return; }
+          if (va.z > -0.1) va = mix(va, vb, (va.z + 0.1) / (va.z - vb.z));
+          if (vb.z > -0.1) vb = mix(vb, va, (vb.z + 0.1) / (vb.z - va.z));
+          vec4 ca = projectionMatrix * va, cb = projectionMatrix * vb, c = aC.x < 0.5 ? ca : cb;
+          vec2 sa = ca.xy / ca.w * uRes * 0.5, sb = cb.xy / cb.w * uRes * 0.5, d = sb - sa;
+          vec2 n = length(d) > 1e-4 ? normalize(vec2(-d.y, d.x)) : vec2(0.0, 1.0);
+          float px = uW * projectionMatrix[1][1] * uRes.y * 0.5 / c.w;   // 実寸の太さ（画素）
+          float w = max(px, 1.0);
+          c.xy += n * aC.y * w * 0.5 / (uRes * 0.5) * c.w;
+          float dist = -(aC.x < 0.5 ? va.z : vb.z);
+          vA = clamp(px, 0.18, 1.0) * (1.0 - smoothstep(uFar - 60.0, uFar, dist));
+          gl_Position = c;
+        }`,
+      fragmentShader: `varying float vA; void main() { gl_FragColor = vec4(0.07, 0.075, 0.08, 0.92 * vA); }`
+    });
+    const wmesh = new THREE.Mesh(wg, wm); wmesh.frustumCulled = false; wmesh.renderOrder = 3;
+    wmesh.onBeforeRender = (r) => { r.getDrawingBufferSize(res); };
+    scene.add(wmesh);
+    let wx = Infinity, wz = Infinity;
+    out.wires = { mesh: wmesh, update(cx, cz) {
+      if (Math.hypot(cx - wx, cz - wz) < 20) return; wx = cx; wz = cz;
+      const I = idx.array; let n = 0;
+      const g0x = Math.floor((cx - WIRE_R) / WC), g1x = Math.floor((cx + WIRE_R) / WC), g0z = Math.floor((cz - WIRE_R) / WC), g1z = Math.floor((cz + WIRE_R) / WC);
+      for (let gx = g0x; gx <= g1x; gx++) for (let gz = g0z; gz <= g1z; gz++) {
+        const L = cells.get(gx + ',' + gz); if (!L) continue;
+        const ddx = Math.max(0, Math.abs((gx + 0.5) * WC - cx) - WC / 2), ddz = Math.max(0, Math.abs((gz + 0.5) * WC - cz) - WC / 2);
+        if (ddx * ddx + ddz * ddz > WIRE_R * WIRE_R) continue;
+        for (const s of L) { const v = s * 4; I[n++] = v; I[n++] = v + 2; I[n++] = v + 1; I[n++] = v + 1; I[n++] = v + 2; I[n++] = v + 3; }
+      }
+      idx.clearUpdateRanges(); idx.addUpdateRange(0, n); idx.needsUpdate = true; wg.setDrawRange(0, n);
+    } };
   }
   // 街灯（高さ 10m の柱、車道側へ 1.8m のアーム、LED 灯具）。外部のモデルがあればそれを使う
   if (!(opt.models && opt.models.light)) {
@@ -150,6 +222,7 @@ export function buildProps(scene, net, at, free, opt) {
   // 街灯の灯具の位置（モデルの灯具の位置 head があればそれ、無ければ手続きの形の 1.9m 先）
   const hd = opt.models && opt.models.light && opt.models.light.head ? opt.models.light.head : { x: 1.9, y: 9.75 };
   out.lightHeads = lightSpots.map(p => ({ x: p.x + hd.x * Math.cos(p.yaw), y: p.y + hd.y, z: p.z - hd.x * Math.sin(p.yaw), gy: p.y }));
+  out.update = (cx, cz) => { (out.lods || []).forEach(l => l.update(cx, cz)); if (out.wires) out.wires.update(cx, cz); };
   out.poles = poleSpots; out.lights = lightSpots; out.wireCount = spans.length;
   return out;
 }
