@@ -148,7 +148,8 @@ export function build(D, heightAt, widths) {
   // 横断歩道の線（OSM の footway=crossing。道路を横切る線）。位置と、どの道を横切るかはこの線と道の交点で決める
   const crossWays = D.ways.filter(w => w.k === 'cross' && w.n.length >= 2).map(w => w.n.map(i => [P[i * 3], P[i * 3 + 1]]));
   const crossings = feats.filter(F => (F.f.highway === 'crossing' || F.f.crossing) && F.f.crossing !== 'unmarked' && F.f.crossing !== 'no')
-    .map(F => ({ x: F.p[0], z: F.p[1], sig: F.f.crossing === 'traffic_signals' || F.f.highway === 'traffic_signals' }));
+    .map(F => ({ x: F.p[0], z: F.p[1], sig: F.f.crossing === 'traffic_signals' || F.f.highway === 'traffic_signals' }))
+    .concat((D.crossPhoto || []).map(p => ({ x: p[0], z: p[1], sig: true, photo: true })));   // 航空写真で見つけたもの（信号のある交差点の腕だけ）
 
   // 近い交差点をまとめる（osm2streets の consolidate intersections に相当）。上下線が分かれた大通りどうしの交差点は、
   // OSM では 2〜4 個の点と短い道でできているので、信号のある交差点で 28m 未満の道でつながる点を 1 つの交差点として扱う
@@ -453,6 +454,7 @@ export function markings(net, carAt) {
     }
     return best;
   };
+  const distSeg = (x, z, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1, u = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2)); return len2(x - a[0] - dx * u, z - a[1] - dz * u); };
   const addX = (e, sv, sig) => { if (!XS.has(e)) XS.set(e, []); XS.get(e).push({ s: sv, sig }); };
   const segX = (p, q, r, t) => {   // 線分 pq と rt の交点（無ければ null）
     const d = (q[0] - p[0]) * (t[1] - r[1]) - (q[1] - p[1]) * (t[0] - r[0]); if (Math.abs(d) < 1e-9) return null;
@@ -463,21 +465,29 @@ export function markings(net, carAt) {
   const usedPts = [];
   (net.crossWays || []).forEach(W2 => {
     // この横断歩道の線が交わる道のうち、交点が道の範囲（切り詰めた線の 0〜全長）にいちばん近いものを 1 つだけ採る（交差点の中で隣の道の延長と交わる誤りを避ける）
-    let best = null;
+    // 1 本の線が何本もの道を横切るとき（駅のバスターミナルの長い横断歩道など）は、道の範囲の中で交わる所（6m 以上離れたもの）にも置く
+    const cand = [];
     for (let k = 1; k < W2.length; k++) for (const e of roadEdges) {
       const Pp = e.pts || e.line, Lt = lineLen(e.line);
       for (let i = 1; i < Pp.length; i++) {
         const X = segX(W2[k - 1], W2[k], Pp[i - 1], Pp[i]); if (!X) continue;
         const r = sOnLine(e, X[0], X[1]); if (!r || r.d > e.pr.hw + 3) continue;
         const outR = r.s < 0 ? -r.s : r.s > Lt ? r.s - Lt : 0, sc = outR + r.d * 0.5;
-        if (!best || sc < best.sc) best = { e, s: r.s, X, sc };
+        cand.push({ e, s: r.s, X, sc, outR });
       }
     }
-    if (best) { const sig = (net.crossings || []).some(c => c.sig && len2(c.x - best.X[0], c.z - best.X[1]) < 8); addX(best.e, best.s, sig); usedPts.push(best.X); }
+    cand.sort((p, q) => p.sc - q.sc);
+    const took = [];
+    cand.forEach((c, k) => {
+      if (k > 0 && (c.outR > 0 || took.some(t => t.e === c.e || len2(t.X[0] - c.X[0], t.X[1] - c.X[1]) < 6))) return;
+      took.push(c);
+      const sig = (net.crossings || []).some(q => q.sig && len2(q.x - c.X[0], q.z - c.X[1]) < 8); addX(c.e, c.s, sig); usedPts.push(c.X);
+    });
   });
   (net.crossings || []).forEach(c => {
     const near = usedPts.find(p => len2(p[0] - c.x, p[1] - c.z) < 8);
     if (near) return;   // 横断歩道の線で置いたもの
+    if ((net.crossWays || []).some(W2 => W2.some((p, k) => k > 0 && distSeg(c.x, c.z, W2[k - 1], p) < 2.5))) return;   // 横断歩道の線の上の点（線の方で置く）
     let best = null;
     roadEdges.forEach(e => { const r = sOnLine(e, c.x, c.z); if (r && r.d < e.pr.hw + 2) { const sc = r.d / Math.max(2, e.pr.hw); if (!best || sc < best.sc) best = { e, s: r.s, sc }; } });
     if (best) addX(best.e, best.s, c.sig);

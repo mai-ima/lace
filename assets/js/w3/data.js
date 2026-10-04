@@ -3,13 +3,14 @@
  */
 export async function loadWorld(base) {
   const opt = u => fetch(base + u).then(r => r.ok ? r.json() : null).catch(() => null);   // 無くても動く（道路の範囲・実測の道幅）
-  const [roadArea, roadWidth, bldgRoof, water] = await Promise.all([opt('road_area.json'), opt('road_width.json'), opt('bldg_roof.json'), opt('water.json')]);
+  const [roadArea, roadWidth, bldgRoof, water, crossPhoto] = await Promise.all([opt('road_area.json'), opt('road_width.json'), opt('bldg_roof.json'), opt('water.json'), opt('cross_photo.json')]);
   const [roads, terr, bjs, bbin] = await Promise.all([
     fetch(base + 'roads.json').then(r => r.json()),
     fetch(base + 'terrain.bin').then(r => r.arrayBuffer()),
     fetch(base + 'bldg.json').then(r => r.json()),
     fetch(base + 'bldg.bin').then(r => r.arrayBuffer())
   ]);
+  if (crossPhoto) roads.crossPhoto = crossPhoto;   // 航空写真で見つけた横断歩道（OSM に無いもの。tools/world/photo_cross.py）
   const T = roads.terrain, U = new Uint16Array(terr), H = new Float32Array(U.length);
   for (let i = 0; i < U.length; i++) H[i] = (U[i] - 5000) / 100;
   const terrain = { x0: T.x0, z0: T.z0, nx: T.nx, nz: T.nz, cell: T.cell, H };
