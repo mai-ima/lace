@@ -113,6 +113,46 @@ if NET and os.path.exists(NET):
     walk = walk.buffer(-0.4).buffer(0.4)   # 幅 0.8m 未満の細い部分は捨てる（車道として扱う）
     wparts = [g for g in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if g.geom_type == 'Polygon' and g.area >= 4]
     walk = unary_union(wparts).simplify(0.1)
+    # 航空写真で見直す: 歩道とした所のうち、幅 5m 以上でアスファルトの色（暗い無彩色、影の青みが無い）の所は車道に戻す
+    #   （バスターミナルの周回路、OSM の幅を少なく見積もった外側の車線、停車帯など。普通の歩道は幅 5m 未満なので対象外）
+    from PIL import Image
+    import numpy as np
+    img = np.asarray(Image.open(os.path.join(out, 'ortho.jpg')).convert('RGB')).astype(np.float32) / 255.0
+    NPX = img.shape[0]; SPAN = X1 - X0
+    def photo_stats(geom):
+        minx, minz, maxx, maxz = geom.bounds; pts = []
+        x = minx + 0.5
+        while x < maxx:
+            z = minz + 0.5
+            while z < maxz:
+                if geom.contains(Point(x, z)): pts.append((x, z))
+                z += 1.0
+            x += 1.0
+        if len(pts) < 8: return None
+        ij = np.array([[int((zz - Z0) / SPAN * NPX), int((xx - X0) / SPAN * NPX)] for xx, zz in pts]).clip(0, NPX - 1)
+        px = img[ij[:, 0], ij[:, 1]]
+        L = px.mean(1); sat = px.max(1) - px.min(1); br = px[:, 2] / np.maximum(px.sum(1), 1e-3)
+        asph = (L > 0.18) & (L < 0.46) & (sat < 0.09) & (br < 0.355)
+        return asph.mean()
+    to_car = []
+    wb = walk.bounds; g = 12.0; gx = wb[0]
+    while gx < wb[2]:
+        gz = wb[1]
+        while gz < wb[3]:
+            piece = walk.intersection(box(gx, gz, gx + g, gz + g))
+            if not piece.is_empty and piece.area > 20:
+                core = piece.buffer(-2.6)
+                if not core.is_empty and core.area > 4:
+                    fa = photo_stats(core)
+                    if fa is not None and fa > 0.6: to_car.append(core.buffer(2.6).intersection(piece))
+            gz += g
+        gx += g
+    if to_car:
+        tc = unary_union(to_car)
+        walk = walk.difference(tc).buffer(-0.4).buffer(0.4)
+        wparts = [gg for gg in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if gg.geom_type == 'Polygon' and gg.area >= 4]
+        walk = unary_union(wparts).simplify(0.1)
+        print('航空写真で車道に戻した所 %.0f m2' % tc.area)
     car = U.difference(walk).simplify(0.1)
     # 縁石の線分
     curbs = []

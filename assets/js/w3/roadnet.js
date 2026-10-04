@@ -20,7 +20,8 @@ export const CLASS = {
   unclassified:  { rank: 6, lanes: 2, lw: 2.75, edge: 0.4,  walk: 0 },
   residential:   { rank: 7, lanes: 1, lw: 4.0,  edge: 0.3,  walk: 0 },
   living_street: { rank: 8, lanes: 1, lw: 3.5,  edge: 0.3,  walk: 0 },
-  service:       { rank: 9, lanes: 1, lw: 3.0,  edge: 0.2,  walk: 0 }
+  service:       { rank: 9, lanes: 1, lw: 3.0,  edge: 0.2,  walk: 0 },
+  busway:        { rank: 9, lanes: 1, lw: 3.5,  edge: 0.3,  walk: 0 }   // バス専用の道（一般車は走らない: 交通は rank 7 まで）
 };
 const MARK = { lane: 0.15, center: 0.15, centerWide: 0.20, edge: 0.15, stop: 0.45, cwStripe: 0.45, cwGap: 0.45, cwLen: 4.0, dash: [6, 9], centerDash: [5, 5], solidNear: 30, stopGap: 2.0 };
 

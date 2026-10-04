@@ -16,9 +16,9 @@ src, out = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
 
 ROADS = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service',
-         'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'}
+         'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'busway'}
 KEEP = ['highway', 'lanes', 'lanes:forward', 'lanes:backward', 'oneway', 'width', 'turn:lanes', 'turn:lanes:forward', 'turn:lanes:backward',
-        'layer', 'bridge', 'tunnel', 'maxspeed', 'name', 'ref', 'junction', 'sidewalk', 'service', 'surface', 'destination', 'placement', 'cycleway']
+        'layer', 'bridge', 'tunnel', 'maxspeed', 'name', 'ref', 'junction', 'sidewalk', 'service', 'surface', 'destination', 'placement', 'cycleway', 'access', 'bus', 'psv']
 NODE_KEYS = {'highway': {'traffic_signals', 'crossing', 'stop', 'give_way', 'street_lamp', 'bus_stop', 'motorway_junction', 'toll_gantry', 'turning_circle'},
              'crossing': None, 'traffic_signals': None, 'railway': {'level_crossing'}, 'barrier': {'toll_booth', 'bollard', 'gate'}}
 nodes, ways, seenw = {}, [], set()
@@ -33,7 +33,9 @@ for fn in sorted(glob.glob(os.path.join(src, '*.xml'))):
         tags = {t.get('k'): t.get('v') for t in w.iter('tag')}
         hw = tags.get('highway')
         kind = None
-        if hw in ROADS and tags.get('area') != 'yes' and tags.get('access') not in ('no', 'private'): kind = 'road'
+        # バス・タクシー専用の道（バスターミナルの周回路など）は、一般の通行止め（access=no）でも道路として入れる
+        psv = hw == 'busway' or tags.get('bus') in ('yes', 'designated') or tags.get('psv') in ('yes', 'designated') or '専用' in (tags.get('name') or '')
+        if hw in ROADS and tags.get('area') != 'yes' and (tags.get('access') not in ('no', 'private') or psv): kind = 'road'
         elif tags.get('railway') in ('rail', 'light_rail'): kind = 'rail'
         elif tags.get('natural') == 'water' or tags.get('waterway') in ('river', 'canal', 'riverbank'): kind = 'water'
         elif tags.get('amenity') == 'parking' and tags.get('parking') in (None, 'surface'): kind = 'parking'

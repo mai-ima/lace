@@ -461,7 +461,10 @@ export async function start(container, opt) {
     g.fillStyle = 'rgba(28,34,40,.85)'; g.fillRect(0, 0, S, S);
     g.translate(c, c); g.rotate(Math.PI + st.yaw); g.scale(sc, sc); g.translate(-st.x, -st.z);   // ゲームの x 東・z 南 → 画面（進む向きが上、右は車の右）
     g.imageSmoothingEnabled = true; g.drawImage(miniBase, MT.x0, MT.z0, mSpan, mSpan);
-    g.fillStyle = '#5bc0ff'; if (traffic) traffic.cars.forEach(o => { if (o.P) { g.beginPath(); g.arc(o.P.x, o.P.z, 3.2, 0, Math.PI * 2); g.fill(); } });
+    // 一般車: 進む向きの分かる三角の印（白い縁取り）。画面の大きさがどの端末でも同じになるよう、1 画素あたりの m で大きさを決める
+    if (traffic) { const k = 1 / sc * DPR; g.fillStyle = '#4fb6ff'; g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.2 * k;
+      traffic.cars.forEach(o => { if (!o.P || Math.abs(o.P.x - st.x) > 260 || Math.abs(o.P.z - st.z) > 260) return; const fx = Math.sin(o.P.yaw), fz = Math.cos(o.P.yaw), r = 5 * k;
+        g.beginPath(); g.moveTo(o.P.x + fx * r, o.P.z + fz * r); g.lineTo(o.P.x - fx * r * 0.7 + fz * r * 0.6, o.P.z - fz * r * 0.7 - fx * r * 0.6); g.lineTo(o.P.x - fx * r * 0.7 - fz * r * 0.6, o.P.z - fz * r * 0.7 + fx * r * 0.6); g.closePath(); g.fill(); g.stroke(); }); }
     g.restore();
     // 自車（中心の矢印）
     g.save(); g.translate(c, c); g.fillStyle = '#ff4d3d'; g.strokeStyle = '#fff'; g.lineWidth = 2 * DPR;
