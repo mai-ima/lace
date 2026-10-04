@@ -337,12 +337,20 @@ export function buildWorld(scene, W, gfx) {
       wallTex.image = { data: new Uint8Array(d.buffer), width: im.width, height: im.width, depth: L };
       wallTex.generateMipmaps = true; wallTex.minFilter = THREE.LinearMipmapLinearFilter; wallTex.magFilter = THREE.LinearFilter; wallTex.anisotropy = 4; wallTex.needsUpdate = true;
     }; im.src = W.base + '../walls.jpg'; }
+  // ビルの外壁の写真（ambientCG CC0、6 種を縦に並べた facades.jpg）: 0 ガラスのカーテンウォール 1 横連窓のオフィス 2〜4 石・タイル張りに窓 5 ガラスとパネル
+  const facTex = new THREE.DataArrayTexture(new Uint8Array(4 * 6).fill(128), 1, 1, 6);
+  facTex.colorSpace = THREE.SRGBColorSpace; facTex.wrapS = facTex.wrapT = THREE.RepeatWrapping; facTex.needsUpdate = true;
+  { const im = new Image(); im.onload = () => {
+      const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height; const g = cv.getContext('2d'); g.drawImage(im, 0, 0);
+      facTex.image = { data: new Uint8Array(g.getImageData(0, 0, im.width, im.height).data.buffer), width: im.width, height: im.width, depth: im.height / im.width };
+      facTex.generateMipmaps = true; facTex.minFilter = THREE.LinearMipmapLinearFilter; facTex.magFilter = THREE.LinearFilter; facTex.anisotropy = 4; facTex.needsUpdate = true;
+    }; im.src = W.base + '../facades.jpg'; }
   // 窓（シェーダー）: 階の高さは種類ごと（戸建て 2.9m・共同住宅 2.9m・事務所 3.6m）、1 階は店の大きなガラス、屋上の手すり部分は窓なし
   bmat.onBeforeCompile = sh => {
-    sh.uniforms.tWall = { value: wallTex };
+    sh.uniforms.tWall = { value: wallTex }; sh.uniforms.tFac = { value: facTex };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen; vRel = vec3(transformed.x - aCen.x, transformed.y - aBld.x, transformed.z - aCen.y);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nuniform highp sampler2DArray tWall; float gMask = 0.0; float gLit = 0.0; vec3 gLitC = vec3(0.0); vec3 gFn = vec3(0.0, 1.0, 0.0);\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nuniform highp sampler2DArray tWall; uniform highp sampler2DArray tFac; float gMask = 0.0; float gLit = 0.0; vec3 gLitC = vec3(0.0); vec3 gFn = vec3(0.0, 1.0, 0.0);\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
         // 面の向きは建物の中心からの相対座標（値が小さく精度が高い）の微分で求める。ワールド座標だと数百 m の値の誤差で窓の縁がギザギザになる
         vec3 wdx = dFdx(vRel), wdy = dFdy(vRel); vec3 fn = normalize(cross(wdx, wdy)); gFn = fn;
@@ -425,6 +433,18 @@ export function buildWorld(scene, W, gfx) {
             gLitC = mix(vec3(1.0, 0.86, 0.66), vec3(0.92, 0.95, 1.0), step(0.5, cell2)) * (0.15 + 0.3 * smoothstep(0.2, 2.9, rel)) * shelf;
           }
           gLit = mix(gl * on, cover * onP * 0.8, far2);
+          // ビル（商業・事務所・学校など、高さ 10m 以上）の 2 階より上は、実際の建物の外壁の写真を階の高さ・柱の間隔に合わせて貼る
+          if ((kind > 1.5 && kind < 2.5 || kind > 3.5) && top > 10.0 && rel > fh && rel < top - 0.6) {
+            float hp = fract(hb * 5.31 + 0.7);
+            float fl = top > 25.0 ? (hp < 0.35 ? 0.0 : hp < 0.6 ? 5.0 : hp < 0.85 ? 1.0 : 3.0) : (hp < 0.4 ? 1.0 : hp < 0.6 ? 2.0 : hp < 0.8 ? 3.0 : 4.0);
+            float nf = fl < 0.5 ? 10.0 : fl < 1.5 ? 8.0 : fl > 4.5 ? 9.0 : 5.0, nb = fl < 0.5 ? 10.0 : fl < 1.5 ? 13.0 : fl > 4.5 ? 9.0 : 5.0, bw2 = fl > 1.5 && fl < 4.5 ? 3.0 : 1.6;
+            vec3 fc = texture(tFac, vec3(u / (nb * bw2), -(rel - fh) / (nf * 3.6), fl)).rgb;
+            float lum = dot(fc, vec3(0.3, 0.59, 0.11)), gmk = clamp((0.4 - lum) * 5.0, 0.0, 1.0) * step(0.0, fc.b - fc.r + 0.03);
+            diffuseColor.rgb = fc * (0.92 + 0.16 * hb2);
+            gMask = gmk * 0.9;
+            float onc = step(0.55, h21(vec2(floor(u / bw2), floor(rel / 3.6)) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0));
+            gLit = gmk * onc * 0.8; gLitC = mix(vec3(1.0, 0.86, 0.66), vec3(0.86, 0.93, 1.0), step(0.5, hb2));
+          }
           // 階ごとの床の帯（共同住宅のベランダ・事務所の腰壁）と、屋上の笠木
           float band = (kind > 0.5 && kind < 2.5) ? step(fy, 0.08) * step(fh, rel) : 0.0;
           diffuseColor.rgb *= 1.0 - band * 0.12;

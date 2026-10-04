@@ -34,3 +34,4 @@ assets/data/world/ の出典（加工して作成）
 - 建物の屋根の色（center/bldg_roof.json）: 国土地理院（地理院タイル 全国最新写真（シームレス））から建物ごとに取り出して作成（tools/world/building_looks.py）。
 - 川の水面（center/water.json）: 国土地理院（地理院地図ベクトル（最適化ベクトルタイル）の水域・地理院タイル（標高））を tools/world/build_water.py で加工して作成。
 - 横断歩道・バス専用レーン: © OpenStreetMap contributors（footway=crossing・busway）。
+- ビルの外壁の写真（facades.jpg）: ambientCG（CC0） Facade001, Facade006, Facade018A, Facade019A, Facade020A, Facade002 を縮小して並べた。
