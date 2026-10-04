@@ -431,19 +431,31 @@ export async function start(container, opt) {
     if (tags) { g.font = 'bold ' + 11 * DPR + 'px system-ui,sans-serif'; g.fillStyle = '#ffb347'; g.fillText(tags, c, c - 40 * DPR); }
   }
   // ミニマップ: 進む向きが上。道路（格で太さを変える）・信号の交差点・一般車・自車
-  const miniEdges = world.net.edges.filter(e => !e.hidden && e.line.length >= 2).map(e => ({ L: e.line, w: Math.max(1.5, e.pr.hw * 0.5), r: e.pr.rank }));
+  // ミニマップの下絵: 実際の道路の形（PLATEAU の車道・歩道）を最初に 1 枚の画像に描いておく。無ければ道の中心線（切り詰める前の全体）
+  const MT = W.terrain, mSpan = (MT.nx - 1) * MT.cell, MPX = 2048, mK = MPX / mSpan;
+  const miniBase = document.createElement('canvas'); miniBase.width = miniBase.height = MPX;
+  { const g = miniBase.getContext('2d');
+    const fillTris = (A, col) => { if (!A || !A.v) return; const q = W.roadArea.q, v = A.v, I = A.i; g.fillStyle = col; g.strokeStyle = col; g.lineWidth = 0.6; g.beginPath();
+      for (let t = 0; t < I.length; t += 3) { const a = I[t] * 2, b = I[t + 1] * 2, c2 = I[t + 2] * 2;
+        g.moveTo((v[a] * q - MT.x0) * mK, (v[a + 1] * q - MT.z0) * mK); g.lineTo((v[b] * q - MT.x0) * mK, (v[b + 1] * q - MT.z0) * mK); g.lineTo((v[c2] * q - MT.x0) * mK, (v[c2 + 1] * q - MT.z0) * mK); g.closePath(); }
+      g.fill(); g.stroke(); };
+    if (W.roadArea) { fillTris(W.roadArea.walk, '#5d6670'); fillTris(W.roadArea.car, '#c9cdd2'); }
+    // 幹線は色を付けて重ねる（国道・主要地方道は黄、県道は白）
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    world.net.edges.forEach(e => {
+      const L = e.pts || e.line; if (e.hidden || !L || L.length < 2) return;
+      if (W.roadArea && e.pr.rank > 2) return;
+      g.strokeStyle = e.pr.rank <= 2 ? '#e2c66e' : e.pr.rank <= 4 ? '#e8e8e8' : '#9aa3ab'; g.lineWidth = Math.max(1.5, e.pr.hw * (W.roadArea ? 0.8 : 2)) * mK;
+      g.beginPath(); L.forEach((p, i) => (i ? g.lineTo((p[0] - MT.x0) * mK, (p[1] - MT.z0) * mK) : g.moveTo((p[0] - MT.x0) * mK, (p[1] - MT.z0) * mK))); g.stroke();
+    });
+  }
   function drawMini() {
     const g = mini.getContext('2d'), S = 170 * DPR, c = S / 2, st = car.st, sc = S / 360;   // 半径 180m
     g.save(); g.clearRect(0, 0, S, S);
     g.beginPath(); g.arc(c, c, c, 0, Math.PI * 2); g.clip();
     g.fillStyle = 'rgba(28,34,40,.85)'; g.fillRect(0, 0, S, S);
     g.translate(c, c); g.rotate(Math.PI + st.yaw); g.scale(sc, sc); g.translate(-st.x, -st.z);   // ゲームの x 東・z 南 → 画面（進む向きが上、右は車の右）
-    g.lineCap = 'round'; g.lineJoin = 'round';
-    miniEdges.forEach(e => {
-      const p0 = e.L[0]; if (Math.abs(p0[0] - st.x) > 400 || Math.abs(p0[1] - st.z) > 400) return;
-      g.strokeStyle = e.r <= 2 ? '#d9c27a' : e.r <= 4 ? '#e8e8e8' : '#9aa3ab'; g.lineWidth = e.w * 2;
-      g.beginPath(); e.L.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); g.stroke();
-    });
+    g.imageSmoothingEnabled = true; g.drawImage(miniBase, MT.x0, MT.z0, mSpan, mSpan);
     g.fillStyle = '#5bc0ff'; if (traffic) traffic.cars.forEach(o => { if (o.P) { g.beginPath(); g.arc(o.P.x, o.P.z, 3.2, 0, Math.PI * 2); g.fill(); } });
     g.restore();
     // 自車（中心の矢印）
@@ -509,6 +521,16 @@ export async function start(container, opt) {
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
     draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    /** 検証用: 真上から見た正射投影（中心 x, z、半分の幅 half m、画素 px）。航空写真と並べて比べる */
+    shotTop(x, z, half, px) {
+      const oc = new THREE.OrthographicCamera(-half, half, half, -half, 1, 2000), y = W.terrain.at(x, z);
+      oc.position.set(x, y + 600, z); oc.up.set(0, 0, -1); oc.lookAt(x, y, z);   // 画像の上が北（−z）
+      const fog = scene.fog, sz = renderer.getSize(new THREE.Vector2()), pr = renderer.getPixelRatio(); scene.fog = null;
+      if (world.props && world.props.update) world.props.update(x, z);
+      renderer.setPixelRatio(1); renderer.setSize(px || 800, px || 800, false); renderer.render(scene, oc);
+      const url = renderer.domElement.toDataURL('image/jpeg', 0.92);
+      scene.fog = fog; renderer.setPixelRatio(pr); renderer.setSize(sz.x, sz.y, false); return url;
+    },
     /** 時間帯 'day' | 'dusk' | 'night' */
     setTime(m) { sky.setTime(m); },
     /** 車を切り替える（step: 1 で次の車） */

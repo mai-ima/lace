@@ -7,7 +7,7 @@
 出典: 国土交通省 PLATEAU（3D 都市モデル 浜松市 交通（道路）モデル LOD1、2023 年度）を加工して作成。"""
 import sys, os, math, json, glob, urllib.request
 import mapbox_vector_tile
-from shapely.geometry import Polygon, MultiPolygon, LineString, Point, box
+from shapely.geometry import Polygon, MultiPolygon, MultiPoint, LineString, Point, box
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
@@ -95,7 +95,18 @@ if NET and os.path.exists(NET):
     net = json.load(open(NET))
     # 歩道のない道（住宅地の道など）は、道路の範囲いっぱいを車道にする（半幅 + 4m で太らせて範囲で切る）
     shapes = [LineString(e['pts']).buffer(e['hw'] if e['walk'] > 0 else e['hw'] + 4.0, cap_style=2, join_style=1) for e in net['edges'] if len(e['pts']) >= 2]
-    shapes += [Point(nd['x'], nd['z']).buffer(nd['r'] + 2.0, 24) for nd in net['nodes']]
+    # 交差点: 腕ごとに中心から外へ（ほかの腕の最大の半幅 + 隅切り 3m）の長さの帯を作り、その凸包。角が斜めに切れた形（隅切り）になる
+    def junction_shape(nd):
+        arms = nd.get('arms') or []
+        if len(arms) < 2: return Point(nd['x'], nd['z']).buffer(nd['r'] + 2.0, 24)
+        pts = []
+        for a in arms:
+            L = max(b['hw'] for b in arms if b is not a) + 3.0
+            lx, lz = -a['dz'], a['dx']
+            for s_ in (0.0, L):
+                for o in (-a['hw'], a['hw']): pts.append((nd['x'] + a['dx'] * s_ + lx * o, nd['z'] + a['dz'] * s_ + lz * o))
+        return MultiPoint(pts).convex_hull
+    shapes += [junction_shape(nd) for nd in net['nodes']]
     carU = unary_union(shapes)
     car = carU.intersection(U)
     walk = U.difference(carU)

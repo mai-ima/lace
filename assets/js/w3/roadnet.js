@@ -44,7 +44,8 @@ export function profile(t) {
   const walk = t.sidewalk === 'no' || t.sidewalk === 'none' ? 0 : C.walk;
   return { cls: t.highway, rank: C.rank, one: !!one, rev: t.oneway === '-1', fw, bw, lw, edge: C.edge, hw: carriage / 2, walk,
            centerLine: !one && nl >= 2 && lanes >= 2, bridge: t.bridge && t.bridge !== 'no', tunnel: t.tunnel && t.tunnel !== 'no', layer: num(t.layer, 0),
-           turnF: t['turn:lanes:forward'] || (one ? t['turn:lanes'] : null) || null, turnB: t['turn:lanes:backward'] || null, name: t.name || t.ref || '' };
+           turnF: t['turn:lanes:forward'] || (one ? t['turn:lanes'] : null) || null, turnB: t['turn:lanes:backward'] || null, name: t.name || t.ref || '',
+           lanesTagged: t.lanes !== undefined || t['lanes:forward'] !== undefined };
 }
 
 /**
@@ -62,8 +63,18 @@ export function fitWidth(pr, m) {
   const nl = pr.fw + pr.bw;
   if (car < nl * 2.6 + 2 * pr.edge && walk > 0) { walk = Math.max(0, (W - nl * 2.6 - 2 * pr.edge) / 2); car = W - walk * 2; }
   q.walk = walk;
-  q.lw = Math.max(2.5, Math.min(3.75, (car - 2 * pr.edge) / Math.max(1, nl)));
-  q.hw = (nl * q.lw + 2 * pr.edge) / 2;
+  // OSM に車線数が無い道は、車道の幅から車線数を決める（1 車線あたり約 3.1m。日本の市街地の幹線の一般的な車線幅）
+  let nl2 = nl;
+  if (!pr.lanesTagged && pr.rank <= 7) {
+    const k = (car - 2 * pr.edge) / 3.1;
+    if (pr.one) nl2 = Math.max(1, Math.min(4, Math.round(k)));
+    else if (pr.rank <= 6 || car >= 7.0) nl2 = Math.max(2, Math.min(8, Math.round(k / 2) * 2));
+    if (nl2 !== nl) {
+      if (pr.one) { q.fw = nl2; q.bw = 0; } else { q.fw = nl2 / 2; q.bw = nl2 / 2; q.centerLine = true; }
+    }
+  }
+  q.lw = Math.max(2.5, Math.min(3.75, (car - 2 * pr.edge) / Math.max(1, nl2)));
+  q.hw = (nl2 * q.lw + 2 * pr.edge) / 2;
   q.shift = Math.max(-3, Math.min(3, off));   // 中心線を実測の道路の中央へ寄せる（+ 側へ）
   q.measured = W;
   return q;
@@ -308,9 +319,22 @@ export function ribbon(e, off0, off1) {
  * 路面表示（区画線・停止線・横断歩道）の四角形の一覧を作る。
  * 返り値の各要素: { q:[[x,z],[x,z],[x,z],[x,z]], y, c:'w'|'y' }
  */
-export function markings(net) {
+export function markings(net, carAt) {
+  // 返り値: [{ q: 4 点（帯）| tris: [[x,z]×3...]（形）, c: 'w'|'y', t: 種類 }] と文字 { txt, at: 中心, dir: 読む向き（車の進む向き）, w, len }
+  // 種類 t: edge 外側線 / center 中央線 / lane 車線境界線 / cw 横断歩道 / stop 停止線 / arrow 矢印 / dia ひし形 / side 路側帯の線
   const M = net.MARK, out = [];
-  function quadAlong(e, off, w, s0, s1, c) {   // 線に沿った帯（off: 中心線からの横のずれ、w: 幅、s0〜s1: 距離の範囲）
+  out.texts = [];
+  let CS = 0;   // いま線を引いている道の、中心線から実際の車道の中央までのずれ（m、+ 側）
+  // 実際の車道（PLATEAU）の幅を、中心線から直角に測る（carAt があるとき）。返り値: [− 側の端, + 側の端]（中心線からの m）
+  function extentAt(e, s) {
+    if (!carAt) return null;
+    const f = frame(e, s); if (!f || !carAt(f.x, f.z)) return null;
+    const lx = -f.dz, lz = f.dx; let lo = 0, hi = 0;
+    while (lo > -30 && carAt(f.x + lx * (lo - 0.25), f.z + lz * (lo - 0.25))) lo -= 0.25;
+    while (hi < 30 && carAt(f.x + lx * (hi + 0.25), f.z + lz * (hi + 0.25))) hi += 0.25;
+    return [lo, hi];
+  }
+  function quadAlong(e, off, w, s0, s1, c, t) {   // 線に沿った帯（off: 中心線からの横のずれ、w: 幅、s0〜s1: 距離の範囲）
     const L = e.line; let acc = 0;
     for (let i = 1; i < L.length; i++) {
       const a = L[i - 1], b = L[i], sl = len2(b[0] - a[0], b[1] - a[1]); if (sl <= 0) continue;
@@ -318,54 +342,167 @@ export function markings(net) {
       if (u1 > u0) {
         const dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl, lx = -dz, lz = dx;
         const p0 = [a[0] + (b[0] - a[0]) * u0, a[1] + (b[1] - a[1]) * u0], p1 = [a[0] + (b[0] - a[0]) * u1, a[1] + (b[1] - a[1]) * u1];
-        const o0 = off - w / 2, o1 = off + w / 2;
-        out.push({ q: [[p0[0] + lx * o0, p0[1] + lz * o0], [p1[0] + lx * o0, p1[1] + lz * o0], [p1[0] + lx * o1, p1[1] + lz * o1], [p0[0] + lx * o1, p0[1] + lz * o1]], y: a[2] + (b[2] - a[2]) * (u0 + u1) / 2, c });
+        const o0 = off + CS - w / 2, o1 = off + CS + w / 2;
+        out.push({ q: [[p0[0] + lx * o0, p0[1] + lz * o0], [p1[0] + lx * o0, p1[1] + lz * o0], [p1[0] + lx * o1, p1[1] + lz * o1], [p0[0] + lx * o1, p0[1] + lz * o1]], c, t: t || 'line' });
       }
       acc += sl;
     }
   }
-  function dashed(e, off, w, dash, c, solidNearA, solidNearB) {
+  function dashed(e, off, w, dash, c, solidNearA, solidNearB, t) {
     const Ltot = lineLen(e.line), on = dash[0], per = dash[0] + dash[1];
-    if (solidNearA > 0) quadAlong(e, off, w, 0, Math.min(Ltot, solidNearA), c);
-    if (solidNearB > 0) quadAlong(e, off, w, Math.max(0, Ltot - solidNearB), Ltot, c);
-    for (let s = solidNearA; s < Ltot - solidNearB; s += per) quadAlong(e, off, w, s, Math.min(s + on, Ltot - solidNearB), c);
+    if (solidNearA > 0) quadAlong(e, off, w, 0, Math.min(Ltot, solidNearA), c, t);
+    if (solidNearB > 0) quadAlong(e, off, w, Math.max(0, Ltot - solidNearB), Ltot, c, t);
+    for (let s = solidNearA; s < Ltot - solidNearB; s += per) quadAlong(e, off, w, s, Math.min(s + on, Ltot - solidNearB), c, t);
   }
+  // 線上の距離 s の点と向き
+  function frame(e, s) {
+    const L = e.line; let acc = 0;
+    for (let i = 1; i < L.length; i++) {
+      const a = L[i - 1], b = L[i], sl = len2(b[0] - a[0], b[1] - a[1]); if (sl <= 0) continue;
+      if (s <= acc + sl || i === L.length - 1) { const u = Math.max(0, Math.min(1, (s - acc) / sl)); return { x: a[0] + (b[0] - a[0]) * u, z: a[1] + (b[1] - a[1]) * u, dx: (b[0] - a[0]) / sl, dz: (b[1] - a[1]) / sl }; }
+      acc += sl;
+    }
+    return null;
+  }
+  // 形（車の進む向き u・運転者の左 w の座標の多角形のリスト）を、距離 s・横のずれ off・進む向き dir（a→b が +1）で置く
+  function shapeAt(e, s, off, dir, polys, c, t) {
+    const f = frame(e, s); if (!f) return;
+    const lx = -f.dz, lz = f.dx, tris = [];
+    off += CS;
+    const P = ([u, w]) => [f.x + lx * off + f.dx * u * dir + lx * (-w * dir), f.z + lz * off + f.dz * u * dir + lz * (-w * dir)];
+    polys.forEach(poly => { const Q = poly.map(P); for (let k = 1; k < Q.length - 1; k++) tris.push(Q[0], Q[k], Q[k + 1]); });
+    out.push({ tris, c, t });
+  }
+  // 矢印（長さ 5m。軸 0.3m、頭 0.9m）。u = 0 が後ろの端
+  const SH = 0.15, HD = 0.45;
+  const A_STRAIGHT = [[[0, -SH], [3.4, -SH], [3.4, SH], [0, SH]], [[3.4, -HD], [5, 0], [3.4, HD]]];
+  const turnArrow = k => {   // k: +1 左折、−1 右折。まっすぐの軸のあと 45 度で曲がる軸と、その先の頭
+    const c = Math.SQRT1_2, n = [-c * SH, c * SH], h = [-c * HD, c * HD];
+    const poly = [[[0, -SH], [2.6, -SH], [2.6, SH], [0, SH]],
+      [[2.6 - n[0], -n[1]], [3.5 - n[0], 0.9 - n[1]], [3.5 + n[0], 0.9 + n[1]], [2.6 + n[0], n[1]]],
+      [[3.5 - h[0], 0.9 - h[1]], [3.5 + 1.2 * c, 0.9 + 1.2 * c], [3.5 + h[0], 0.9 + h[1]]]];
+    return poly.map(P => P.map(([u, w]) => [u, w * k]));
+  };
+  const A_LEFT = turnArrow(1), A_RIGHT = turnArrow(-1);
+  const DIAMOND = (() => { const L2 = 2.5, W2 = 0.75, t = 0.2, P = [[-L2, 0], [0, W2], [L2, 0], [0, -W2]], out2 = [];
+    for (let i = 0; i < 4; i++) { const a = P[i], b = P[(i + 1) % 4], dx = b[0] - a[0], dw = b[1] - a[1], l = Math.hypot(dx, dw), nx = -dw / l * t, nw = dx / l * t;
+      out2.push([[a[0], a[1]], [b[0], b[1]], [b[0] + nx, b[1] + nw], [a[0] + nx, a[1] + nw]]); }
+    return out2.map(p => p.map(([u, w]) => [u + 2.5, w])); })();
+  // 交差点の腕の向きから、曲がれる向き（左・直進・右）を調べる。hx, hz: 交差点へ向かう向き
+  function turnsAt(j, e, hx, hz) {
+    const r = { left: false, straight: false, right: false }, Lx = hz, Lz = -hx;   // 運転者の左
+    j.arms.forEach(a => {
+      if (a.e === e || a.e.hidden) return;
+      const P = a.e.line; if (!P || P.length < 2) return;
+      const atA = len2(P[0][0] - j.x, P[0][1] - j.z) <= len2(P[P.length - 1][0] - j.x, P[P.length - 1][1] - j.z);
+      const q = atA ? P[Math.min(P.length - 1, 2)] : P[Math.max(0, P.length - 3)], d = len2(q[0] - j.x, q[1] - j.z) || 1, dx = (q[0] - j.x) / d, dz = (q[1] - j.z) / d;
+      const st = dx * hx + dz * hz, lf = dx * Lx + dz * Lz;
+      if (st > 0.7) r.straight = true; else if (lf > 0.35) r.left = true; else if (lf < -0.35) r.right = true;
+    });
+    return r;
+  }
+  const arrowsFor = (str, tr) => {   // turn:lanes の 1 車線ぶん（"left;through" など）→ 形
+    const parts = (str || '').split(';'), polys = [];
+    if (parts.some(p => /through/.test(p))) polys.push(...A_STRAIGHT);
+    if (parts.some(p => /left/.test(p))) polys.push(...A_LEFT);
+    if (parts.some(p => /right/.test(p))) polys.push(...A_RIGHT);
+    return polys;
+  };
   net.edges.forEach(e => {
-    const pr = e.pr, Ltot = lineLen(e.line);
+    let pr = e.pr; const Ltot = lineLen(e.line);
     if (e.internal || e.hidden || Ltot < 2) return;   // まとめた交差点の中の短い道と、地下の道には線を引かない
     const jA = net.nodes.get(e.a), jB = net.nodes.get(e.b);
-    const minor = pr.rank >= 7;   // 住宅地の細い道・私道は、区画線は引かず、信号のある交差点の停止線と横断歩道だけ
+    const minor = pr.rank >= 7;
     const nearA = jA && jA.arms.length >= 3 ? M.solidNear : 0, nearB = jB && jB.arms.length >= 3 ? M.solidNear : 0;
+    // 実測の車道の幅と中心で線の位置を合わせる（道の 20〜80% の何か所かで測った中央値。交差点の広がりは除く）
+    CS = 0;
+    if (carAt && Ltot > 8 && !(pr.one && pr.rank <= 5)) {   // 上下線が分かれた道の片側（一方通行）は、測ると両方向の幅になるので合わせない
+      const ex = []; for (let k = 1; k <= 5; k++) { const r = extentAt(e, Ltot * (0.1 + 0.16 * k)); if (r) ex.push(r); }
+      if (ex.length >= 2) {
+        const med = a => a.slice().sort((p, q) => p - q)[Math.floor(a.length / 2)];
+        const lo = med(ex.map(r => r[0])), hi = med(ex.map(r => r[1])), wM = hi - lo;
+        if (wM > 2.4 && wM < pr.hw * 2 * 1.9 + 3 && wM > pr.hw * 2 * 0.5) {
+          const nl0 = pr.fw + pr.bw, lwM = (wM - 2 * pr.edge) / Math.max(1, nl0);
+          if (lwM >= 2.3 && lwM <= 4.2) { pr = Object.assign({}, pr, { hw: wM / 2, lw: lwM }); CS = (hi + lo) / 2; }
+        }
+      }
+    }
     const nl = pr.fw + pr.bw, x0 = -pr.hw + pr.edge;   // 車道の端（− 側）
     const cOff = x0 + pr.fw * pr.lw;
-    junctionMarks0(e, jA, jB, Ltot, pr, x0, cOff, minor);
-    if (minor) return;
-    // 外側線
-    quadAlong(e, -pr.hw + pr.edge * 0.5, M.edge, 0, Ltot, 'w');
-    quadAlong(e, pr.hw - pr.edge * 0.5, M.edge, 0, Ltot, 'w');
-    // 中央線（両方向の道）: 4 車線以上は実線、2 車線は破線（交差点の手前 30m は実線）
-    // 左側通行: 進行方向（a→b）の車線は − 側（座標の向きで「進行方向の左」は − 側）
-    if (pr.centerLine) {
-      if (nl >= 4) quadAlong(e, cOff, M.centerWide, 0, Ltot, 'w');
-      else dashed(e, cOff, M.center, M.centerDash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2));
+    junctionMarks(e, jA, jB, Ltot, pr, x0, cOff, minor);
+    if (Ltot < 20 && jA && jB && jA.arms.length >= 3 && jB.arms.length >= 3) return;   // 交差点どうしをつなぐ短い道（左折の側道・交差点の中の道）には線を引かない
+    if (minor) {
+      // 住宅地の道: 幅 4.5m 以上なら両側に路側帯の線（実線）。交差点の手前 2m で切る
+      if (pr.hw * 2 >= 4.5) { const g0 = jA && jA.arms.length >= 3 ? pr.hw + 1 : 0, g1 = jB && jB.arms.length >= 3 ? pr.hw + 1 : 0;
+        if (Ltot - g0 - g1 > 3) { quadAlong(e, -pr.hw + 0.6, M.edge, g0, Ltot - g1, 'w', 'side'); quadAlong(e, pr.hw - 0.6, M.edge, g0, Ltot - g1, 'w', 'side'); } }
+      return;
     }
-    // 車線境界線（同じ向きの車線の間）
-    for (let k = 1; k < pr.fw; k++) dashed(e, x0 + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2));
-    for (let k = 1; k < pr.bw; k++) dashed(e, cOff + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2));
+    // 外側線
+    quadAlong(e, -pr.hw + pr.edge * 0.5, M.edge, 0, Ltot, 'w', 'edge');
+    quadAlong(e, pr.hw - pr.edge * 0.5, M.edge, 0, Ltot, 'w', 'edge');
+    // 中央線: 4 車線以上は白の実線、2 車線の幹線（県道以上）は黄色の実線（はみ出し禁止）、それ以外の 2 車線は白の破線（交差点の手前 30m は実線）
+    if (pr.centerLine) {
+      if (nl >= 4) quadAlong(e, cOff, M.centerWide, 0, Ltot, 'w', 'center');
+      else if (pr.rank <= 3) quadAlong(e, cOff, M.center, 0, Ltot, 'y', 'center');
+      else dashed(e, cOff, M.center, M.centerDash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2), 'center');
+    }
+    // 車線境界線（同じ向きの車線の間。交差点の手前 30m は黄色の実線 = 車線変更禁止、が多い）
+    for (let k = 1; k < pr.fw; k++) { dashed(e, x0 + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', 0, 0, 'lane'); }
+    for (let k = 1; k < pr.bw; k++) { dashed(e, cOff + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', 0, 0, 'lane'); }
+    // 速度の数字（県道以上: 50、それ以外の 2 車線以上の道: 40）。長い道の中ほどに、向きごとに 1 つ
+    if (Ltot > 90 && pr.rank <= 5) {
+      const v = pr.rank <= 2 ? '50' : pr.rank <= 4 ? '40' : '30';
+      if (pr.fw > 0) out.texts.push(Object.assign(frame(e, Ltot * 0.45), { off: CS + x0 + pr.lw * 0.5, dir: 1, txt: v, w: Math.min(1.6, pr.lw * 0.6), len: 3.0 }));
+      if (pr.bw > 0) out.texts.push(Object.assign(frame(e, Ltot * 0.55), { off: CS + cOff + pr.bw * pr.lw - pr.lw * 0.5, dir: -1, txt: v, w: Math.min(1.6, pr.lw * 0.6), len: 3.0 }));
+    }
   });
   return out;
-  // 交差点の手前: 横断歩道と停止線（信号か横断歩道のある交差点）
-  function junctionMarks0(e, jA, jB, Ltot, pr, x0, cOff, minor) {
+  // 交差点の手前: 横断歩道・停止線・矢印・ひし形・止まれ
+  function junctionMarks(e, jA, jB, Ltot, pr, x0, cOff, minor) {
     [[jA, 0, 1], [jB, Ltot, -1]].forEach(([j, s, dir]) => {
-      if (!j || j.arms.length < 3 || !(j.sig || (j.cross && !minor))) return;
-      const cw0 = s + dir * 0.5, cw1 = s + dir * (0.5 + M.cwLen);
-      // 横断歩道（車道の全幅、縞は道路の進行方向と平行）
-      for (let o = -pr.hw + 0.3; o + M.cwStripe <= pr.hw - 0.3; o += M.cwStripe + M.cwGap) quadAlong(e, o + M.cwStripe / 2, M.cwStripe, Math.min(cw0, cw1), Math.max(cw0, cw1), 'w');
-      // 停止線: 交差点へ向かう車線の側だけ（a 端の交差点へ向かうのは b→a の車線 = + 側、b 端へ向かうのは − 側）
-      const st = s + dir * (0.5 + M.cwLen + M.stopGap);
+      if (!j || j.arms.length < 3) return;
+      // この端の交差点へ向かう車線: a 端（dir=+1 で s=0）へ向かうのは b→a の車線（+ 側、bw 本）、b 端へ向かうのは a→b（− 側、fw 本）
+      const nIn = dir === 1 ? pr.bw : pr.fw;
+      const laneOff = k => dir === 1 ? (pr.hw - pr.edge - (k + 0.5) * pr.lw) : (x0 + (k + 0.5) * pr.lw);   // k = 0 がいちばん左の車線
+      const travel = -dir;   // 交差点へ向かう車の進む向き（線の向きに対して）
+      const higher = j.arms.some(a => a.e !== e && a.e.pr.rank < pr.rank - 1);
+      const stopSign = !j.sig && (j.stop || (higher && pr.rank >= 5));
+      const cw = j.sig || (j.cross && !minor);
+      let st = s + dir * 0.5;
+      if (cw) {
+        const cw0 = s + dir * 0.5, cw1 = s + dir * (0.5 + M.cwLen);
+        // 横断歩道は、その位置の実際の車道の幅いっぱい（縁から 0.3m 内側まで）
+        let lo = -pr.hw, hi = pr.hw; const ex = extentAt(e, (cw0 + cw1) / 2);
+        if (ex && ex[1] - ex[0] > 2 && ex[1] - ex[0] < pr.hw * 2 * 2.2 + 4) { lo = ex[0] - CS; hi = ex[1] - CS; }
+        for (let o = lo + 0.3; o + M.cwStripe <= hi - 0.3; o += M.cwStripe + M.cwGap) quadAlong(e, o + M.cwStripe / 2, M.cwStripe, Math.min(cw0, cw1), Math.max(cw0, cw1), 'w', 'cw');
+        st = s + dir * (0.5 + M.cwLen + M.stopGap);
+      }
+      if (!(cw || stopSign) || nIn < 1) return;
+      // 停止線（向かう側の車線の幅）
       const s0 = Math.min(st, st + dir * M.stop), s1 = Math.max(st, st + dir * M.stop);
-      if (dir === 1 && pr.bw > 0) quadAlong(e, cOff + pr.bw * pr.lw / 2, pr.bw * pr.lw, s0, s1, 'w');
-      if (dir === -1 && pr.fw > 0) quadAlong(e, x0 + pr.fw * pr.lw / 2, pr.fw * pr.lw, s0, s1, 'w');
+      const mid = dir === 1 ? cOff + pr.bw * pr.lw / 2 : x0 + pr.fw * pr.lw / 2, wIn = nIn * pr.lw;
+      quadAlong(e, minor && pr.centerLine === false ? 0 : mid, minor && !pr.centerLine ? pr.hw * 2 - 0.6 : wIn, s0, s1, 'w', 'stop');
+      const sAfter = d => st + dir * (M.stop + d);   // 停止線から手前へ d m
+      if (stopSign && Ltot > 12) {   // 「止まれ」（停止線の 1〜4m 手前）
+        const f = frame(e, sAfter(2.5)); if (f) out.texts.push(Object.assign(f, { off: CS + (minor && !pr.centerLine ? 0 : mid), dir: travel, txt: '止まれ', w: Math.min(2.4, Math.max(1.2, (minor && !pr.centerLine ? pr.hw * 2 : wIn) * 0.6)), len: 4.5 }));
+      }
+      // 進行方向別の矢印（2 車線以上で向かう交差点）。turn:lanes があればその通り、無ければ曲がれる向きから決める
+      if (!minor && nIn >= 2 && Ltot > 45) {
+        const f = frame(e, st), hx = f.dx * travel, hz = f.dz * travel, T = turnsAt(j, e, hx, hz);
+        const tags = (dir === 1 ? pr.turnB : pr.turnF); const tl = tags ? tags.split('|') : null;
+        for (let k = 0; k < nIn; k++) {
+          let str = tl && tl[k] ? tl[k] : null;
+          if (!str) {
+            if (k === 0) str = (T.left ? 'left;' : '') + (T.straight || nIn === 2 && !T.right ? 'through' : '');
+            else if (k === nIn - 1) str = (T.straight && nIn === 2 ? 'through;' : '') + (T.right ? 'right' : T.straight ? 'through' : '');
+            else str = T.straight ? 'through' : '';
+          }
+          const polys = arrowsFor(str); if (!polys.length) continue;
+          [8, 30].forEach(d => { if (d + 5 < Ltot - 10) shapeAt(e, sAfter(d + 5), laneOff(k), travel, polys, 'w', 'arrow'); });
+        }
+      }
+      // 信号の無い横断歩道の予告（ひし形）: 30m と 50m 手前
+      if (cw && !j.sig && !minor) for (let k = 0; k < nIn; k++) [30, 50].forEach(d => { if (d + 5 < Ltot - 5) shapeAt(e, sAfter(d), laneOff(k), travel, DIAMOND, 'w', 'dia'); });
     });
   }
 }
