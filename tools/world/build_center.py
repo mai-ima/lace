@@ -36,6 +36,7 @@ for fn in sorted(glob.glob(os.path.join(src, '*.xml'))):
         # バス・タクシー専用の道（バスターミナルの周回路など）は、一般の通行止め（access=no）でも道路として入れる
         psv = hw == 'busway' or tags.get('bus') in ('yes', 'designated') or tags.get('psv') in ('yes', 'designated') or '専用' in (tags.get('name') or '')
         if hw in ROADS and tags.get('area') != 'yes' and (tags.get('access') not in ('no', 'private') or psv): kind = 'road'
+        elif tags.get('footway') == 'crossing' and tags.get('crossing') not in ('unmarked', 'no'): kind = 'cross'   # 横断歩道（道路を横切る線）
         elif tags.get('railway') in ('rail', 'light_rail'): kind = 'rail'
         elif tags.get('natural') == 'water' or tags.get('waterway') in ('river', 'canal', 'riverbank'): kind = 'water'
         elif tags.get('amenity') == 'parking' and tags.get('parking') in (None, 'surface'): kind = 'parking'

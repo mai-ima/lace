@@ -171,13 +171,9 @@ print('road_area.json', os.path.getsize(os.path.join(out, 'road_area.json')) // 
 
 # OSM の道路ごとの実測の道幅（中心線から直角に、道路の範囲の縁まで）
 P = roads['p']; pos = lambda k: (P[k * 3], P[k * 3 + 1])
-tree = STRtree(parts)
-res = {}
-for w in roads['ways']:
-    if w['k'] != 'road': continue
-    pts = [pos(k) for k in w['n']]
-    Ls = LineString(pts)
-    if Ls.length < 20: continue
+def measure(geoms, Ls, maxw=59):
+    """中心線から直角に、geoms（多角形のリスト）の縁までを 8m ごとに測る。返り値: 幅の中央値・中心のずれの中央値・測れた数"""
+    tree = STRtree(geoms)
     widths, offs = [], []
     s = 10.0
     while s < Ls.length - 10.0:
@@ -187,7 +183,7 @@ for w in roads['ways']:
         seg = LineString([(p.x - nx * 30, p.y - nz * 30), (p.x + nx * 30, p.y + nz * 30)])
         hit = None
         for idx in tree.query(seg):
-            g = parts[idx]
+            g = geoms[idx]
             if g.contains(p) or g.distance(p) < 0.5:
                 inter = g.intersection(seg)
                 cand = list(inter.geoms) if hasattr(inter, 'geoms') else [inter]
@@ -198,11 +194,28 @@ for w in roads['ways']:
             c0, c1 = hit.coords[0], hit.coords[-1]
             t0 = (c0[0] - p.x) * nx + (c0[1] - p.y) * nz; t1 = (c1[0] - p.x) * nx + (c1[1] - p.y) * nz
             lo_, hi_ = min(t0, t1), max(t0, t1)
-            if hi_ - lo_ < 59: widths.append(hi_ - lo_); offs.append((hi_ + lo_) / 2)
+            if hi_ - lo_ < maxw: widths.append(hi_ - lo_); offs.append((hi_ + lo_) / 2)
         s += 8.0
-    if len(widths) >= 2:
-        widths.sort(); offs.sort()
-        res[str(w['id'])] = [round(widths[len(widths) // 2], 2), round(offs[len(offs) // 2], 2), len(widths)]
+    if len(widths) < 2: return None
+    widths.sort(); offs.sort()
+    return round(widths[len(widths) // 2], 2), round(offs[len(offs) // 2], 2), len(widths)
+# 車道だけの幅（航空写真で見直したあとの車道）。roadnet はこれで車線数と車線の位置を決める（歩道の幅を仮定しなくてよい）
+carParts = None
+if NET and os.path.exists(NET):
+    cg = car.buffer(0)
+    carParts = [g for g in (cg.geoms if hasattr(cg, 'geoms') else [cg]) if g.geom_type == 'Polygon']
+res = {}
+for w in roads['ways']:
+    if w['k'] != 'road': continue
+    Ls = LineString([pos(k) for k in w['n']])
+    if Ls.length < 20: continue
+    m = measure(parts, Ls)
+    if not m: continue
+    r = list(m)
+    if carParts:
+        mc = measure(carParts, Ls, 45)
+        if mc: r += [mc[0], mc[1]]
+    res[str(w['id'])] = r
 json.dump(res, open(os.path.join(out, 'road_width.json'), 'w'), separators=(',', ':'))
 ws = sorted(v[0] for v in res.values()); os_ = sorted(abs(v[1]) for v in res.values())
 print('road_width.json', len(res), '本', '幅の中央値 %.1f m' % ws[len(ws) // 2], 'ずれの中央値 %.2f m' % os_[len(os_) // 2])

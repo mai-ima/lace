@@ -141,9 +141,19 @@ export function buildWorld(scene, W, gfx) {
   function boxUV(g, s) { const p = g.attributes.position, nn = g.attributes.normal, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { const up = Math.abs(nn.getY(i)) > 0.5; uv[i * 2] = (up ? p.getX(i) : p.getX(i) * Math.abs(nn.getZ(i)) + p.getZ(i) * Math.abs(nn.getX(i))) / s; uv[i * 2 + 1] = (up ? p.getZ(i) : p.getY(i)) / s; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return g; }
   function worldUV(g, s) { const p = g.attributes.position, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getX(i) / s; uv[i * 2 + 1] = p.getZ(i) / s; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return g; }
   const roadGeos = [], walkGeos = [];
-  function strip(R, y0, side) {   // R: ribbon の結果。2 本の縁の間の面
+  function strip(R, y0, side, onTerrain) {   // R: ribbon の結果。2 本の縁の間の面。onTerrain: 高さを道路の面の地形（窪みを埋めた高さ）に合わせる（橋以外）
+    if (onTerrain) {   // 4m ごとに点を足して、途中でも地形に沿わせる（頂点の間の直線が地形より浮いて路面表示を覆わないように）
+      const D = [R[0]];
+      for (let i = 1; i < R.length; i++) {
+        const a = R[i - 1], b = R[i], l = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1]), Math.hypot(b[2] - a[2], b[3] - a[3])), m = Math.ceil(l / 4);
+        for (let k = 1; k <= m; k++) { const u = k / m; D.push(a.map((v, j) => v + (b[j] - v) * u)); }
+      }
+      R = D;
+    }
     const n = R.length, pos = new Float32Array(n * 6), ix = [];
-    for (let i = 0; i < n; i++) { pos.set([R[i][0], R[i][4] + y0, R[i][1], R[i][2], R[i][4] + y0, R[i][3]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
+    for (let i = 0; i < n; i++) {
+      const ya = onTerrain ? terr.atRoad(R[i][0], R[i][1]) : R[i][4], yb = onTerrain ? terr.atRoad(R[i][2], R[i][3]) : R[i][4];
+      pos.set([R[i][0], ya + y0, R[i][1], R[i][2], yb + y0, R[i][3]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
     return upGeo(pos, ix);
   }
   // 面が上を向くように三角形の向きをそろえる（上から見て反時計回り）
@@ -163,7 +173,7 @@ export function buildWorld(scene, W, gfx) {
   net.edges.forEach(e => {
     if (e.line.length < 2 || e.hidden) return;
     const pr = e.pr;
-    let g = strip(ribbon(e, -pr.hw, pr.hw), 0.05, true);
+    let g = strip(ribbon(e, -pr.hw, pr.hw), pr.bridge ? 0.05 : 0.02, true, !pr.bridge);   // 路面表示（+0.075）より必ず下に
     roadGeos.push(g);
     if (pr.walk > 0 && !e.internal && !(W.roadArea && W.roadArea.walk)) [[-1], [1]].forEach(([s]) => {   // 実測の歩道（PLATEAU）があるときは使わない
       const a = s < 0 ? -pr.hw - pr.walk : pr.hw, b = s < 0 ? -pr.hw : pr.hw + pr.walk;
@@ -175,16 +185,16 @@ export function buildWorld(scene, W, gfx) {
   net.junctions.forEach(n => {
     const P = n.poly, m = P.length, pos = new Float32Array((m + 1) * 3), ix = [];
     let cx = 0, cz = 0; P.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= m; cz /= m;
-    pos.set([cx, terr.atRoad(cx, cz) + 0.055, cz], 0);
-    P.forEach((p, i) => { pos.set([p[0], terr.atRoad(p[0], p[1]) + 0.055, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
+    pos.set([cx, terr.atRoad(cx, cz) + 0.03, cz], 0);
+    P.forEach((p, i) => { pos.set([p[0], terr.atRoad(p[0], p[1]) + 0.03, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
     roadGeos.push(upGeo(pos, ix));
   });
   // まとめた交差点（上下線が分かれた大通りどうし）: 外へ出る腕の切り口を包む面。中央分離帯の切れ目も舗装にする
   net.groups.forEach(C => {
     const P = C.poly, m = P.length; if (m < 3) return;
     const pos = new Float32Array((m + 1) * 3), ix = [];
-    pos.set([C.x, terr.atRoad(C.x, C.z) + 0.045, C.z], 0);
-    P.forEach((p, i) => { pos.set([p[0], terr.atRoad(p[0], p[1]) + 0.045, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
+    pos.set([C.x, terr.atRoad(C.x, C.z) + 0.025, C.z], 0);
+    P.forEach((p, i) => { pos.set([p[0], terr.atRoad(p[0], p[1]) + 0.025, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
     roadGeos.push(upGeo(pos, ix));
   });
   const roadMat = new THREE.MeshStandardMaterial({ map: asph, color: 0xa4a6aa, roughness: 0.9, metalness: 0 });
@@ -595,21 +605,43 @@ export function buildWorld(scene, W, gfx) {
     });
     net.nodes.forEach(n => { if (n.arms.length < 3) return; const r = Math.max(...n.arms.map(a2 => a2.e.pr.hw)) * 0.9; const k = jk(n.x, n.z); if (!JG.has(k)) JG.set(k, []); JG.get(k).push([n.x, n.z, r]); });
     const inJ = (x, z) => { const gx = Math.floor(x / 40), gz = Math.floor(z / 40); for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [nx, nz, r] of JG.get((gx + i) + ',' + (gz + j)) || []) if ((x - nx) ** 2 + (z - nz) ** 2 < r * r) return true; return false; };
-    const LINE = { edge: 1, center: 1, lane: 1, side: 1 };
+    const LINE = { edge: 1, center: 1, lane: 1, side: 1, zebra: 1, arrow: 1, dia: 1 };
+    // ほかの道の車道の中（交差点の中・重なった道）には線を引かない。ほかの道は切り詰める前の中心線と半幅で判定する。
+    // 腕が 2 本だけの点でつながる道（同じ道が OSM で分かれているだけ）は同じ道として扱う
+    const SG = new Map(), sk = (i, j) => i + ',' + j, SC = 20;
+    const cont = new Map();
+    net.nodes.forEach(n => { if (n.arms.length !== 2) return; const [a1, a2] = n.arms; if (!cont.has(a1.e)) cont.set(a1.e, new Set()); if (!cont.has(a2.e)) cont.set(a2.e, new Set()); cont.get(a1.e).add(a2.e); cont.get(a2.e).add(a1.e); });
+    net.edges.forEach(e2 => {
+      if (e2.hidden) return; const Pp = e2.pts || e2.line; if (!Pp || Pp.length < 2) return;
+      for (let i = 1; i < Pp.length; i++) {
+        const a = Pp[i - 1], b = Pp[i], g = { e: e2, ax: a[0], az: a[1], bx: b[0], bz: b[1], hw: e2.pr.hw };
+        const i0 = Math.floor((Math.min(a[0], b[0]) - g.hw) / SC), i1 = Math.floor((Math.max(a[0], b[0]) + g.hw) / SC), j0 = Math.floor((Math.min(a[1], b[1]) - g.hw) / SC), j1 = Math.floor((Math.max(a[1], b[1]) + g.hw) / SC);
+        for (let ii = i0; ii <= i1; ii++) for (let jj = j0; jj <= j1; jj++) { const k = sk(ii, jj); if (!SG.has(k)) SG.set(k, []); SG.get(k).push(g); }
+      }
+    });
+    const inOther = (e, x, z) => {
+      const cs = cont.get(e);
+      for (const g of SG.get(sk(Math.floor(x / SC), Math.floor(z / SC))) || []) {
+        if (g.e === e || (cs && cs.has(g.e))) continue;
+        const dx = g.bx - g.ax, dz = g.bz - g.az, l2 = dx * dx + dz * dz || 1, u = Math.max(0, Math.min(1, ((x - g.ax) * dx + (z - g.az) * dz) / l2));
+        const px = g.ax + dx * u - x, pz = g.az + dz * u - z; if (px * px + pz * pz < (g.hw - 0.2) ** 2) return true;
+      }
+      return false;
+    };
     // 400m 四方のまとまりごとに分ける（画面の外のまとまりは描かない）
     const CH = new Map(), chunkOf = (x, z) => { const k = Math.floor(x / 400) + ',' + Math.floor(z / 400); let c = CH.get(k); if (!c) CH.set(k, c = { P: [], C: [], I: [] }); return c; };
     let cur = null;
     const put = (pts, col) => { const c = cur, b = c.P.length / 3; pts.forEach(p => { c.P.push(p[0], hAt(p[0], p[1]), p[1]); c.C.push(col[0], col[1], col[2]); }); return b; };
     mk.forEach(m => {
       const col = m.c === 'y' ? yellow : white;
-      if (m.tris) { for (let k = 0; k < m.tris.length; k += 3) { const t = m.tris; const cx = (t[k][0] + t[k + 1][0] + t[k + 2][0]) / 3, cz = (t[k][1] + t[k + 1][1] + t[k + 2][1]) / 3; if (!out.onRoadPt(cx, cz)) continue; cur = chunkOf(cx, cz); const b = put([t[k], t[k + 1], t[k + 2]], col); cur.I.push(b, b + 2, b + 1); } return; }
-      const q = m.q, len = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), n = Math.max(1, Math.ceil(len / 3));
+      if (m.tris) { for (let k = 0; k < m.tris.length; k += 3) { const t = m.tris; const cx = (t[k][0] + t[k + 1][0] + t[k + 2][0]) / 3, cz = (t[k][1] + t[k + 1][1] + t[k + 2][1]) / 3; if (!out.onRoadPt(cx, cz) || (LINE[m.t] && m.e && inOther(m.e, cx, cz))) continue; cur = chunkOf(cx, cz); const b = put([t[k], t[k + 1], t[k + 2]], col); cur.I.push(b, b + 2, b + 1); } return; }
+      const q = m.q, len = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), n = Math.max(1, Math.ceil(len / (m.t === 'cw' ? 1 : 3)));
       const L = (A, B, u) => [A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u];
       for (let i = 0; i < n; i++) {
         const u0 = i / n, u1 = (i + 1) / n, a0 = L(q[0], q[1], u0), a1 = L(q[0], q[1], u1), b1 = L(q[3], q[2], u1), b0 = L(q[3], q[2], u0);
         const cx = (a0[0] + a1[0] + b0[0] + b1[0]) / 4, cz = (a0[1] + a1[1] + b0[1] + b1[1]) / 4;
-        if (!out.onRoadPt(cx, cz) && m.t !== 'cw') continue;
-        if (LINE[m.t] && inJ(cx, cz)) continue;
+        if (!out.onRoadPt(cx, cz)) continue;   // 車道の外（歩道・建物）にはみ出す部分は描かない
+        if (LINE[m.t] && (inJ(cx, cz) || (m.e && inOther(m.e, cx, cz)))) continue;
         cur = chunkOf(cx, cz); const b = put([a0, a1, b1, b0], col); cur.I.push(b, b + 2, b + 1, b, b + 3, b + 2);
       }
     });

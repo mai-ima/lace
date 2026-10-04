@@ -56,28 +56,40 @@ export function profile(t) {
  */
 export function fitWidth(pr, m) {
   if (!m) return pr;
-  const [W, off] = m;
-  if (W < 3 || W > 60 || (pr.one && Math.abs(off) > 2.5) || W < pr.hw * 2 * 0.55) return pr;
+  const [W, off, , carW, carOff] = m;
   const q = Object.assign({}, pr);
-  let walk = (pr.rank <= 4 && W >= 9) ? Math.max(1.5, Math.min(4.5, W * 0.2)) : 0;
-  let car = W - walk * 2;
-  const nl = pr.fw + pr.bw;
-  if (car < nl * 2.6 + 2 * pr.edge && walk > 0) { walk = Math.max(0, (W - nl * 2.6 - 2 * pr.edge) / 2); car = W - walk * 2; }
+  let car, walk;
+  if (carW && carW > 2.4 && carW < 45) {
+    // 実測の車道の幅（PLATEAU の道路の範囲から歩道を除き、航空写真で見直したもの）があればそれを使う
+    car = carW; walk = (pr.rank <= 4 && W > carW + 2) ? Math.max(0, Math.min(4.5, (W - carW) / 2)) : 0;
+    q.shift = Math.max(-4, Math.min(4, carOff));
+  } else {
+    if (W < 3 || W > 60 || (pr.one && Math.abs(off) > 2.5) || W < pr.hw * 2 * 0.55) return pr;
+    walk = (pr.rank <= 4 && W >= 9) ? Math.max(1.5, Math.min(4.5, W * 0.2)) : 0;
+    car = W - walk * 2;
+    const nl0 = pr.fw + pr.bw;
+    if (car < nl0 * 2.6 + 2 * pr.edge && walk > 0) { walk = Math.max(0, (W - nl0 * 2.6 - 2 * pr.edge) / 2); car = W - walk * 2; }
+    q.shift = Math.max(-3, Math.min(3, off));   // 中心線を実測の道路の中央へ寄せる（+ 側へ）
+  }
   q.walk = walk;
-  // OSM に車線数が無い道は、車道の幅から車線数を決める（1 車線あたり約 3.1m。日本の市街地の幹線の一般的な車線幅）
+  // 車線数: OSM に無い道、または OSM の車線数だと 1 車線が広すぎる（4.6m 超）・狭すぎる（2.4m 未満）道は、車道の幅から決める（1 車線あたり約 3.1m）
+  const nl = pr.fw + pr.bw, per = (car - 2 * pr.edge) / Math.max(1, nl);
   let nl2 = nl;
-  if (!pr.lanesTagged && pr.rank <= 7) {
+  if ((!pr.lanesTagged || per > 4.6 || (per < 2.4 && nl > 1)) && pr.rank <= 7) {
     const k = (car - 2 * pr.edge) / 3.1;
-    if (pr.one) nl2 = Math.max(1, Math.min(4, Math.round(k)));
+    if (pr.one) nl2 = Math.max(1, Math.min(5, Math.round(k)));
     else if (pr.rank <= 6 || car >= 7.0) nl2 = Math.max(2, Math.min(8, Math.round(k / 2) * 2));
     if (nl2 !== nl) {
       if (pr.one) { q.fw = nl2; q.bw = 0; } else { q.fw = nl2 / 2; q.bw = nl2 / 2; q.centerLine = true; }
+      q.lanesFixed = true;
     }
   }
-  q.lw = Math.max(2.5, Math.min(3.75, (car - 2 * pr.edge) / Math.max(1, nl2)));
-  q.hw = (nl2 * q.lw + 2 * pr.edge) / 2;
-  q.shift = Math.max(-3, Math.min(3, off));   // 中心線を実測の道路の中央へ寄せる（+ 側へ）
-  q.measured = W;
+  // 導流帯（中央のゼブラ帯）: 対面通行で、車道が車線数 × 3.25m より 1.5m 以上広いとき、余りを中央に（最大 4m）
+  const two = !pr.one && q.fw > 0 && q.bw > 0 && nl2 >= 2 && pr.rank <= 6, extra = car - 2 * pr.edge - nl2 * 3.25;
+  q.zb = two && extra >= 1.5 ? Math.min(4, extra) : 0;
+  q.lw = Math.max(2.5, Math.min(3.75, (car - 2 * pr.edge - q.zb) / Math.max(1, nl2)));
+  q.hw = (nl2 * q.lw + 2 * pr.edge + q.zb) / 2;
+  q.measured = W; q.carW = carW || 0;
   return q;
 }
 
@@ -132,6 +144,11 @@ export function build(D, heightAt, widths) {
     if (f.highway === 'crossing' || f.crossing) { const j = nearJ(F.p[0], F.p[1], 25); if (j) j.cross = true; }
     if (f.highway === 'stop') { const j = nearJ(F.p[0], F.p[1], 25); if (j) j.stop = true; }
   });
+  // 横断歩道の実際の位置（OSM の crossing の点。塗装の無いもの unmarked は除く）。路面表示はこの位置に置く
+  // 横断歩道の線（OSM の footway=crossing。道路を横切る線）。位置と、どの道を横切るかはこの線と道の交点で決める
+  const crossWays = D.ways.filter(w => w.k === 'cross' && w.n.length >= 2).map(w => w.n.map(i => [P[i * 3], P[i * 3 + 1]]));
+  const crossings = feats.filter(F => (F.f.highway === 'crossing' || F.f.crossing) && F.f.crossing !== 'unmarked' && F.f.crossing !== 'no')
+    .map(F => ({ x: F.p[0], z: F.p[1], sig: F.f.crossing === 'traffic_signals' || F.f.highway === 'traffic_signals' }));
 
   // 近い交差点をまとめる（osm2streets の consolidate intersections に相当）。上下線が分かれた大通りどうしの交差点は、
   // OSM では 2〜4 個の点と短い道でできているので、信号のある交差点で 28m 未満の道でつながる点を 1 つの交差点として扱う
@@ -251,7 +268,7 @@ export function build(D, heightAt, widths) {
     const bx = t[0][0] - t[1][0], bz = t[0][1] - t[1][1], bl = len2(bx, bz) || 1;   // 0 番の腕の向き（外向き）の平均
     n.arms.forEach((arm, k) => { const s = k === 0 ? 1 : -1; arm.e[arm.end === 0 ? 'dirA' : 'dirB'] = [s * bx / bl * (arm.end === 0 ? 1 : -1), s * bz / bl * (arm.end === 0 ? 1 : -1)]; });
   });
-  return { nodes, edges, junctions, groups, MARK };
+  return { nodes, edges, junctions, groups, MARK, crossings, crossWays };
 }
 
 function hull2(P) {
@@ -344,7 +361,7 @@ export function markings(net, carAt) {
         const dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl, lx = -dz, lz = dx;
         const p0 = [a[0] + (b[0] - a[0]) * u0, a[1] + (b[1] - a[1]) * u0], p1 = [a[0] + (b[0] - a[0]) * u1, a[1] + (b[1] - a[1]) * u1];
         const o0 = off + CS - w / 2, o1 = off + CS + w / 2;
-        out.push({ q: [[p0[0] + lx * o0, p0[1] + lz * o0], [p1[0] + lx * o0, p1[1] + lz * o0], [p1[0] + lx * o1, p1[1] + lz * o1], [p0[0] + lx * o1, p0[1] + lz * o1]], c, t: t || 'line' });
+        out.push({ q: [[p0[0] + lx * o0, p0[1] + lz * o0], [p1[0] + lx * o0, p1[1] + lz * o0], [p1[0] + lx * o1, p1[1] + lz * o1], [p0[0] + lx * o1, p0[1] + lz * o1]], c, t: t || 'line', e });
       }
       acc += sl;
     }
@@ -372,7 +389,7 @@ export function markings(net, carAt) {
     off += CS;
     const P = ([u, w]) => [f.x + lx * off + f.dx * u * dir + lx * (-w * dir), f.z + lz * off + f.dz * u * dir + lz * (-w * dir)];
     polys.forEach(poly => { const Q = poly.map(P); for (let k = 1; k < Q.length - 1; k++) tris.push(Q[0], Q[k], Q[k + 1]); });
-    out.push({ tris, c, t });
+    out.push({ tris, c, t, e });
   }
   // 矢印（長さ 5m。軸 0.3m、頭 0.9m）。u = 0 が後ろの端
   const SH = 0.15, HD = 0.45;
@@ -409,6 +426,50 @@ export function markings(net, carAt) {
     if (parts.some(p => /right/.test(p))) polys.push(...A_RIGHT);
     return polys;
   };
+  // 横断歩道の割り当て。① 横断歩道の線（footway=crossing）が道の中心線（切り詰める前）と交わる点 → その道の、その位置
+  //                    ② 線の無い横断歩道の点は、いちばん近い道（横のずれ ÷ 半幅 が最小）
+  // 位置は切り詰めた線の上の距離 s に直す（交差点の中にある場合は負や全長を超える値になり、あとで道の端に寄せる）
+  const XS = new Map();
+  const sOnLine = (e, x, z) => {   // 切り詰めた線へ（両端は 12m まで延長して）射影した距離と横のずれ
+    const L = e.line; let acc = 0, best = null;
+    for (let i = 1; i < L.length; i++) {
+      const a = L[i - 1], b = L[i], sl = len2(b[0] - a[0], b[1] - a[1]); if (sl <= 0) continue;
+      const dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl, u = (x - a[0]) * dx + (z - a[1]) * dz;
+      const lo = i === 1 ? -12 : 0, hi = i === L.length - 1 ? sl + 12 : sl;
+      if (u >= lo && u <= hi) { const d = Math.abs((x - a[0]) * -dz + (z - a[1]) * dx); if (!best || d < best.d) best = { s: acc + u, d }; }
+      acc += sl;
+    }
+    return best;
+  };
+  const addX = (e, sv, sig) => { if (!XS.has(e)) XS.set(e, []); XS.get(e).push({ s: sv, sig }); };
+  const segX = (p, q, r, t) => {   // 線分 pq と rt の交点（無ければ null）
+    const d = (q[0] - p[0]) * (t[1] - r[1]) - (q[1] - p[1]) * (t[0] - r[0]); if (Math.abs(d) < 1e-9) return null;
+    const u = ((r[0] - p[0]) * (t[1] - r[1]) - (r[1] - p[1]) * (t[0] - r[0])) / d, v = ((r[0] - p[0]) * (q[1] - p[1]) - (r[1] - p[1]) * (q[0] - p[0])) / d;
+    return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u] : null;
+  };
+  const roadEdges = net.edges.filter(e => !e.internal && !e.hidden && e.line.length >= 2 && (e.pts || e.line).length >= 2);
+  const usedPts = [];
+  (net.crossWays || []).forEach(W2 => {
+    // この横断歩道の線が交わる道のうち、交点が道の範囲（切り詰めた線の 0〜全長）にいちばん近いものを 1 つだけ採る（交差点の中で隣の道の延長と交わる誤りを避ける）
+    let best = null;
+    for (let k = 1; k < W2.length; k++) for (const e of roadEdges) {
+      const Pp = e.pts || e.line, Lt = lineLen(e.line);
+      for (let i = 1; i < Pp.length; i++) {
+        const X = segX(W2[k - 1], W2[k], Pp[i - 1], Pp[i]); if (!X) continue;
+        const r = sOnLine(e, X[0], X[1]); if (!r || r.d > e.pr.hw + 3) continue;
+        const outR = r.s < 0 ? -r.s : r.s > Lt ? r.s - Lt : 0, sc = outR + r.d * 0.5;
+        if (!best || sc < best.sc) best = { e, s: r.s, X, sc };
+      }
+    }
+    if (best) { const sig = (net.crossings || []).some(c => c.sig && len2(c.x - best.X[0], c.z - best.X[1]) < 8); addX(best.e, best.s, sig); usedPts.push(best.X); }
+  });
+  (net.crossings || []).forEach(c => {
+    const near = usedPts.find(p => len2(p[0] - c.x, p[1] - c.z) < 8);
+    if (near) return;   // 横断歩道の線で置いたもの
+    let best = null;
+    roadEdges.forEach(e => { const r = sOnLine(e, c.x, c.z); if (r && r.d < e.pr.hw + 2) { const sc = r.d / Math.max(2, e.pr.hw); if (!best || sc < best.sc) best = { e, s: r.s, sc }; } });
+    if (best) addX(best.e, best.s, c.sig);
+  });
   net.edges.forEach(e => {
     let pr = e.pr; const Ltot = lineLen(e.line);
     if (e.internal || e.hidden || Ltot < 2) return;   // まとめた交差点の中の短い道と、地下の道には線を引かない
@@ -429,9 +490,17 @@ export function markings(net, carAt) {
       }
     }
     const nl = pr.fw + pr.bw, x0 = -pr.hw + pr.edge;   // 車道の端（− 側）
-    const cOff = x0 + pr.fw * pr.lw;
+    // 導流帯（中央のゼブラ帯）: 対面通行で、車道の幅が車線数 × 3.25m より 1.5m 以上広いとき、余りを中央の導流帯にする（最大 4m）
+    let zb = 0;
+    if (!minor && pr.centerLine && pr.fw > 0 && pr.bw > 0 && nl >= 2) {
+      const extra = pr.hw * 2 - 2 * pr.edge - nl * 3.25;
+      zb = pr.zb !== undefined ? pr.zb : extra >= 1.5 ? Math.min(4, extra) : 0;
+      if (zb > 0) pr = Object.assign({}, pr, { lw: (pr.hw * 2 - 2 * pr.edge - zb) / nl });
+    }
+    const cOff = x0 + pr.fw * pr.lw + zb;   // + 側の車線の始まり（導流帯があればその外）
+    const cMid = x0 + pr.fw * pr.lw + zb / 2;   // 中央線の位置
     junctionMarks(e, jA, jB, Ltot, pr, x0, cOff, minor);
-    if (Ltot < 20 && jA && jB && jA.arms.length >= 3 && jB.arms.length >= 3) return;   // 交差点どうしをつなぐ短い道（左折の側道・交差点の中の道）には線を引かない
+    if (Ltot < 25 && jA && jB && jA.arms.length >= 3 && jB.arms.length >= 3) return;   // 交差点どうしをつなぐ短い道（左折の側道・交差点の中の道）には線を引かない
     if (minor) {
       // 住宅地の道: 幅 4.5m 以上なら両側に路側帯の線（実線）。交差点の手前 2m で切る
       if (pr.hw * 2 >= 4.5) { const g0 = jA && jA.arms.length >= 3 ? pr.hw + 1 : 0, g1 = jB && jB.arms.length >= 3 ? pr.hw + 1 : 0;
@@ -442,10 +511,16 @@ export function markings(net, carAt) {
     quadAlong(e, -pr.hw + pr.edge * 0.5, M.edge, 0, Ltot, 'w', 'edge');
     quadAlong(e, pr.hw - pr.edge * 0.5, M.edge, 0, Ltot, 'w', 'edge');
     // 中央線: 4 車線以上は白の実線、2 車線の幹線（県道以上）は黄色の実線（はみ出し禁止）、それ以外の 2 車線は白の破線（交差点の手前 30m は実線）
-    if (pr.centerLine) {
-      if (nl >= 4) quadAlong(e, cOff, M.centerWide, 0, Ltot, 'w', 'center');
-      else if (pr.rank <= 3) quadAlong(e, cOff, M.center, 0, Ltot, 'y', 'center');
-      else dashed(e, cOff, M.center, M.centerDash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2), 'center');
+    if (zb > 0) {
+      // 導流帯: 両側の実線と、45 度の斜線（幅 0.45m・3m ごと）。交差点の手前 12m までは描かない
+      quadAlong(e, cMid - zb / 2 + 0.08, M.centerWide, 0, Ltot, 'w', 'center');
+      quadAlong(e, cMid + zb / 2 - 0.08, M.centerWide, 0, Ltot, 'w', 'center');
+      const h = zb / 2 - 0.1;
+      for (let s2 = 12; s2 + zb < Ltot - 12; s2 += 3) shapeAt(e, s2, cMid, 1, [[[-0.22, -h], [0.22, -h], [0.22 + 2 * h, h], [-0.22 + 2 * h, h]]], 'w', 'zebra');
+    } else if (pr.centerLine) {
+      if (nl >= 4) quadAlong(e, cMid, M.centerWide, 0, Ltot, 'w', 'center');
+      else if (pr.rank <= 3) quadAlong(e, cMid, M.center, 0, Ltot, 'y', 'center');
+      else dashed(e, cMid, M.center, M.centerDash, 'w', Math.min(nearA, Ltot / 2), Math.min(nearB, Ltot / 2), 'center');
     }
     // 車線境界線（同じ向きの車線の間。交差点の手前 30m は黄色の実線 = 車線変更禁止、が多い）
     for (let k = 1; k < pr.fw; k++) { dashed(e, x0 + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', 0, 0, 'lane'); }
@@ -460,6 +535,25 @@ export function markings(net, carAt) {
   return out;
   // 交差点の手前: 横断歩道・停止線・矢印・ひし形・止まれ
   function junctionMarks(e, jA, jB, Ltot, pr, x0, cOff, minor) {
+    // 横断歩道（OSM の位置）。同じ道で 6m 以内のものは 1 つにまとめ、道の範囲に収める
+    const half = 0.5 + M.cwLen / 2, xs = [];
+    (XS.get(e) || []).slice().sort((p, q) => p.s - q.s).forEach(c => { const s2 = Math.max(half, Math.min(Ltot - half, c.s)); if (Ltot < M.cwLen + 1) return; if (!xs.some(o => Math.abs(o.s - s2) < 6)) xs.push({ s: s2, sig: c.sig }); });
+    const drawCW = sc => {
+      const cw0 = sc - M.cwLen / 2, cw1 = sc + M.cwLen / 2;
+      let lo = -pr.hw, hi = pr.hw; const ex = extentAt(e, sc);
+      if (ex && ex[1] - ex[0] > 2 && ex[1] - ex[0] < pr.hw * 2 * 2.2 + 4) { lo = ex[0] - CS; hi = ex[1] - CS; }
+      for (let o = lo + 0.3; o + M.cwStripe <= hi - 0.3; o += M.cwStripe + M.cwGap) quadAlong(e, o + M.cwStripe / 2, M.cwStripe, cw0, cw1, 'w', 'cw');
+    };
+    xs.forEach(c => drawCW(c.s));
+    // 交差点から離れた横断歩道（両端から 20m 以上）: 信号付きなら両方向に停止線、信号なしなら両方向にひし形
+    xs.filter(c => c.s > 20 && c.s < Ltot - 20).forEach(c => {
+      [1, -1].forEach(dir2 => {   // dir2 = +1: a→b の車線（− 側）が向かう
+        const nIn2 = dir2 > 0 ? pr.fw : pr.bw; if (nIn2 < 1 || minor) return;
+        const mid2 = dir2 > 0 ? x0 + pr.fw * pr.lw / 2 : cOff + pr.bw * pr.lw / 2, st2 = c.s - dir2 * (M.cwLen / 2 + M.stopGap);
+        if (c.sig) quadAlong(e, mid2, nIn2 * pr.lw, Math.min(st2, st2 - dir2 * M.stop), Math.max(st2, st2 - dir2 * M.stop), 'w', 'stop');
+        else for (let k = 0; k < nIn2; k++) [30, 50].forEach(d => { const sd = st2 - dir2 * d; if (sd > 6 && sd < Ltot - 6) shapeAt(e, sd, dir2 > 0 ? x0 + (k + 0.5) * pr.lw : pr.hw - pr.edge - (k + 0.5) * pr.lw, dir2, DIAMOND, 'w', 'dia'); });
+      });
+    });
     [[jA, 0, 1], [jB, Ltot, -1]].forEach(([j, s, dir]) => {
       if (!j || j.arms.length < 3) return;
       // この端の交差点へ向かう車線: a 端（dir=+1 で s=0）へ向かうのは b→a の車線（+ 側、bw 本）、b 端へ向かうのは a→b（− 側、fw 本）
@@ -468,17 +562,12 @@ export function markings(net, carAt) {
       const travel = -dir;   // 交差点へ向かう車の進む向き（線の向きに対して）
       const higher = j.arms.some(a => a.e !== e && a.e.pr.rank < pr.rank - 1);
       const stopSign = !j.sig && (j.stop || (higher && pr.rank >= 5));
-      const cw = j.sig || (j.cross && !minor);
+      // この端の近く（20m 以内）の横断歩道。停止線はその 2m 手前（交差点から遠い側）
+      const near = xs.filter(c => Math.abs(c.s - s) < 20).sort((p, q) => Math.abs(q.s - s) - Math.abs(p.s - s))[0];
+      const cw = !!near;
       let st = s + dir * 0.5;
-      if (cw) {
-        const cw0 = s + dir * 0.5, cw1 = s + dir * (0.5 + M.cwLen);
-        // 横断歩道は、その位置の実際の車道の幅いっぱい（縁から 0.3m 内側まで）
-        let lo = -pr.hw, hi = pr.hw; const ex = extentAt(e, (cw0 + cw1) / 2);
-        if (ex && ex[1] - ex[0] > 2 && ex[1] - ex[0] < pr.hw * 2 * 2.2 + 4) { lo = ex[0] - CS; hi = ex[1] - CS; }
-        for (let o = lo + 0.3; o + M.cwStripe <= hi - 0.3; o += M.cwStripe + M.cwGap) quadAlong(e, o + M.cwStripe / 2, M.cwStripe, Math.min(cw0, cw1), Math.max(cw0, cw1), 'w', 'cw');
-        st = s + dir * (0.5 + M.cwLen + M.stopGap);
-      }
-      if (!(cw || stopSign) || nIn < 1) return;
+      if (near) st = near.s + dir * (M.cwLen / 2 + M.stopGap);
+      if (!(j.sig || cw || stopSign) || nIn < 1) return;
       // 停止線（向かう側の車線の幅）
       const s0 = Math.min(st, st + dir * M.stop), s1 = Math.max(st, st + dir * M.stop);
       const mid = dir === 1 ? cOff + pr.bw * pr.lw / 2 : x0 + pr.fw * pr.lw / 2, wIn = nIn * pr.lw;

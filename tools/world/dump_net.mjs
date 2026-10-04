@@ -8,6 +8,8 @@ import { build } from '../../assets/js/w3/roadnet.js';
 const dir = process.argv[2];
 const D = JSON.parse(fs.readFileSync(path.join(dir, 'roads.json'), 'utf8'));
 const W = fs.existsSync(path.join(dir, 'road_width.json')) ? JSON.parse(fs.readFileSync(path.join(dir, 'road_width.json'), 'utf8')) : null;
+// 車道の範囲を作るときは、実測の車道の幅（4・5 番目の値）は使わない（車道の範囲 → 幅 → 範囲 … と広がり続けないように）
+if (W) Object.keys(W).forEach(k => { W[k] = W[k].slice(0, 3); });
 const net = build(D, () => 0, W);
 const edges = net.edges.filter(e => !e.hidden && e.pts.length >= 2).map(e => ({ pts: e.pts.map(p => [+p[0].toFixed(2), +p[1].toFixed(2)]), hw: e.pr.hw, rank: e.pr.rank, walk: e.pr.walk }));
 // 交差点: 中心と、腕ごとの向き（中心から外へ向かう単位ベクトル）と半幅。build_tran.py で隅切りのある交差点の形（腕の帯の凸包）にする
