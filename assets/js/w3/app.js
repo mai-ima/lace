@@ -213,7 +213,7 @@ export async function start(container, opt) {
     { key: 'kei_van', name: '軽バン', color: 0xf4f4f2, spec: { mass: 900, wb: 2.35, track: 1.3, cgH: 0.72, Iz: 1100, power: 36e3, maxRpm: 6000, gears: [3.6, 2.2, 1.45, 1.0], final: 5.1, wheelR: 0.28, tqR: 63 / 0.28, cd: 0.42, area: 2.6, drive: 'fr', mu: 0.95 } }
   ].filter(c => carInfo.some(i => i.key === c.key));
   let carM = null, garageIdx = Math.max(0, GARAGE.findIndex(c => c.key === (opt.carKey || 'compact_swift')));
-  const headL = new THREE.SpotLight(0xfff2de, 70, 90, 0.42, 0.6, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22); headL.visible = false;   // 夜のヘッドライト（路面を照らす。影なし）
+  const headL = new THREE.SpotLight(0xfff2de, 380, 140, 0.5, 0.65, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22); headL.visible = false;   // 夜のヘッドライト（ロービーム: 前方 40m ほどの路面が見える明るさ。影なし）
   const myGlow = makeCarGlows(scene, 1); let myLay = null;
   async function loadPlayer(G) {
     const info = carInfo.find(i => i.key === G.key) || {}, hero = gfx.tier === 'high' && info.lods && info.lods.hero;

@@ -43,9 +43,9 @@ export function makeCarGlows(scene, max) {
         float facing = aKind < 0.5 ? dot(fwd, toCam) : -dot(fwd, toCam);
         float vis = smoothstep(-0.15, 0.45, facing);
         float br = aKind < 0.5 ? 1.0 : (0.55 + 0.9 * aLay2.z);
-        vCol = (aKind < 0.5 ? vec3(7.0, 6.6, 5.6) : vec3(7.0, 0.35, 0.2)) * vis * br * uNight;
+        vCol = (aKind < 0.5 ? vec3(7.0, 6.6, 5.6) : vec3(9.0, 0.25, 0.12)) * vis * br * uNight;
         vec4 mv = viewMatrix * wc;
-        float sz = (aKind < 0.5 ? 0.26 : 0.18) * (1.0 + 0.012 * max(0.0, -mv.z));   // 遠くでも見えるよう、距離で少し大きく
+        float sz = (aKind < 0.5 ? 0.26 : 0.11) * (1.0 + 0.012 * max(0.0, -mv.z));   // 遠くでも見えるよう、距離で少し大きく
         mv.xy += aCorner * sz;
         mv.z += 0.25;   // 車体の面に埋もれないよう、少し手前に
         vC = aCorner;

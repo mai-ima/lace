@@ -439,7 +439,7 @@ export function buildWorld(scene, W, gfx) {
           gLitC = mix(vec3(1.0, 0.72, 0.42), vec3(0.85, 0.9, 1.0), step(0.55, fract(cell2 * 9.7))) * (0.6 + 0.6 * cell);
           gLitC *= 0.55 + 0.45 * smoothstep(wy0, wy1, fy);   // 天井の照明で上ほど明るい
           if (shop > 0.5) {   // 夜も開いている店は半分。天井の照明で上ほど明るく、棚の段で横縞
-            on = step(0.5, cell);
+            on = step(0.65, cell);
             float shelf = 0.75 + 0.25 * step(0.5, fract(rel / 0.45)) * step(rel, 1.8);
             gLitC = mix(vec3(1.0, 0.86, 0.66), vec3(0.92, 0.95, 1.0), step(0.5, cell2)) * (0.15 + 0.3 * smoothstep(0.2, 2.9, rel)) * shelf;
           }
@@ -472,7 +472,7 @@ export function buildWorld(scene, W, gfx) {
           float Fr = 0.1 + 0.9 * pow(1.0 - clamp(dot(-Vd, gFn), 0.0, 1.0), 5.0);
           totalEmissiveRadiance += sk * Fr * gMask * uRefl * max(0.05, 1.0 - uNight * 1.25);
         }
-        totalEmissiveRadiance += gLitC * gLit * uNight * uNight * 2.2;   // 夕方はまだ外が明るいので控えめ`);
+        totalEmissiveRadiance += gLitC * gLit * uNight * uNight * 1.3;   // 夕方はまだ外が明るいので控えめ`);
     sh.uniforms.uRefl = { value: 1.0 }; sh.uniforms.uNight = NIGHT;
     sh.fragmentShader = sh.fragmentShader.replace('uniform highp sampler2DArray tWall;', 'uniform highp sampler2DArray tWall; uniform float uRefl; uniform float uNight;');
   };
@@ -853,8 +853,8 @@ export function buildSky(scene, renderer, opt) {
   // 時間帯: 昼（既定）・夕方・夜。太陽（夜は月）の向きと光、空、霧、環境光、灯りの度合い（NIGHT）をまとめて切り替える
   const TIMES = {
     day: { elev, azim, sun: [0xfff1dc, 2.6], hemi: [0xd4dde8, 0x6a6458, 0.55], fog: 0xc4d2de, env: 0.12, night: 0, tb: 4, ray: 1.6 },
-    dusk: { elev: 3.5, azim: 250, sun: [0xffa66a, 1.5], hemi: [0x8f8aa0, 0x3a3230, 0.32], fog: 0x9c8f96, env: 0.5, night: 0.55, tb: 6, ray: 2.6 },
-    night: { elev: 32, azim: 120, sun: [0x8fa6d8, 0.16], hemi: [0x26324c, 0x0c0c10, 0.22], fog: 0x0a0f18, env: 0, night: 1, tb: 2, ray: 0.4, skyElev: -14 }
+    dusk: { elev: 3.5, azim: 250, sun: [0xffa66a, 1.5], hemi: [0x8f8aa0, 0x4a4038, 0.55], fog: 0x9c8f96, env: 0.5, night: 0.55, tb: 6, ray: 2.6 },
+    night: { elev: 32, azim: 120, sun: [0x8fa6d8, 0.22], hemi: [0x34405e, 0x16161c, 0.42], fog: 0x0a0f18, env: 0, night: 1, tb: 2, ray: 0.4, skyElev: -14 }
   };
   // 夜空: 天頂は濃い紺、地平線の近くは街の明かりで少し明るい（光害）。描画 1 回の球
   const nightSky = new THREE.Mesh(new THREE.SphereGeometry(15000, 24, 12), new THREE.ShaderMaterial({
