@@ -120,6 +120,11 @@ export async function start(container, opt) {
   const sky = buildSky(scene, renderer, { shadows: gfx.shadows, far: gfx.far, elev: opt.elev, azim: opt.azim, time: opt.time });
   const world = buildWorld(scene, W, gfx);
   const T0 = W.terrain, collide = makeColliders(W.bldg, { x0: T0.x0, z0: T0.z0, size: (T0.nx - 1) * T0.cell }, makeGrid, world.roadTris, world.pierTris);
+  // 川には入れない（水面を当たり判定に塗ってから、橋の上の道路の範囲を消す）
+  if (world.waterTris) {
+    world.waterTris((ax, az, bx, bz, cx, cz) => collide.grid.tri(ax, az, bx, bz, cx, cz));
+    collide.grid.clear = true; world.roadTris((ax, az, bx, bz, cx, cz) => collide.grid.tri(ax, az, bx, bz, cx, cz)); collide.grid.clear = false;
+  }
   // 街路樹: 幹線（歩道のある道）の両側の歩道に、約 12m ごと。建物・車道・信号の近くは避ける
   try {
     const imp = await loadImpostor('assets/data/world/props/', 'tree_broadleaf');

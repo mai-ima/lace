@@ -54,6 +54,23 @@ export function buildWorld(scene, W, gfx) {
   const out = { group: new THREE.Group(), anim: [] };
   scene.add(out.group);
   const terr = W.terrain;
+  /* --- 川（国土地理院の水域）: 水域の中の地形を川底まで掘り下げる（道路の窪み埋めより先に。橋の路面は窪み埋めの高さで渡る） --- */
+  const waterCells = new Uint8Array(terr.nx * terr.nz), waterBank = new Float32Array(terr.nx * terr.nz), waters = [];
+  if (W.water && W.water.water) {
+    const q = W.water.q, H = terr.H, C = terr.cell;
+    W.water.water.forEach(wt => {
+      const rings = wt.rings.map(r => { const a = []; for (let i = 0; i < r.length; i += 2) a.push([r[i] * q, r[i + 1] * q]); return a; });
+      const inside = (x, z) => { let c = false; rings.forEach(R => { for (let i = 0, j = R.length - 1; i < R.length; j = i++) { const a = R[i], b = R[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } }); return c; };
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; rings[0].forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); });
+      const bankY = rings.map(R => R.map(p => terr.at(p[0], p[1])));   // 護岸の上端（掘る前の地形の高さ）
+      for (let j = Math.max(0, Math.floor((z0 - terr.z0) / C)); j <= Math.min(terr.nz - 1, Math.ceil((z1 - terr.z0) / C)); j++)
+        for (let i = Math.max(0, Math.floor((x0 - terr.x0) / C)); i <= Math.min(terr.nx - 1, Math.ceil((x1 - terr.x0) / C)); i++) {
+          const k = j * terr.nx + i; if (inside(terr.x0 + i * C, terr.z0 + j * C)) { H[k] = Math.min(H[k], wt.bed); waterCells[k] = 1; waterBank[k] = wt.bank; }
+        }
+      waters.push({ wt, rings, bankY, inside });
+    });
+    out.inWater = (x, z) => waters.some(w => w.inside(x, z));
+  }
   /* --- 地形の窪みを道路の範囲だけ埋める: 標高データ（5m）には、駅前の地下広場・地下道の入口などの掘り下げが入っていて、
          その上の歩道や車道が急に下がる。道路の範囲（PLATEAU の車道・歩道）にある窪み（周り 45m の中央値より 0.8m 以上低い）は
          中央値まで上げる。ただし OSM の道路の高さも下がっている所（線路の下をくぐるアンダーパスなど本物の掘り下げ）は残す --- */
@@ -72,11 +89,12 @@ export function buildWorld(scene, W, gfx) {
     }); });
     // 道路の面の高さ（Hf）: 窪みをすべて中央値まで埋めた高さ。地形（H）は道路の範囲の中だけ埋める（地下広場そのものは残す）
     const Hf = Float32Array.from(H);
+    for (let k = 0; k < Hf.length; k++) if (waterCells[k]) Hf[k] = Math.max(Hf[k], waterBank[k]);   // 橋の路面（道路の範囲）は川の上でも岸の高さ
     let filled = 0;
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const k = j * nx + i; if (keep[k] || med[k] - H[k] < 0.8) continue;
       Hf[k] = med[k];
-      if (roadMask.at(terr.x0 + i * C, terr.z0 + j * C)) { H[k] = med[k]; filled++; }
+      if (!waterCells[k] && roadMask.at(terr.x0 + i * C, terr.z0 + j * C)) { H[k] = med[k]; filled++; }
     }
     out.pitsFilled = filled;
     terr.atRoad = (x, z) => {
@@ -591,6 +609,57 @@ export function buildWorld(scene, W, gfx) {
   out.setSignal = (k, phase) => { for (let i = 0; i < 3; i++) lamps.setColorAt(k * 3 + i, ORDER[i] === phase ? LIT[phase] : DARK); };
   out.signalsDone = () => { if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true; };
   sigs.forEach((s, k) => out.setSignal(k, 'red')); out.signalsDone();
+  /* --- 川: 水面（さざ波・空の映り込み）と、コンクリートの護岸（岸の高さから川底まで） --- */
+  if (waters.length) {
+    const q = W.water.q, WP = [], WI = [], RP = [], RI = [];
+    waters.forEach(({ wt, rings, bankY }) => {
+      const b = WP.length / 3, v = wt.tri.v; for (let i = 0; i < v.length; i += 2) WP.push(v[i] * q, wt.wl, v[i + 1] * q);
+      for (let i = 0; i < wt.tri.i.length; i += 3) WI.push(b + wt.tri.i[i], b + wt.tri.i[i + 2], b + wt.tri.i[i + 1]);
+      rings.forEach((R, ri) => { for (let i = 1; i < R.length; i++) {
+        const a = R[i - 1], c = R[i], ya = Math.max(wt.wl + 0.8, bankY[ri][i - 1] + 0.1), yc = Math.max(wt.wl + 0.8, bankY[ri][i] + 0.1), k = RP.length / 3;
+        RP.push(a[0], ya, a[1], c[0], yc, c[1], a[0], wt.bed - 0.3, a[1], c[0], wt.bed - 0.3, c[1]); RI.push(k, k + 2, k + 1, k + 1, k + 2, k + 3);
+      } });
+    });
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(WP, 3)); wg.setIndex(WI); wg.computeVertexNormals();
+    const wTime = { value: 0 };
+    const wm = new THREE.MeshStandardMaterial({ color: 0x2c443e, roughness: 0.06, metalness: 0.0, transparent: true, opacity: 0.93, side: THREE.DoubleSide });
+    wm.onBeforeCompile = sh => {
+      sh.uniforms.uT = wTime;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWW;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWW; uniform float uT;')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          // さざ波: 向きの違う波を重ねて法線を揺らす（流れの向きは問わない）
+          vec2 p = vWW.xz;
+          float d1 = cos(dot(p, vec2(0.83, 0.55)) * 1.7 + uT * 1.3), d2 = cos(dot(p, vec2(-0.42, 0.91)) * 2.9 + uT * 1.9), d3 = cos(dot(p, vec2(0.21, -0.98)) * 5.3 + uT * 2.7);
+          vec3 wn = normalize(vec3(d1 * 0.06 * 0.83 - d2 * 0.04 * 0.42 + d3 * 0.025 * 0.21, 1.0, d1 * 0.06 * 0.55 + d2 * 0.04 * 0.91 - d3 * 0.025 * 0.98));
+          normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);`);
+    };
+    const water = new THREE.Mesh(wg, wm); water.receiveShadow = true; water.onBeforeRender = () => { wTime.value = performance.now() / 1000; }; out.group.add(water);
+    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(RP, 3)); rg.setIndex(RI); rg.computeVertexNormals();
+    const rw = new THREE.Mesh(rg, new THREE.MeshStandardMaterial({ color: 0x9c998f, roughness: 0.92, side: THREE.DoubleSide })); rw.receiveShadow = true; out.group.add(rw);
+    out.waterTris = fn => { for (let i = 0; i < WI.length; i += 3) fn(WP[WI[i] * 3], WP[WI[i] * 3 + 2], WP[WI[i + 1] * 3], WP[WI[i + 1] * 3 + 2], WP[WI[i + 2] * 3], WP[WI[i + 2] * 3 + 2]); };
+  }
+  /* --- 橋（道路）: 路面の下の桁（厚さ 1.2m）と、両側の高欄（高さ 1.0m のコンクリートの壁と上の手すり）。地面から 1.5m 以上高い所だけ --- */
+  {
+    const BP = [], BI = [], quad = (a, b, c, d) => { const k = BP.length / 3; BP.push(...a, ...b, ...c, ...d); BI.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); };
+    (out.bridges || []).forEach(br => {
+      const L = br.L; if (L.length < 2) return;
+      const mid = L[Math.floor(L.length / 2)]; if (mid[2] - terr.at(mid[0], mid[1]) < 1.5) return;
+      const w = br.hw + 0.6;
+      for (let i = 1; i < L.length; i++) {
+        const a = L[i - 1], c = L[i], dx = c[0] - a[0], dz = c[1] - a[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l * w, nz = dx / l * w;
+        const A = [a[0] - nx, a[2], a[1] - nz], B = [a[0] + nx, a[2], a[1] + nz], Cc = [c[0] - nx, c[2], c[1] - nz], D = [c[0] + nx, c[2], c[1] + nz];
+        const dn = p => [p[0], p[1] - 1.2, p[2]], up = p => [p[0], p[1] + 1.0, p[2]];
+        quad(dn(A), dn(Cc), dn(B), dn(D));                  // 桁の下面
+        quad(A, Cc, dn(A), dn(Cc)); quad(B, D, dn(B), dn(D));  // 桁の側面
+        quad(up(A), up(Cc), A, Cc); quad(up(B), up(D), B, D);  // 高欄
+      }
+    });
+    if (BP.length) {
+      const bg2 = new THREE.BufferGeometry(); bg2.setAttribute('position', new THREE.Float32BufferAttribute(BP, 3)); bg2.setIndex(BI); bg2.computeVertexNormals();
+      const bm = new THREE.Mesh(bg2, new THREE.MeshStandardMaterial({ color: 0xbab7af, roughness: 0.85, side: THREE.DoubleSide })); bm.castShadow = true; bm.receiveShadow = true; out.group.add(bm);
+    }
+  }
   /* --- 路面表示（車道の中だけ。長い線は 2m ごとに分けて路面の高さに沿わせる。橋の上は橋の路面の高さ） --- */
   {
     const mk = markings(net, (x, z) => out.onRoadPt(x, z));
