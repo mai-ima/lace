@@ -86,7 +86,7 @@ export function fitWidth(pr, m) {
   }
   // 導流帯（中央のゼブラ帯）: 対面通行で、車道が車線数 × 3.25m より 1.5m 以上広いとき、余りを中央に（最大 4m）
   const two = !pr.one && q.fw > 0 && q.bw > 0 && nl2 >= 2 && pr.rank <= 6, extra = car - 2 * pr.edge - nl2 * 3.25;
-  q.zb = two && extra >= 1.5 ? Math.min(4, extra) : 0;
+  q.zb = two && extra >= 2.2 ? Math.min(4, extra) : 0;   // 2.2m 未満の余りは広めの車線・停車帯とみなす
   q.lw = Math.max(2.5, Math.min(3.75, (car - 2 * pr.edge - q.zb) / Math.max(1, nl2)));
   q.hw = (nl2 * q.lw + 2 * pr.edge + q.zb) / 2;
   q.measured = W; q.carW = carW || 0;
@@ -400,12 +400,18 @@ export function markings(net, carAt) {
   // 矢印（長さ 5m。軸 0.3m、頭 0.9m）。u = 0 が後ろの端
   const SH = 0.15, HD = 0.45;
   const A_STRAIGHT = [[[0, -SH], [3.4, -SH], [3.4, SH], [0, SH]], [[3.4, -HD], [5, 0], [3.4, HD]]];
-  const turnArrow = k => {   // k: +1 左折、−1 右折。まっすぐの軸のあと 45 度で曲がる軸と、その先の頭
-    const c = Math.SQRT1_2, n = [-c * SH, c * SH], h = [-c * HD, c * HD];
-    const poly = [[[0, -SH], [2.6, -SH], [2.6, SH], [0, SH]],
-      [[2.6 - n[0], -n[1]], [3.5 - n[0], 0.9 - n[1]], [3.5 + n[0], 0.9 + n[1]], [2.6 + n[0], n[1]]],
-      [[3.5 - h[0], 0.9 - h[1]], [3.5 + 1.2 * c, 0.9 + 1.2 * c], [3.5 + h[0], 0.9 + h[1]]]];
-    return poly.map(P => P.map(([u, w]) => [u, w * k]));
+  const turnArrow = k => {   // k: +1 左折、−1 右折。まっすぐの軸（2.4m）のあと半径 1.0m で 90 度曲がり、頭は横を向く（道路標示の様式）
+    const S0 = 2.4, R = 1.0, polys = [[[0, -SH], [S0, -SH], [S0, SH], [0, SH]]];
+    const N = 6; let prevI = null, prevO = null;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N * Math.PI / 2, cu = S0 + Math.sin(t) * R, cw = R - Math.cos(t) * R;   // 円弧の中心線（u, w）
+      const pi = [cu - Math.sin(t) * SH, cw + Math.cos(t) * SH], po = [cu + Math.sin(t) * SH, cw - Math.cos(t) * SH];   // 曲がる側・外側の縁（法線 = (−sin t, cos t)）
+      if (prevI) polys.push([prevO, po, pi, prevI]);
+      prevI = pi; prevO = po;
+    }
+    // 頭（横向き）: 円弧の終わり (S0 + R, R) から w の向きへ
+    polys.push([[S0 + R - HD, R], [S0 + R, R + 1.1], [S0 + R + HD, R]]);
+    return polys.map(P => P.map(([u, w]) => [u, w * k]));
   };
   const A_LEFT = turnArrow(1), A_RIGHT = turnArrow(-1);
   const DIAMOND = (() => { const L2 = 2.5, W2 = 0.75, t = 0.2, P = [[-L2, 0], [0, W2], [L2, 0], [0, -W2]], out2 = [];
@@ -421,7 +427,7 @@ export function markings(net, carAt) {
       const atA = len2(P[0][0] - j.x, P[0][1] - j.z) <= len2(P[P.length - 1][0] - j.x, P[P.length - 1][1] - j.z);
       const q = atA ? P[Math.min(P.length - 1, 2)] : P[Math.max(0, P.length - 3)], d = len2(q[0] - j.x, q[1] - j.z) || 1, dx = (q[0] - j.x) / d, dz = (q[1] - j.z) / d;
       const st = dx * hx + dz * hz, lf = dx * Lx + dz * Lz;
-      if (st > 0.7) r.straight = true; else if (lf > 0.35) r.left = true; else if (lf < -0.35) r.right = true;
+      if (st > 0.7) r.straight = true; else if (lf > 0.35) r.left = true; else if (lf < -0.35) { r.right = true; if (!r.rightArm || lf < r.rightLf) { r.rightArm = { e: a.e, atA }; r.rightLf = lf; } }
     });
     return r;
   }
@@ -500,7 +506,7 @@ export function markings(net, carAt) {
     let zb = 0;
     if (!minor && pr.centerLine && pr.fw > 0 && pr.bw > 0 && nl >= 2) {
       const extra = pr.hw * 2 - 2 * pr.edge - nl * 3.25;
-      zb = pr.zb !== undefined ? pr.zb : extra >= 1.5 ? Math.min(4, extra) : 0;
+      zb = pr.zb !== undefined ? pr.zb : extra >= 2.2 ? Math.min(4, extra) : 0;
       if (zb > 0) pr = Object.assign({}, pr, { lw: (pr.hw * 2 - 2 * pr.edge - zb) / nl });
     }
     const cOff = x0 + pr.fw * pr.lw + zb;   // + 側の車線の始まり（導流帯があればその外）
@@ -606,6 +612,28 @@ export function markings(net, carAt) {
             else str = T.straight ? 'through' : '';
           }
           const polys = arrowsFor(str); if (!polys.length) continue;
+          // 右折の誘導線（信号のある交差点の、いちばん右の車線から右の道の出ていく車線へ、交差点の中の点線）
+          if (k === nIn - 1 && /right/.test(str) && j.sig && T.rightArm) {
+            const e2 = T.rightArm.e, p2 = e2.pr, L2 = lineLen(e2.line), s2 = T.rightArm.atA ? 0 : L2, out2 = T.rightArm.atA ? 1 : -1;
+            const f0 = frame(e, st), f3 = frame(e2, s2);
+            if (f0 && f3) {
+              const l0 = laneOff(k) + CS, P0 = [f0.x - f0.dz * l0, f0.z + f0.dx * l0], d0 = [f0.dx * travel, f0.dz * travel];
+              const n2 = out2 > 0 ? p2.fw : p2.bw, o2 = out2 > 0 ? (-p2.hw + p2.edge + (n2 - 0.5) * p2.lw) : (p2.hw - p2.edge - (n2 - 0.5) * p2.lw);   // 出ていく車線のうち中央寄り
+              const P3 = [f3.x - f3.dz * o2, f3.z + f3.dx * o2], d3 = [f3.dx * out2, f3.dz * out2], D = len2(P3[0] - P0[0], P3[1] - P0[1]);
+              if (D > 6 && D < 70) {
+                const P1 = [P0[0] + d0[0] * D * 0.45, P0[1] + d0[1] * D * 0.45], P2 = [P3[0] - d3[0] * D * 0.45, P3[1] - d3[1] * D * 0.45];
+                const B = t => { const v = 1 - t; return [v * v * v * P0[0] + 3 * v * v * t * P1[0] + 3 * v * t * t * P2[0] + t * t * t * P3[0], v * v * v * P0[1] + 3 * v * v * t * P1[1] + 3 * v * t * t * P2[1] + t * t * t * P3[1]]; };
+                const n = Math.ceil(D * 1.6), pts = []; for (let i = 0; i <= n; i++) pts.push(B(i / n));
+                let acc = 0, on = true, tris = [];
+                for (let i = 1; i < pts.length; i++) {   // 長さ 1m・間 1m の点線、幅 0.15m
+                  const a = pts[i - 1], b = pts[i], l = len2(b[0] - a[0], b[1] - a[1]) || 1e-6, nx = -(b[1] - a[1]) / l * 0.075, nz = (b[0] - a[0]) / l * 0.075;
+                  if (Math.floor(acc / 1.0) % 2 === 0) tris.push([a[0] + nx, a[1] + nz], [b[0] + nx, b[1] + nz], [b[0] - nx, b[1] - nz], [a[0] + nx, a[1] + nz], [b[0] - nx, b[1] - nz], [a[0] - nx, a[1] - nz]);
+                  acc += l;
+                }
+                if (tris.length) out.push({ tris, c: 'w', t: 'guide', e });
+              }
+            }
+          }
           [8, 30].forEach(d => { if (d + 5 < Ltot - 10) shapeAt(e, sAfter(d + 5), laneOff(k), travel, polys, 'w', 'arrow'); });
         }
       }
