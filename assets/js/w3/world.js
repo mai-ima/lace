@@ -153,6 +153,17 @@ export function buildWorld(scene, W, gfx) {
 
   /* --- 道路網 --- */
   const net = build(W.roads, (x, z) => terr.at(x, z), W.roadWidth);   // 道幅は PLATEAU の道路の範囲で実測した値（tools/world/build_tran.py）
+  // PLATEAU の道路の範囲の外を通る細い道（駐車場の通路・敷地の中の私道など。住宅地の道より格下）は、帯も路面表示も描かない（地面は航空写真のまま）
+  if (W.roadArea && W.roadArea.car) {
+    const g = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0), q = W.roadArea.q;
+    [W.roadArea.car, W.roadArea.walk].forEach(A => { if (!A) return; const v = A.v, I = A.i; for (let t = 0; t < I.length; t += 3) g.tri(v[I[t] * 2] * q, v[I[t] * 2 + 1] * q, v[I[t + 1] * 2] * q, v[I[t + 1] * 2 + 1] * q, v[I[t + 2] * 2] * q, v[I[t + 2] * 2 + 1] * q); });
+    net.edges.forEach(e => {
+      if (e.pr.rank < 7 || e.line.length < 2) return;
+      let n = 0, inn = 0; const L = e.pts || e.line;
+      for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i], m = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 2)); for (let k = 0; k < m; k++) { n++; inn += g.at(a[0] + (b[0] - a[0]) * k / m, a[1] + (b[1] - a[1]) * k / m); } }
+      if (n >= 4 && inn / n < 0.3) e.offArea = true;
+    });
+  }
   out.net = net;
   const asph = photoTex('asphalt', 1, true);
   // 面の向きで UV を変える（上向きの面は xz、壁は「水平の位置 × 高さ」。縦に引き伸ばされない）
@@ -189,7 +200,7 @@ export function buildWorld(scene, W, gfx) {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g;
   }
   net.edges.forEach(e => {
-    if (e.line.length < 2 || e.hidden) return;
+    if (e.line.length < 2 || e.hidden || e.offArea) return;
     const pr = e.pr;
     let g = strip(ribbon(e, -pr.hw, pr.hw), pr.bridge ? 0.05 : 0.02, true, !pr.bridge);   // 路面表示（+0.075）より必ず下に
     roadGeos.push(g);

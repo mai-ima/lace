@@ -484,7 +484,7 @@ export function markings(net, carAt) {
   });
   net.edges.forEach(e => {
     let pr = e.pr; const Ltot = lineLen(e.line);
-    if (e.internal || e.hidden || Ltot < 2) return;   // まとめた交差点の中の短い道と、地下の道には線を引かない
+    if (e.internal || e.hidden || e.offArea || Ltot < 2) return;   // まとめた交差点の中の短い道、地下の道、道路の範囲の外の私道には線を引かない
     const jA = net.nodes.get(e.a), jB = net.nodes.get(e.b);
     const minor = pr.rank >= 7;
     const nearA = jA && jA.arms.length >= 3 ? M.solidNear : 0, nearB = jB && jB.arms.length >= 3 ? M.solidNear : 0;

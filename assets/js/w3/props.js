@@ -49,7 +49,7 @@ export function buildProps(scene, net, at, free, opt) {
   const out = { poles: [], lights: [] };
   const poleSpots = [], spans = [], lightSpots = [];
   net.edges.forEach(e => {
-    const pr = e.pr; if (e.internal || e.hidden || e.line.length < 2) return;
+    const pr = e.pr; if (e.internal || e.hidden || e.offArea || e.line.length < 2) return;
     const mid = e.line[Math.floor(e.line.length / 2)], r = Math.hypot(mid[0], mid[1]);
     // 電柱: 住宅地・その他の道（rank 4〜8）。中心部（半径 1km）は 1 割だけ
     if (pr.rank >= 4 && pr.rank <= 8 && (r > 1000 || hsh(mid[0], mid[1]) < 0.1)) {

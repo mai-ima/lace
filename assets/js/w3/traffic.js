@@ -32,9 +32,9 @@ const limitOf = pr => (pr.rank <= 2 ? 50 : pr.rank <= 4 ? 40 : 30) / 3.6;
 
 export function makeTraffic(scene, net, opt) {
   const R = window.TB && TB.Race, rnd = opt.random || Math.random;
-  const edges = net.edges.filter(e => !e.hidden && e.line.length >= 2 && e.pr.rank <= 7);
+  const edges = net.edges.filter(e => !e.hidden && !e.offArea && e.line.length >= 2 && e.pr.rank <= 7);
   edges.forEach(prep);
-  const nodeArms = id => net.nodes.get(id).arms.filter(a => !a.e.hidden && a.e.pr.rank <= 7 && a.e.line.length >= 2);
+  const nodeArms = id => net.nodes.get(id).arms.filter(a => !a.e.hidden && !a.e.offArea && a.e.pr.rank <= 7 && a.e.line.length >= 2);
   const cars = [], N = opt.count || 40;
   /* 見た目: 自車と同じ形を、インスタンス描画で色違いに（白・銀・黒が多い日本の色の比率） */
   const COLORS = [[0xf2f2f0, 30], [0xb8bcc2, 20], [0x1a1c20, 18], [0x6b6f75, 8], [0x2a3d66, 6], [0x8c1c1c, 6], [0xd7cfc0, 5], [0x2f4a3a, 3], [0x5a3a24, 4]];
