@@ -744,6 +744,54 @@ export function buildWorld(scene, W, gfx) {
       tm.receiveShadow = true; out.group.add(tm);
     }
     out.markCount = { quads: nQuads, texts: TI.length / 6 };
+    /* --- 標識（道路標識令の様式。図柄は Canvas で描く）: 表・裏・柱をそれぞれインスタンス描画（描画 3 回） --- */
+    const SL = ['stop', 'speed30', 'speed40', 'speed50', 'cross', 'oneway', 'noentry', 'nopark'], SA = document.createElement('canvas'); SA.width = 1024; SA.height = 512;
+    { const g = SA.getContext('2d');
+      const slot = (i, fn) => { g.save(); g.translate((i % 4) * 256, Math.floor(i / 4) * 256); fn(g); g.restore(); };
+      const circle = (g, fill, ring) => { g.beginPath(); g.arc(128, 128, 122, 0, Math.PI * 2); g.fillStyle = ring; g.fill(); g.beginPath(); g.arc(128, 128, 96, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+      slot(0, g => { g.beginPath(); g.moveTo(6, 22); g.lineTo(250, 22); g.lineTo(128, 236); g.closePath(); g.fillStyle = '#fff'; g.fill(); g.beginPath(); g.moveTo(22, 31); g.lineTo(234, 31); g.lineTo(128, 216); g.closePath(); g.fillStyle = '#d0121b'; g.fill();
+        g.fillStyle = '#fff'; g.font = '900 52px "Hiragino Sans","Noto Sans JP",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('止まれ', 128, 92); });
+      [30, 40, 50].forEach((v, k) => slot(1 + k, g => { circle(g, '#fff', '#d0121b'); g.fillStyle = '#1b3f95'; g.font = '900 118px Arial,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.save(); g.translate(128, 132); g.scale(0.82, 1); g.fillText(String(v), 0, 0); g.restore(); }));
+      slot(4, g => { g.fillStyle = '#1b5fb4'; g.fillRect(8, 8, 240, 240); g.strokeStyle = '#fff'; g.lineWidth = 8; g.strokeRect(18, 18, 220, 220);
+        g.beginPath(); g.moveTo(128, 34); g.lineTo(226, 214); g.lineTo(30, 214); g.closePath(); g.fillStyle = '#fff'; g.fill();
+        g.fillStyle = '#111'; g.beginPath(); g.arc(128, 96, 13, 0, Math.PI * 2); g.fill(); g.lineCap = 'round'; g.lineWidth = 14; g.strokeStyle = '#111'; g.beginPath(); g.moveTo(126, 112); g.lineTo(118, 160); g.lineTo(98, 196); g.moveTo(118, 160); g.lineTo(142, 194); g.moveTo(124, 126); g.lineTo(100, 146); g.moveTo(124, 126); g.lineTo(152, 142); g.stroke();
+        g.fillStyle = '#111'; for (let k = 0; k < 5; k++) g.fillRect(58 + k * 30, 200, 18, 10); });
+      slot(5, g => { g.fillStyle = '#1b5fb4'; g.fillRect(0, 64, 256, 128); g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(8, 72, 240, 112); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(36, 116); g.lineTo(170, 116); g.lineTo(170, 92); g.lineTo(226, 128); g.lineTo(170, 164); g.lineTo(170, 140); g.lineTo(36, 140); g.closePath(); g.fill(); });
+      slot(6, g => { g.beginPath(); g.arc(128, 128, 122, 0, Math.PI * 2); g.fillStyle = '#d0121b'; g.fill(); g.fillStyle = '#fff'; g.fillRect(38, 108, 180, 40); });
+      slot(7, g => { circle(g, '#1b5fb4', '#d0121b'); g.save(); g.translate(128, 128); g.rotate(Math.PI / 4); g.fillStyle = '#d0121b'; g.fillRect(-100, -13, 200, 26); g.restore(); });
+    }
+    const stex = new THREE.CanvasTexture(SA); stex.colorSpace = THREE.SRGBColorSpace; stex.anisotropy = 8;
+    const signs = (mk.signs || []).map(sg => {
+      // 車道の上なら、進む向きの左へ路肩の外まで押し出す
+      let x = sg.x, z = sg.z; const lx = -sg.nz, lz = sg.nx;
+      for (let k = 0; k < 12 && out.onRoadPt(x, z); k++) { x += lx * 0.3; z += lz * 0.3; }
+      if (out.onRoadPt(x, z)) return null;
+      const key = sg.type === 'speed' ? 'speed' + sg.val : sg.type, i = SL.indexOf(key); if (i < 0) return null;
+      const size = sg.type === 'stop' ? 0.8 : sg.type === 'oneway' ? 0.8 : 0.6, h = sg.type === 'stop' ? 2.0 : 2.3;
+      return { x, z, y: terr.atRoad(x, z) + WALK_H, yaw: Math.atan2(sg.nx, sg.nz), i, size, h };
+    }).filter(Boolean);
+    if (signs.length) {
+      const pg = new THREE.PlaneGeometry(1, 1), bg3 = new THREE.PlaneGeometry(1, 1); bg3.rotateY(Math.PI); bg3.translate(0, 0, -0.012);
+      const auv = new THREE.InstancedBufferAttribute(new Float32Array(signs.length * 4), 4);
+      signs.forEach((sg, k) => auv.setXYZW(k, (sg.i % 4) / 4, 1 - (Math.floor(sg.i / 4) + 1) / 2, 0.25, 0.5));
+      pg.setAttribute('aUV', auv);
+      const fm = new THREE.MeshStandardMaterial({ map: stex, roughness: 0.45, metalness: 0.1, alphaTest: 0.5, side: THREE.FrontSide });
+      fm.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aUV;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = uv * aUV.zw + aUV.xy;'); };
+      fm.customProgramCacheKey = () => 'signFront';
+      const bmat2 = new THREE.MeshStandardMaterial({ map: stex, color: 0x8a8d90, roughness: 0.5, metalness: 0.5, alphaTest: 0.5 });
+      bmat2.onBeforeCompile = fm.onBeforeCompile; bmat2.customProgramCacheKey = () => 'signBack'; bg3.setAttribute('aUV', auv);
+      const front = new THREE.InstancedMesh(pg, fm, signs.length), back = new THREE.InstancedMesh(bg3, bmat2, signs.length);
+      const poleG = new THREE.CylinderGeometry(0.03, 0.03, 1, 8, 1, true); poleG.translate(0, 0.5, -0.04);
+      const poles = new THREE.InstancedMesh(poleG, new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.45, metalness: 0.6 }), signs.length);
+      const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), V = new THREE.Vector3();
+      signs.forEach((sg, k) => {
+        Q.setFromAxisAngle(Y, sg.yaw);
+        M4.compose(V.set(sg.x, sg.y + sg.h, sg.z), Q, new THREE.Vector3(sg.size, sg.size, 1)); front.setMatrixAt(k, M4); back.setMatrixAt(k, M4);
+        M4.compose(V.set(sg.x, sg.y, sg.z), Q, new THREE.Vector3(1, sg.h + sg.size * 0.3, 1)); poles.setMatrixAt(k, M4);
+      });
+      [front, back, poles].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); out.group.add(m); });
+      out.signCount = signs.length;
+    }
   }
 
   return out;

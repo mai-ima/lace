@@ -341,7 +341,13 @@ export function markings(net, carAt) {
   // 返り値: [{ q: 4 点（帯）| tris: [[x,z]×3...]（形）, c: 'w'|'y', t: 種類 }] と文字 { txt, at: 中心, dir: 読む向き（車の進む向き）, w, len }
   // 種類 t: edge 外側線 / center 中央線 / lane 車線境界線 / cw 横断歩道 / stop 停止線 / arrow 矢印 / dia ひし形 / side 路側帯の線
   const M = net.MARK, out = [];
-  out.texts = [];
+  out.texts = []; out.signs = [];
+  // 標識: 進む向き travel（線の向きに対して ±1）の左側の路肩に、近づく運転者の方へ向けて立てる
+  function addSign(type, e, s, pr, travel, val) {
+    const f = frame(e, s); if (!f) return;
+    const tx = f.dx * travel, tz = f.dz * travel, lat = -travel * (pr.hw + 0.9) + CS;
+    out.signs.push({ type, val, x: f.x + -f.dz * lat, z: f.z + f.dx * lat, nx: -tx, nz: -tz, e, s, travel });
+  }
   let CS = 0;   // いま線を引いている道の、中心線から実際の車道の中央までのずれ（m、+ 側）
   // 実際の車道（PLATEAU）の幅を、中心線から直角に測る（carAt があるとき）。返り値: [− 側の端, + 側の端]（中心線からの m）
   function extentAt(e, s) {
@@ -525,6 +531,17 @@ export function markings(net, carAt) {
     // 車線境界線（同じ向きの車線の間。交差点の手前 30m は黄色の実線 = 車線変更禁止、が多い）
     for (let k = 1; k < pr.fw; k++) { dashed(e, x0 + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', 0, 0, 'lane'); }
     for (let k = 1; k < pr.bw; k++) { dashed(e, cOff + k * pr.lw, M.lane, pr.rank === 0 ? [8, 12] : M.dash, 'w', 0, 0, 'lane'); }
+    // 標識: 最高速度（約 300m ごと、向きごと）、一方通行（入口）と進入禁止（出口）、駐車禁止（幹線）
+    if (pr.rank <= 5 && Ltot > 60) {
+      const v = pr.rank <= 2 ? 50 : pr.rank <= 4 ? 40 : 30;
+      for (let s2 = 40; s2 < Ltot - 30; s2 += 300) { if (pr.fw > 0) addSign('speed', e, s2, pr, 1, v); if (pr.bw > 0) addSign('speed', e, Ltot - s2, pr, -1, v); }
+      if (pr.rank <= 3 && Ltot > 120) { if (pr.fw > 0) addSign('nopark', e, Ltot * 0.6, pr, 1); if (pr.bw > 0) addSign('nopark', e, Ltot * 0.4, pr, -1); }
+    }
+    if (pr.one && pr.rank >= 3 && Ltot > 25) {
+      const tr = pr.rev ? -1 : 1, s0 = tr > 0 ? 6 : Ltot - 6, s1 = tr > 0 ? Ltot - 3 : 3;
+      addSign('oneway', e, s0, pr, tr);
+      const jEnd = net.nodes.get(tr > 0 ? e.b : e.a); if (jEnd && jEnd.arms.length >= 3) addSign('noentry', e, s1, pr, -tr);
+    }
     // 速度の数字（県道以上: 50、それ以外の 2 車線以上の道: 40）。長い道の中ほどに、向きごとに 1 つ
     if (Ltot > 90 && pr.rank <= 5) {
       const v = pr.rank <= 2 ? '50' : pr.rank <= 4 ? '40' : '30';
@@ -544,7 +561,7 @@ export function markings(net, carAt) {
       if (ex && ex[1] - ex[0] > 2 && ex[1] - ex[0] < pr.hw * 2 * 2.2 + 4) { lo = ex[0] - CS; hi = ex[1] - CS; }
       for (let o = lo + 0.3; o + M.cwStripe <= hi - 0.3; o += M.cwStripe + M.cwGap) quadAlong(e, o + M.cwStripe / 2, M.cwStripe, cw0, cw1, 'w', 'cw');
     };
-    xs.forEach(c => drawCW(c.s));
+    xs.forEach(c => { drawCW(c.s); if (!c.sig && !minor) { addSign('cross', e, c.s, pr, 1); addSign('cross', e, c.s, pr, -1); } });   // 信号の無い横断歩道は両端に横断歩道の標識
     // 交差点から離れた横断歩道（両端から 20m 以上）: 信号付きなら両方向に停止線、信号なしなら両方向にひし形
     xs.filter(c => c.s > 20 && c.s < Ltot - 20).forEach(c => {
       [1, -1].forEach(dir2 => {   // dir2 = +1: a→b の車線（− 側）が向かう
@@ -573,6 +590,7 @@ export function markings(net, carAt) {
       const mid = dir === 1 ? cOff + pr.bw * pr.lw / 2 : x0 + pr.fw * pr.lw / 2, wIn = nIn * pr.lw;
       quadAlong(e, minor && pr.centerLine === false ? 0 : mid, minor && !pr.centerLine ? pr.hw * 2 - 0.6 : wIn, s0, s1, 'w', 'stop');
       const sAfter = d => st + dir * (M.stop + d);   // 停止線から手前へ d m
+      if (stopSign && Ltot > 8) addSign('stop', e, st + dir * 0.6, pr, travel);   // 止まれの標識（停止線の位置の左の路肩）
       if (stopSign && Ltot > 12) {   // 「止まれ」（停止線の 1〜4m 手前）
         const f = frame(e, sAfter(2.5)); if (f) out.texts.push(Object.assign(f, { off: CS + (minor && !pr.centerLine ? 0 : mid), dir: travel, txt: '止まれ', w: Math.min(2.4, Math.max(1.2, (minor && !pr.centerLine ? pr.hw * 2 : wIn) * 0.6)), len: 4.5 }));
       }
