@@ -139,6 +139,17 @@ export function buildProps(scene, net, at, free, opt) {
   out.lampMaterial = lampM;
   inst(lhG, lampM, lightSpots, p => at0(p, 9.8));
   }
+  // 防犯灯（住宅地の電柱に付く小型の LED 灯）: 中心部の外の電柱の約 6 割に、高さ 5.2m・道路側へ 0.8m の腕
+  const secSpots = poleSpots.filter(p => hsh(p.x * 0.7, p.z * 1.3) < 0.6);
+  const secArmG = new THREE.CylinderGeometry(0.022, 0.022, 0.75, 5, 1, true); secArmG.rotateX(Math.PI / 2); secArmG.translate(0, 0.08, 0.5); secArmG.rotateX(-0.2);
+  const secHeadG = new THREE.BoxGeometry(0.16, 0.07, 0.46); secHeadG.translate(0, 0.17, 0.98);
+  const secPlace = p => { Q.setFromAxisAngle(Y, Math.atan2(-p.out[0], -p.out[1])); V.set(p.x, p.y + 5.2, p.z); return M.compose(V, Q, S); };
+  inst(secArmG, new THREE.MeshStandardMaterial({ color: 0x9a9c9e, roughness: 0.5, metalness: 0.6 }), secSpots, secPlace, true);
+  inst(secHeadG, new THREE.MeshStandardMaterial({ color: 0xe6e6e2, roughness: 0.45 }), secSpots, secPlace, true);
+  out.secLamps = secSpots.map(p => ({ x: p.x - p.out[0] * 0.98, y: p.y + 5.2 + 0.13, z: p.z - p.out[1] * 0.98 }));
+  // 街灯の灯具の位置（モデルの灯具の位置 head があればそれ、無ければ手続きの形の 1.9m 先）
+  const hd = opt.models && opt.models.light && opt.models.light.head ? opt.models.light.head : { x: 1.9, y: 9.75 };
+  out.lightHeads = lightSpots.map(p => ({ x: p.x + hd.x * Math.cos(p.yaw), y: p.y + hd.y, z: p.z - hd.x * Math.sin(p.yaw), gy: p.y }));
   out.poles = poleSpots; out.lights = lightSpots; out.wireCount = spans.length;
   return out;
 }

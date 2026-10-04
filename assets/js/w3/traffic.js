@@ -173,12 +173,15 @@ export function makeTraffic(scene, net, opt) {
     cars.forEach(c => { c.P = pose(c); c.d2 = (c.P.x - player.x) ** 2 + (c.P.z - player.z) ** 2; });
     const order = cars.slice().sort((a, b) => a.d2 - b.d2);
     types.forEach(T => { T.nn = 0; T.nf = 0; });
+    let ng = 0;   // 夜のライトの数
     order.forEach((c, r) => {
       if (c.d2 > FAR * FAR) return;
       const P = c.P, T = c.T, near = r < NEAR && c.d2 < 90 * 90, ims = near ? T.nearIM : T.farIM, i = near ? T.nn++ : T.nf++;
       Q.setFromAxisAngle(Y, P.yaw); V.set(P.x, P.y + 0.02, P.z); M.compose(V, Q, S1);
       ims.forEach(p => { p.im.setMatrixAt(i, M); if (p.paint) p.im.setColorAt(i, col.setHex(c.color)); });
+      if (opt.glows && T.lay) opt.glows.set(ng++, M, T.lay, c.brake);
     });
+    if (opt.glows) opt.glows.commit(ng);
     types.forEach(T => {
       T.nearIM.forEach(p => { p.im.count = T.nn; p.im.visible = T.nn > 0; }); T.farIM.forEach(p => { p.im.count = T.nf; p.im.visible = T.nf > 0; });
       T.nearIM.concat(T.farIM).forEach(p => { if (!p.im.visible) return; p.im.instanceMatrix.needsUpdate = true; if (p.im.instanceColor) p.im.instanceColor.needsUpdate = true; });

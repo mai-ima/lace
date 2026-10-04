@@ -11,6 +11,7 @@ import { loadImpostor, plantTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { makeTraffic } from './traffic.js';
 import { loadGLB, fleetParts, playerCar, toFloat as toFloatGeo } from './cars.js';
+import { NIGHT, makeCarGlows, lampLayout, makeGlowPoints, makeLightPools } from './lights.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -116,7 +117,7 @@ export async function start(container, opt) {
   const DPR = Math.min(2, window.devicePixelRatio || 1); [gauge, mini].forEach(c => { c.width = c.height = 170 * DPR; container.appendChild(c); });
 
   const W = await loadWorld(opt.base || 'assets/data/world/center/');
-  const sky = buildSky(scene, renderer, { shadows: gfx.shadows, far: gfx.far, elev: opt.elev, azim: opt.azim });
+  const sky = buildSky(scene, renderer, { shadows: gfx.shadows, far: gfx.far, elev: opt.elev, azim: opt.azim, time: opt.time });
   const world = buildWorld(scene, W, gfx);
   const T0 = W.terrain, collide = makeColliders(W.bldg, { x0: T0.x0, z0: T0.z0, size: (T0.nx - 1) * T0.cell }, makeGrid, world.roadTris, world.pierTris);
   // 街路樹: 幹線（歩道のある道）の両側の歩道に、約 12m ごと。建物・車道・信号の近くは避ける
@@ -178,11 +179,21 @@ export async function start(container, opt) {
       const load = async (key, fix) => { const [a, b] = await Promise.all(['lod0', 'lod1'].map(l => loadGLB(PR + key + '_' + l + '.glb'))); const m = { lod0: fleetParts(a).parts, lod1: fleetParts(b).parts, h: pinfo.find(x => x.key === key).h }; if (fix) fix(m); return m; };
       const tint = (m, r, g, b) => ['lod0', 'lod1'].forEach(k => m[k].forEach(pt => { const c = pt.geometry.attributes.color; if (c && c.itemSize === 3) { for (let i = 0; i < c.count; i++) c.setXYZ(i, c.getX(i) * r, c.getY(i) * g, c.getZ(i) * b); c.needsUpdate = true; } }));
       // 道路照明はアームがローカルの +x を向くように（モデルの向きを頂点の重心で判定）
-      const armX = m => { let sx = 0, n = 0; m.lod0.forEach(pt => { const P = pt.geometry.attributes.position; for (let i = 0; i < P.count; i++) if (P.getY(i) > m.h * 0.8) { sx += P.getX(i); n++; } }); if (n && sx / n < 0) ['lod0', 'lod1'].forEach(k => m[k].forEach(pt => pt.geometry.rotateY(Math.PI))); };
+      const armX = m => { let sx = 0, n = 0; m.lod0.forEach(pt => { const P = pt.geometry.attributes.position; for (let i = 0; i < P.count; i++) if (P.getY(i) > m.h * 0.8) { sx += P.getX(i); n++; } }); if (n && sx / n < 0) ['lod0', 'lod1'].forEach(k => m[k].forEach(pt => pt.geometry.rotateY(Math.PI)));
+        // 灯具の位置（アームの先端の下面）: 高い所の頂点で x がいちばん大きい所の付近
+        let hx = 0; m.lod0.forEach(pt => { const P = pt.geometry.attributes.position; for (let i = 0; i < P.count; i++) if (P.getY(i) > m.h * 0.7) hx = Math.max(hx, P.getX(i)); });
+        let hy = Infinity; m.lod0.forEach(pt => { const P = pt.geometry.attributes.position; for (let i = 0; i < P.count; i++) if (P.getY(i) > m.h * 0.7 && P.getX(i) > hx - 0.6) hy = Math.min(hy, P.getY(i)); });
+        m.head = { x: hx - 0.3, y: hy - 0.02 }; };
       models = { pole: await load('utility_pole_jp', m => tint(m, 0.74, 0.73, 0.70)), light: await load('streetlight_curve', m => { armX(m); tint(m, 0.62, 0.64, 0.66); }) };
     } catch (e) { console.warn('付属物のモデルを読めませんでした', e); }
     world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, { models, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
     // 並べ直しは毎フレームの更新で（自車の位置が決まってから）
+    // 夕方・夜の灯り: 街灯（LED、白に近い）と防犯灯の光の点、真下の地面の光だまり
+    { const P = world.props;
+      makeGlowPoints(scene, P.lightHeads || [], [16, 15, 13], 0.42);
+      makeGlowPoints(scene, P.secLamps || [], [13, 13.5, 14], 0.22);
+      makeLightPools(scene, (P.lightHeads || []).map(h => ({ x: h.x, y: h.gy - 0.15, z: h.z, r: 12 })), [0.42, 0.38, 0.32]);
+      makeLightPools(scene, (P.secLamps || []).map(h => ({ x: h.x, y: W.terrain.at(h.x, h.z), z: h.z, r: 6.5 })), [0.22, 0.22, 0.23]); }
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }
   // 車: 外部の高品質なモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/vehicles.mjs で変換）
@@ -201,6 +212,11 @@ export async function start(container, opt) {
     carM = { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 4.2), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
   }
   scene.add(carM.root);
+  // 夜のヘッドライト: 路面を照らすスポットライト（影なし）と、前後の灯の光の点
+  const headL = new THREE.SpotLight(0xfff2de, 70, 90, 0.42, 0.6, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22);
+  carM.root.add(headL); carM.root.add(headL.target); headL.visible = false;
+  const pBox = new THREE.Box3().setFromObject(carM.root), pSize = pBox.getSize(new THREE.Vector3());
+  const myGlow = makeCarGlows(scene, 1), myLay = lampLayout(pSize);
   // 一般車: 6 車種。日本の交通に近い割合（軽・コンパクト・セダン・SUV）と、車種ごとの色の割合
   const W_TYPES = { kei_van: 22, compact_swift: 24, sedan_sylphy: 14, sedan_accord: 10, sedan_mazda3: 14, suv_cx5: 16 };
   const KEI_COLORS = [0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0xc9ccd0, 0x9aa0a6];
@@ -210,7 +226,8 @@ export async function start(container, opt) {
       const [n, f] = await Promise.all([loadGLB(CARS + c.key + '_lod1.glb'), loadGLB(CARS + c.key + '_lod2.glb')]);
       return { key: c.key, weight: W_TYPES[c.key], len: c.size.l, near: fleetParts(n), far: fleetParts(f), colors: c.key === 'kei_van' ? KEI_COLORS : null };
     }));
-    traffic = makeTraffic(scene, world.net, { types, count: gfx.tier === 'low' ? 24 : 48, near: gfx.tier === 'high' ? 8 : 4, farDist: gfx.tier === 'high' ? 320 : 200 });
+    types.forEach(T => { T.lay = lampLayout(T.near.size); });
+    traffic = makeTraffic(scene, world.net, { types, glows: makeCarGlows(scene, 64), count: gfx.tier === 'low' ? 24 : 48, near: gfx.tier === 'high' ? 8 : 4, farDist: gfx.tier === 'high' ? 320 : 200 });
   } catch (e) { console.warn('一般車を読めませんでした', e); }
   function trafficStep(dt) {
     if (!traffic) return;
@@ -258,16 +275,21 @@ export async function start(container, opt) {
   let paused = false;
   const pauseEl = document.createElement('div');
   pauseEl.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,10,14,.55);color:#fff;font-size:18px;text-align:center;line-height:2;z-index:5';
-  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切</small></div>';
+  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切　T 時間帯</small></div>';
   pauseEl.addEventListener('pointerdown', () => setPause(false));
   { const b = document.createElement('button'); b.textContent = '横滑り防止（ESC）の入・切'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
     b.addEventListener('pointerdown', e => { e.stopPropagation(); car.s.esc = !car.s.esc; b.textContent = '横滑り防止（ESC）: ' + (car.s.esc ? '入' : '切'); }); pauseEl.appendChild(b); }
+  const TIME_NAME = { day: '昼', dusk: '夕方', night: '夜' }, TIME_ORDER = ['day', 'dusk', 'night'];
+  const nextTime = () => { const m = TIME_ORDER[(TIME_ORDER.indexOf(sky.mode) + 1) % 3]; sky.setTime(m); return m; };
+  { const b = document.createElement('button'); b.textContent = '時間帯: ' + TIME_NAME[sky.mode] + '（T）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
+    b.addEventListener('pointerdown', e => { e.stopPropagation(); b.textContent = '時間帯: ' + TIME_NAME[nextTime()] + '（T）'; }); pauseEl.appendChild(b); }
   container.appendChild(pauseEl);
   function setPause(v) { paused = v; if (engineAudio) engineAudio.mute(v); pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
   const onKey = (e, d) => {
     if (d && e.key === 'Escape') { setPause(!paused); return; }
     if (d && paused && (e.key === 'Enter' || e.key === 'q' || e.key === 'Q')) { if (opt.onExit) opt.onExit(); return; }
     if (d && (e.key === 'x' || e.key === 'X')) { car.s.esc = !car.s.esc; toastMsg(car.s.esc ? '横滑り防止（ESC）: 入' : '横滑り防止（ESC）: 切（ドリフトしやすい）'); return; }
+    if (d && (e.key === 't' || e.key === 'T')) { toastMsg('時間帯: ' + TIME_NAME[nextTime()]); return; }
     keys[e.key] = d;
   };
   // 画面中央に短く出す通知
@@ -353,7 +375,10 @@ export async function start(container, opt) {
   function carVisual(dt) {
     const st = car.st;
     if (carM.wheels) Object.values(carM.wheels).forEach(w => { w.spin.rotation.x += st.vx * dt / Math.max(0.2, w.r) * (carM.flip ? -1 : 1); if (w.front) w.steer.rotation.y = st.steer; });
-    if (carM.tails) carM.tails.forEach(m => { m.emissiveIntensity = ctl.brake > 0.1 ? 2.5 : 0.25; });
+    if (carM.tails) carM.tails.forEach(m => { m.emissiveIntensity = ctl.brake > 0.1 ? 2.5 : Math.max(0.25, NIGHT.value * 1.1); });
+    const nightOn = NIGHT.value > 0.3;
+    if (headL.visible !== nightOn) headL.visible = nightOn;
+    if (NIGHT.value > 0.01) { carM.root.updateMatrix(); myGlow.set(0, carM.root.matrix, myLay, ctl.brake > 0.1); myGlow.commit(1); } else myGlow.commit(0);
   }
   function drawGauge() {
     const g = gauge.getContext('2d'), S = 170 * DPR, c = S / 2, r = S * 0.44, st = car.st;
@@ -451,6 +476,8 @@ export async function start(container, opt) {
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
     draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    /** 時間帯 'day' | 'dusk' | 'night' */
+    setTime(m) { sky.setTime(m); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
   return api;

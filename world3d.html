@@ -20,7 +20,7 @@
 <script type="module">
 import { start } from './assets/js/w3/app.js';
 const q = new URLSearchParams(location.search);
-window.W3 = await start(document.getElementById('stage'), { capture: q.has('capture'), tier: q.get('tier') || null, start: q.has('x') ? { x: +q.get('x'), z: +q.get('z') } : null, onExit: () => { location.href = 'index.html'; } });
+window.W3 = await start(document.getElementById('stage'), { capture: q.has('capture'), tier: q.get('tier') || null, time: q.get('time') || null, start: q.has('x') ? { x: +q.get('x'), z: +q.get('z') } : null, onExit: () => { location.href = 'index.html'; } });
 document.title = document.title + ' ready';
 </script>
 </body></html>

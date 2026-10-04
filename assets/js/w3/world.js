@@ -7,6 +7,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { build, markings, signals, ribbon } from './roadnet.js';
 import { makeGrid } from './grid.js';
+import { NIGHT } from './lights.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -281,10 +282,10 @@ export function buildWorld(scene, W, gfx) {
     sh.uniforms.tWall = { value: wallTex };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen; vRel = vec3(transformed.x - aCen.x, transformed.y - aBld.x, transformed.z - aCen.y);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nuniform highp sampler2DArray tWall;\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nuniform highp sampler2DArray tWall; float gMask = 0.0; float gLit = 0.0; vec3 gLitC = vec3(0.0); vec3 gFn = vec3(0.0, 1.0, 0.0);\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
         // 面の向きは建物の中心からの相対座標（値が小さく精度が高い）の微分で求める。ワールド座標だと数百 m の値の誤差で窓の縁がギザギザになる
-        vec3 wdx = dFdx(vRel), wdy = dFdy(vRel); vec3 fn = normalize(cross(wdx, wdy));
+        vec3 wdx = dFdx(vRel), wdy = dFdy(vRel); vec3 fn = normalize(cross(wdx, wdy)); gFn = fn;
         float kind = floor(vBld.z), rel = vWP.y - vBld.x, top = vBld.y - vBld.x;
         if (abs(fn.y) > 0.3) { diffuseColor.rgb = vRoof; }
         else {
@@ -299,29 +300,90 @@ export function buildWorld(scene, W, gfx) {
           vec3 wt = texture(tWall, vec3(u / 3.0, rel / 3.0, layer)).rgb;
           diffuseColor.rgb *= clamp(wt * 3.0, 0.0, 1.6);
           float fl = floor(rel / fh), fy = fract(rel / fh), fu = fract(u / bay), cell = h21(vec2(floor(u / bay), fl) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0);   // 建物ごとの値は補間の誤差を丸めてから使う
-          float wy0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.32 : 0.22, wy1 = kind < 1.5 ? 0.78 : 0.86;
-          float wu0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.12 : 0.04, wu1 = 1.0 - wu0;
-          float win = step(wy0, fy) * step(fy, wy1) * step(wu0, fu) * step(fu, wu1);
-          if (kind > 2.5 && kind < 3.5) win *= step(0.62, fy) * step(fy, 0.8) * step(0.5, cell);   // 工場は高い位置の横長窓だけ
-          if (kind < 0.5) win *= step(0.25, cell);   // 戸建ては窓の無い面も混ぜる
-          win *= step(rel, top - 0.9) * step(0.0, rel);
-          float shop = (kind > 1.5 && kind < 2.5 && rel < 3.8) ? 1.0 : 0.0;
-          if (shop > 0.5) win = step(0.06, fract(u / 4.5)) * step(0.15, rel) * step(rel, 3.0);
-          float mull = (kind > 1.5 && kind < 2.5) ? step(0.94, fract(u / 1.2)) : 0.0;
-          vec3 sky = mix(vec3(0.2, 0.25, 0.3), vec3(0.5, 0.6, 0.68), clamp(fy * 0.8 + cell * 0.3, 0.0, 1.0));
-          vec3 glass = mix(vec3(0.1, 0.12, 0.14), sky, 0.35 + 0.4 * cell);
-          if (shop > 0.5) glass = mix(vec3(0.18, 0.17, 0.15), vec3(0.42, 0.4, 0.36), cell);
+          float hb2 = fract(hb * 13.7 + 0.31), cell2 = fract(cell * 31.7 + 0.13);
+          vec3 wallC = diffuseColor.rgb;
+          // 窓の範囲（階・柱間の中の割合）。種類ごと: 戸建ては大小の窓が混ざり、事務所は横に連なる窓、工場は高い位置の横長窓
+          float wy0 = 0.32, wy1 = 0.78, wu0 = 0.14, wu1 = 0.86, slide = 1.0, has = 1.0;
+          if (kind < 0.5) { has = step(0.22, cell); if (cell < 0.5) { wu0 = 0.38; wu1 = 0.62; wy0 = 0.45; wy1 = 0.76; slide = 0.0; } else { wu0 = 0.22; wu1 = 0.78; wy0 = 0.3; wy1 = 0.74; } }
+          else if (kind < 1.5) { wu0 = 0.18; wu1 = 0.82; }
+          else if (kind < 2.5) { wy0 = 0.26; wy1 = 0.9; wu0 = 0.0; wu1 = 1.0; slide = 0.0; }
+          else if (kind < 3.5) { wy0 = 0.62; wy1 = 0.8; has = step(0.5, cell); slide = 0.0; }
+          else { wy0 = 0.28; wy1 = 0.84; wu0 = 0.06; wu1 = 0.94; }
+          has *= step(rel, top - 0.9) * step(0.0, rel);
+          // 共同住宅の南面はベランダ: 床版の小口・手すり壁・奥まった掃き出し窓（上の階の床の陰で暗い）
+          float balc = (kind > 0.5 && kind < 1.5 && fn.z > 0.55 && rel > 2.0) ? 1.0 : 0.0;
+          if (balc > 0.5) { fu = fract(u / 6.0); wu0 = 0.08; wu1 = 0.92; wy0 = 0.42; wy1 = 0.94; slide = 1.0; has = step(rel, top - 0.9); }
+          float bu = balc > 0.5 ? 6.0 : bay;
+          float fwU = 0.06 / bu, fwY = 0.06 / fh;   // 窓枠（アルミ）の太さ 6cm
+          float inR = has * step(wu0, fu) * step(fu, wu1) * step(wy0, fy) * step(fy, wy1);
+          float inG = step(wu0 + fwU, fu) * step(fu, wu1 - fwU) * step(wy0 + fwY, fy) * step(fy, wy1 - fwY);
+          float mid = slide * step(abs(fu - 0.5 * (wu0 + wu1)), fwU * 0.7);   // 引き違い窓の召し合わせ
+          float mull = (kind > 1.5 && kind < 2.5 && rel > 3.8) ? step(1.0 - 0.06 / 1.2, fract(u / 1.2)) : 0.0;   // カーテンウォールの方立て
+          float gl = inR * inG * (1.0 - mid) * (1.0 - mull);
+          float frm = inR - gl;
+          // ガラスの奥: 暗い室内・カーテン・すりガラス（戸建ての小窓）。上端は庇と窓の奥行きの陰
+          vec3 inside = mix(vec3(0.035, 0.04, 0.045), vec3(0.09, 0.085, 0.08), cell2);
+          if (cell2 > 0.55 && kind < 2.5) inside = mix(inside, vec3(0.42, 0.38, 0.3) * (0.6 + 0.4 * cell), step(0.5 * (wu0 + wu1) + (cell > 0.5 ? 0.1 : -0.1), fu) * 0.85 + 0.15 * cell);
+          if (kind < 0.5 && cell < 0.5) inside = vec3(0.42, 0.44, 0.45);
+          inside *= mix(1.0, 0.55, smoothstep(wy1 - 0.14, wy1, fy));
+          vec3 frameC = hb2 < 0.55 ? vec3(0.5, 0.51, 0.52) : vec3(0.16, 0.14, 0.12);   // シルバーかブロンズのアルミ
+          vec3 detail = wallC;
+          if (balc > 0.5) {
+            float slab = step(fy, 0.07), par = step(0.07, fy) * step(fy, 0.4), div = step(fract(u / 6.0), 0.012);
+            vec3 parC = hb2 < 0.5 ? wallC * 1.06 : vec3(0.6, 0.64, 0.66);   // 手すり壁（外壁と同じ材か、すりガラスのパネル）
+            detail = mix(wallC * mix(0.62, 0.34, smoothstep(0.4, 1.0, fy)), parC, par);
+            detail = mix(detail, wallC * 1.1, slab);
+            detail = mix(detail, wallC * 0.5, div * (1.0 - slab));
+            inR *= 1.0 - par - slab; gl *= 1.0 - par - slab; frm = inR - gl;
+          } else if (kind < 1.5) {
+            float sill = has * step(wu0 - 0.02, fu) * step(fu, wu1 + 0.02) * step(wy0 - 0.03, fy) * step(fy, wy0);   // 窓台の水切り
+            detail = mix(detail, vec3(0.7, 0.7, 0.68), sill);
+          } else if (kind < 2.5 && rel > 3.8) {
+            detail = mix(wallC, wallC * 0.82, step(wy1, fy) + step(fy, wy0) * 0.5);   // 腰壁の目地
+          } else if (kind > 2.5 && kind < 3.5 && rel < 4.2 && cell > 0.72) {
+            float sh = step(0.15, fract(u / 5.0)) * step(fract(u / 5.0), 0.85);   // 搬入口のシャッター
+            detail = mix(detail, vec3(0.62, 0.63, 0.63) * (0.92 + 0.08 * step(0.5, fract(rel / 0.12))), sh * step(0.02, rel) * step(rel, 3.8));
+          }
+          float shop = (kind > 1.5 && kind < 2.5 && rel < 3.8) ? 1.0 : 0.0;   // 1 階の店のガラス
+          if (shop > 0.5) { float su = fract(u / 4.5); inR = step(0.04, su) * step(su, 0.97) * step(0.15, rel) * step(rel, 3.0); gl = inR * step(0.05, su) * step(su, 0.96) * step(0.2, rel) * step(rel, 2.95); frm = inR - gl; inside = mix(vec3(0.2, 0.19, 0.17), vec3(0.5, 0.47, 0.42), cell); }
+          detail = mix(detail, frameC, frm);
+          detail = mix(detail, inside, gl);
           // 遠くでは窓の格子がちらつくので、画素あたりの格子の大きさに応じて平均の色へ寄せる
           float fw = max(length(fwidth(vWP.xz)) / bay, fwidth(vWP.y) / fh), far2 = smoothstep(0.18, 0.5, fw);
-          float cover = (wy1 - wy0) * (wu1 - wu0) * (kind > 2.5 && kind < 3.5 ? 0.1 : kind < 0.5 ? 0.75 : 1.0);
-          win = mix(win * (1.0 - mull * 0.8), cover, far2);
-          diffuseColor.rgb = mix(diffuseColor.rgb, glass, win);
+          float cover = (wy1 - wy0) * (wu1 - wu0) * (kind > 2.5 && kind < 3.5 ? 0.1 : kind < 0.5 ? 0.6 : 1.0) * step(0.0, rel) * step(rel, top - 0.9);
+          vec3 avg = mix(wallC * (balc > 0.5 ? 0.7 : 1.0), vec3(0.06, 0.065, 0.07), cover);
+          diffuseColor.rgb = mix(detail, avg, far2);
+          gMask = mix(gl, cover * 0.8, far2);
+          // 夜の窓明かり: 部屋ごとに点いているか（住宅は 5 割、事務所は 4 割、工場は 2 割）と色（電球色・昼白色）
+          float onP = kind < 1.5 ? 0.5 : kind < 2.5 ? 0.4 : kind < 3.5 ? 0.2 : 0.25;
+          float on = step(1.0 - onP, fract(cell * 17.3 + cell2 * 5.1));
+          gLitC = mix(vec3(1.0, 0.72, 0.42), vec3(0.85, 0.9, 1.0), step(0.55, fract(cell2 * 9.7))) * (0.6 + 0.6 * cell);
+          gLitC *= 0.55 + 0.45 * smoothstep(wy0, wy1, fy);   // 天井の照明で上ほど明るい
+          if (shop > 0.5) {   // 夜も開いている店は半分。天井の照明で上ほど明るく、棚の段で横縞
+            on = step(0.5, cell);
+            float shelf = 0.75 + 0.25 * step(0.5, fract(rel / 0.45)) * step(rel, 1.8);
+            gLitC = mix(vec3(1.0, 0.86, 0.66), vec3(0.92, 0.95, 1.0), step(0.5, cell2)) * (0.15 + 0.3 * smoothstep(0.2, 2.9, rel)) * shelf;
+          }
+          gLit = mix(gl * on, cover * onP * 0.8, far2);
           // 階ごとの床の帯（共同住宅のベランダ・事務所の腰壁）と、屋上の笠木
           float band = (kind > 0.5 && kind < 2.5) ? step(fy, 0.08) * step(fh, rel) : 0.0;
           diffuseColor.rgb *= 1.0 - band * 0.12;
           diffuseColor.rgb *= 1.0 - 0.18 * step(top - 0.25, rel);
           diffuseColor.rgb *= 0.86 + 0.14 * smoothstep(0.0, 4.0, rel);   // 地面の近くは少し暗く（汚れ・陰）
-        }`);
+        }`)
+      // ガラスはつやがある（太陽の照り返し）
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.12, gMask);')
+      // ガラスに映る空と街（フレネル: 斜めから見るほど強く映る）。光の当たり方によらないので発光として足す
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        if (gMask > 0.001) {
+          vec3 Vd = normalize(vWP - cameraPosition), Rr = reflect(Vd, gFn);
+          vec3 sk = Rr.y > 0.0 ? mix(vec3(0.72, 0.78, 0.84), vec3(0.32, 0.46, 0.7), sqrt(Rr.y)) : mix(vec3(0.24, 0.24, 0.25), vec3(0.12, 0.12, 0.13), sqrt(-Rr.y));
+          float Fr = 0.1 + 0.9 * pow(1.0 - clamp(dot(-Vd, gFn), 0.0, 1.0), 5.0);
+          totalEmissiveRadiance += sk * Fr * gMask * uRefl * max(0.05, 1.0 - uNight * 1.25);
+        }
+        totalEmissiveRadiance += gLitC * gLit * uNight * uNight * 2.2;   // 夕方はまだ外が明るいので控えめ`);
+    sh.uniforms.uRefl = { value: 1.0 }; sh.uniforms.uNight = NIGHT;
+    sh.fragmentShader = sh.fragmentShader.replace('uniform highp sampler2DArray tWall;', 'uniform highp sampler2DArray tWall; uniform float uRefl; uniform float uNight;');
   };
   // 建物は重心の位置で 200m 四方のチャンクに分ける（頂点は共有し、三角形の番号だけ分ける）
   const cx = new Float32Array(nb), cz = new Float32Array(nb), cn = new Uint32Array(nb);
@@ -482,5 +544,36 @@ export function buildSky(scene, renderer, opt) {
   const pm = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene(); const sky2 = new Sky(); sky2.scale.setScalar(1000); Object.keys(u).forEach(k => { if (sky2.material.uniforms[k]) sky2.material.uniforms[k].value = u[k].value; }); envScene.add(sky2);
   scene.environment = pm.fromScene(envScene, 0.02).texture; scene.environmentIntensity = 0.12;   // Preetham の空は値が大きいので弱める
-  return { sky, sun, sunDir, hemi, dispose() { pm.dispose(); sky2.material.dispose(); sky2.geometry.dispose(); } };
+  // 時間帯: 昼（既定）・夕方・夜。太陽（夜は月）の向きと光、空、霧、環境光、灯りの度合い（NIGHT）をまとめて切り替える
+  const TIMES = {
+    day: { elev, azim, sun: [0xfff1dc, 2.6], hemi: [0xd4dde8, 0x6a6458, 0.55], fog: 0xc4d2de, env: 0.12, night: 0, tb: 4, ray: 1.6 },
+    dusk: { elev: 3.5, azim: 250, sun: [0xffa66a, 1.5], hemi: [0x8f8aa0, 0x3a3230, 0.32], fog: 0x9c8f96, env: 0.5, night: 0.55, tb: 6, ray: 2.6 },
+    night: { elev: 32, azim: 120, sun: [0x8fa6d8, 0.16], hemi: [0x26324c, 0x0c0c10, 0.22], fog: 0x0a0f18, env: 0, night: 1, tb: 2, ray: 0.4, skyElev: -14 }
+  };
+  // 夜空: 天頂は濃い紺、地平線の近くは街の明かりで少し明るい（光害）。描画 1 回の球
+  const nightSky = new THREE.Mesh(new THREE.SphereGeometry(15000, 24, 12), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vD; void main() { vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
+    fragmentShader: 'varying vec3 vD; float h(vec3 p) { return fract(sin(dot(floor(p), vec3(12.99, 78.23, 37.71))) * 43758.55); } void main() { float y = max(vD.y, 0.0); vec3 c = mix(vec3(0.075, 0.07, 0.075), vec3(0.008, 0.013, 0.03), pow(y, 0.45)); float st = step(0.9965, h(vD * 420.0)) * smoothstep(0.08, 0.35, y) * 0.5; gl_FragColor = vec4(c + st, 1.0); }'
+  }));
+  nightSky.visible = false; nightSky.renderOrder = -1; nightSky.frustumCulled = false; scene.add(nightSky);
+  let envRT = null;
+  function setTime(mode) {
+    const T = TIMES[mode] || TIMES.day;
+    sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - T.elev), THREE.MathUtils.degToRad(T.azim));   // 夜は月の向き（影を落とす光）
+    const skyDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - (T.skyElev !== undefined ? T.skyElev : T.elev)), THREE.MathUtils.degToRad(T.azim));
+    u.sunPosition.value.copy(skyDir); u.turbidity.value = T.tb; u.rayleigh.value = T.ray;
+    sun.color.set(T.sun[0]); sun.intensity = T.sun[1];
+    hemi.color.set(T.hemi[0]); hemi.groundColor.set(T.hemi[1]); hemi.intensity = T.hemi[2];
+    scene.fog.color.set(T.fog);
+    sky.visible = mode !== 'night'; nightSky.visible = mode === 'night';
+    Object.keys(u).forEach(k => { if (sky2.material.uniforms[k]) sky2.material.uniforms[k].value = u[k].value; });
+    if (T.env > 0) { if (envRT) envRT.dispose(); envRT = pm.fromScene(envScene, 0.02); scene.environment = envRT.texture; scene.environmentIntensity = T.env * (mode === 'dusk' ? 0.4 : 1); }
+    else scene.environmentIntensity = 0.0;
+    NIGHT.value = T.night;
+    out.mode = mode;
+  }
+  const out = { sky, nightSky, sun, sunDir, hemi, setTime, mode: 'day', dispose() { pm.dispose(); if (envRT) envRT.dispose(); sky2.material.dispose(); sky2.geometry.dispose(); } };
+  if (opt.time && opt.time !== 'day') setTime(opt.time);
+  return out;
 }

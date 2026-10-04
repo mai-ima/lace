@@ -10,16 +10,16 @@
   },
   "lods": {
    "lod0": {
-    "tris": 134652,
-    "kb": 2156
+    "tris": 128656,
+    "kb": 1957
    },
    "lod1": {
-    "tris": 34566,
+    "tris": 33884,
     "kb": 383
    },
    "lod2": {
-    "tris": 6081,
-    "kb": 101
+    "tris": 6282,
+    "kb": 103
    }
   },
   "paint": true,
@@ -43,16 +43,16 @@
   },
   "lods": {
    "lod0": {
-    "tris": 119511,
-    "kb": 890
+    "tris": 119492,
+    "kb": 881
    },
    "lod1": {
-    "tris": 31057,
-    "kb": 283
+    "tris": 30578,
+    "kb": 276
    },
    "lod2": {
-    "tris": 5276,
-    "kb": 56
+    "tris": 5224,
+    "kb": 55
    }
   },
   "paint": true,
@@ -61,39 +61,6 @@
    "author": "a0930582398",
    "license": "CC BY 4.0",
    "url": "https://sketchfab.com/3d-models/4e261bd2d93a438ebdabf8cc6b41cf58",
-   "via": "Objaverse (allenai/objaverse)",
-   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
-  }
- },
- {
-  "key": "suv_cx5",
-  "name": "SUV（CX-5 型）",
-  "kind": "suv",
-  "size": {
-   "w": 2.17,
-   "l": 4.55,
-   "h": 1.64
-  },
-  "lods": {
-   "lod0": {
-    "tris": 120010,
-    "kb": 1829
-   },
-   "lod1": {
-    "tris": 30232,
-    "kb": 1269
-   },
-   "lod2": {
-    "tris": 6111,
-    "kb": 66
-   }
-  },
-  "paint": true,
-  "source": {
-   "title": "Mazda CX-5",
-   "author": "tnnv",
-   "license": "CC BY 4.0",
-   "url": "https://sketchfab.com/3d-models/0ca0354c7b2a41bbb84c835ff046e8e5",
    "via": "Objaverse (allenai/objaverse)",
    "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
   }
@@ -110,14 +77,14 @@
   "lods": {
    "lod0": {
     "tris": 120000,
-    "kb": 1787
+    "kb": 1779
    },
    "lod1": {
     "tris": 30000,
-    "kb": 1046
+    "kb": 1044
    },
    "lod2": {
-    "tris": 7120,
+    "tris": 7262,
     "kb": 91
    }
   },
@@ -142,16 +109,16 @@
   },
   "lods": {
    "lod0": {
-    "tris": 49620,
-    "kb": 1072
+    "tris": 35886,
+    "kb": 792
    },
    "lod1": {
-    "tris": 33901,
-    "kb": 479
+    "tris": 32567,
+    "kb": 758
    },
    "lod2": {
-    "tris": 6210,
-    "kb": 78
+    "tris": 6157,
+    "kb": 72
    }
   },
   "paint": true,
@@ -160,6 +127,39 @@
    "author": "David_Holiday",
    "license": "CC BY 4.0",
    "url": "https://sketchfab.com/3d-models/0811f0d3785243a5ad05bd1b84457273",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "suv_cx5",
+  "name": "SUV（CX-5 型）",
+  "kind": "suv",
+  "size": {
+   "w": 2.17,
+   "l": 4.55,
+   "h": 1.64
+  },
+  "lods": {
+   "lod0": {
+    "tris": 120004,
+    "kb": 1824
+   },
+   "lod1": {
+    "tris": 30220,
+    "kb": 1267
+   },
+   "lod2": {
+    "tris": 6126,
+    "kb": 64
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Mazda CX-5",
+   "author": "tnnv",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/0ca0354c7b2a41bbb84c835ff046e8e5",
    "via": "Objaverse (allenai/objaverse)",
    "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
   }
@@ -175,16 +175,16 @@
   },
   "lods": {
    "lod0": {
-    "tris": 119992,
-    "kb": 2019
+    "tris": 119988,
+    "kb": 1989
    },
    "lod1": {
-    "tris": 33039,
-    "kb": 1124
+    "tris": 33354,
+    "kb": 1128
    },
    "lod2": {
-    "tris": 6108,
-    "kb": 61
+    "tris": 6058,
+    "kb": 60
    }
   },
   "paint": true,

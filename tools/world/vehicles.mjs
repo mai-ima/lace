@@ -110,6 +110,35 @@ for (const C of CARS) {
     }
     for (const { p } of prims) { const a = p.getAttribute('POSITION'), v = [0, 0, 0]; for (let i = 0; i < a.getCount(); i++) { a.getElement(i, v); b2 = [Math.min(b2[0], v[0]), Math.max(b2[1], v[0]), Math.min(b2[2], v[2]), Math.max(b2[3], v[2]), Math.max(b2[4], v[1])]; } }
     sizes.w = +(b2[1] - b2[0]).toFixed(2); sizes.l = +(b2[3] - b2[2]).toFixed(2); sizes.h = +b2[4].toFixed(2);
+    // エンブレム・車名の文字を消す（商標のため）: 前後の端から 0.5m 以内・高さ 0.3〜1.4m にある、つながった小さな部品
+    //  （最大の寸法 0.32m 未満）を消す。灯火・ガラス・塗装の部品は対象外。センサーなどの小部品も一緒に消えるが見た目への影響は小さい
+    {
+      let nb = 0;
+      for (const m of root.listMeshes()) for (const p of m.listPrimitives()) {
+        const mat = p.getMaterial(), mn = mat ? mat.getName() : '';
+        if (/^PAINT$|glass|light|lamp|bulb|signal|stop/i.test(mn)) continue;
+        const I = p.getIndices(); if (!I) continue;
+        const idx = I.getArray(), a = p.getAttribute('POSITION'), nvx = a.getCount();
+        const par = new Int32Array(nvx); for (let i = 0; i < nvx; i++) par[i] = i;
+        const find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+        for (let t = 0; t < idx.length; t += 3) { const r0 = find(idx[t]), r1 = find(idx[t + 1]), r2 = find(idx[t + 2]); par[r1] = r0; par[find(r2)] = r0; }
+        const box = new Map(), v = [0, 0, 0];
+        for (let i = 0; i < nvx; i++) { const r = find(i); a.getElement(i, v); let B = box.get(r); if (!B) box.set(r, B = [v[0], v[0], v[1], v[1], v[2], v[2]]);
+          B[0] = Math.min(B[0], v[0]); B[1] = Math.max(B[1], v[0]); B[2] = Math.min(B[2], v[1]); B[3] = Math.max(B[3], v[1]); B[4] = Math.min(B[4], v[2]); B[5] = Math.max(B[5], v[2]); }
+        const bad = new Set();
+        for (const [r, B] of box) {
+          const dim = Math.max(B[1] - B[0], B[3] - B[2], B[5] - B[4]), cy = (B[2] + B[3]) / 2, cz = (B[4] + B[5]) / 2;
+          if (dim < 0.32 && cy > 0.3 && cy < 1.4 && (cz > b2[3] - 0.5 || cz < b2[2] + 0.5)) bad.add(r);
+        }
+        if (!bad.size) continue;
+        const keep = [];
+        for (let t = 0; t < idx.length; t += 3) if (!bad.has(find(idx[t]))) keep.push(idx[t], idx[t + 1], idx[t + 2]);
+        nb += (idx.length - keep.length) / 3;
+        if (keep.length) I.setArray(idx instanceof Uint32Array ? Uint32Array.from(keep) : Uint16Array.from(keep)); else p.dispose();
+      }
+      await doc.transform(fn.prune());
+      if (lod === 'lod0') console.log('  エンブレム等の小部品を削除', nb, '面');
+    }
     // 面を間引く（LOD）。目標: lod0 は元のまま（12 万面を超えるときは 12 万）、lod1 は約 1.4 万、lod2 は約 3 千
     let tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3;
     // 一般車（lod1・lod2）は車内を省く（色の濃いガラス越しにはほぼ見えない）
