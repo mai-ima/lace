@@ -46,7 +46,7 @@ export function profile(t) {
   return { cls: t.highway, rank: C.rank, one: !!one, rev: t.oneway === '-1', fw, bw, lw, edge: C.edge, hw: carriage / 2, walk,
            centerLine: !one && nl >= 2 && lanes >= 2, bridge: t.bridge && t.bridge !== 'no', tunnel: t.tunnel && t.tunnel !== 'no', layer: num(t.layer, 0),
            turnF: t['turn:lanes:forward'] || (one ? t['turn:lanes'] : null) || null, turnB: t['turn:lanes:backward'] || null, name: t.name || t.ref || '',
-           lanesTagged: t.lanes !== undefined || t['lanes:forward'] !== undefined };
+           lanesTagged: t.lanes !== undefined || t['lanes:forward'] !== undefined, ref: t.ref || '', roadName: t.name || '' };
 }
 
 /**

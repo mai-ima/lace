@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { build, markings, signals, ribbon } from './roadnet.js';
+import { guideContents, drawGuide, drawNamePlate } from './guide.js';
 import { makeGrid } from './grid.js';
 import { NIGHT, syncNight } from './lights.js';
 
@@ -901,7 +902,9 @@ export function buildWorld(scene, W, gfx) {
     }
     out.markCount = { quads: nQuads, texts: TI.length / 6 };
     /* --- 標識（道路標識令の様式。図柄は Canvas で描く）: 表・裏・柱をそれぞれインスタンス描画（描画 3 回） --- */
-    const SL = ['stop', 'speed30', 'speed40', 'speed50', 'cross', 'oneway', 'noentry', 'nopark'], SA = document.createElement('canvas'); SA.width = 1024; SA.height = 512;
+    // 標識の画像（4096 × 3072）: 左上 1024 × 512 に規制・警戒の標識（256 角 × 8）、右上に交差点名標識（512 × 128 × 24）、下に方面案内（512 × 320 × 64）
+    const SL = ['stop', 'speed30', 'speed40', 'speed50', 'cross', 'oneway', 'noentry', 'nopark'], SA = document.createElement('canvas'); SA.width = 4096; SA.height = 3072;
+    const AW = SA.width, AH = SA.height, rectUV = (x, y, w, h) => [x / AW, 1 - (y + h) / AH, w / AW, h / AH];
     { const g = SA.getContext('2d');
       const slot = (i, fn) => { g.save(); g.translate((i % 4) * 256, Math.floor(i / 4) * 256); fn(g); g.restore(); };
       const circle = (g, fill, ring) => { g.beginPath(); g.arc(128, 128, 122, 0, Math.PI * 2); g.fillStyle = ring; g.fill(); g.beginPath(); g.arc(128, 128, 96, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
@@ -916,6 +919,39 @@ export function buildWorld(scene, W, gfx) {
       slot(6, g => { g.beginPath(); g.arc(128, 128, 122, 0, Math.PI * 2); g.fillStyle = '#d0121b'; g.fill(); g.fillStyle = '#fff'; g.fillRect(38, 108, 180, 40); });
       slot(7, g => { circle(g, '#1b5fb4', '#d0121b'); g.save(); g.translate(128, 128); g.rotate(Math.PI / 4); g.fillStyle = '#d0121b'; g.fillRect(-100, -13, 200, 26); g.restore(); });
     }
+    /* 青看板（方面案内）と交差点名標識（guide.js）: 画像の空きに描いて、ほかの標識と同じ描画にまとめる */
+    const extra = [];
+    {
+      const g = SA.getContext('2d'), units = net.groups.filter(C => C.sig).concat(net.junctions.filter(n => n.sig && !n.cluster)).filter(n => n.A && n.A.length);
+      const slots = new Map(); let ng = 0;
+      guideContents(units).forEach(G => {
+        const key = JSON.stringify(G.items.map(it => [it.k, Math.round(it.ang * 5), it.ja, it.ref]));
+        let uv = slots.get(key);
+        if (!uv) { if (ng >= 64) return; const x = (ng % 8) * 512, y = 512 + Math.floor(ng / 8) * 320; g.save(); g.translate(x, y); drawGuide(g, 512, 320, G); g.restore(); uv = rectUV(x + 2, y + 2, 508, 316); slots.set(key, uv); ng++; }
+        // 置く所: 交差点の中心から進入路を 45m 戻った所の、運転者の左の歩道（見つからなければ車道の外）
+        const d = G.a.d, tx = -d[0], tz = -d[1], lx = tz, lz = -tx, pr = G.a.arm.e.pr, back = Math.min(45, Math.max(22, G.a.trim + 20));
+        const cx = G.unit.x + d[0] * back, cz = G.unit.z + d[1] * back;
+        let px = null, pz = null;
+        for (let o = Math.max(1, pr.hw - 1); o < pr.hw + 9; o += 0.25) { const x = cx + lx * o, z = cz + lz * o; if (out.walkG.at(x, z) && !out.onRoadPt(x, z)) { px = x + lx * 0.5; pz = z + lz * 0.5; break; } }
+        if (px === null) { for (let o = pr.hw; o < pr.hw + 9; o += 0.25) { const x = cx + lx * o, z = cz + lz * o; if (!out.onRoadPt(x, z)) { px = x + lx * 0.6; pz = z + lz * 0.6; break; } } }
+        if (px === null) return;
+        extra.push({ x: px, z: pz, y: terr.atRoad(px, pz) + WALK_H, yaw: Math.atan2(d[0], d[1]), uv, sw: 3.2, sh: 2.0, h: 4.8, poleR: 3.6 });
+      });
+      // 交差点名標識: 名前のある信号（OSM）に近い交差点の、各灯器の上
+      const RP = W.roads.p, named = (W.roads.feat || []).filter(([, f]) => f.highway === 'traffic_signals' && f.name).map(([i, f]) => ({ x: RP[i * 3], z: RP[i * 3 + 1], name: f.name }));
+      const plateUV = new Map(); let np = 0;
+      sigs.forEach(sg => {
+        const u = units.find(n => n.id === sg.junction); if (!u) return;
+        let best = null, bd = 45; named.forEach(f => { const dd = Math.hypot(f.x - u.x, f.z - u.z); if (dd < bd) { bd = dd; best = f; } }); if (!best) return;
+        let uv = plateUV.get(best.name);
+        if (!uv) { if (np >= 24) return; const x = 1024 + (np % 6) * 512, y = Math.floor(np / 6) * 128; g.save(); g.translate(x, y); drawNamePlate(g, 512, 128, best.name); g.restore(); uv = rectUV(x + 2, y + 2, 508, 124); plateUV.set(best.name, uv); np++; }
+        const hx = sg.arm - 0.55, c = Math.cos(sg.face), sn = Math.sin(sg.face);   // 灯器の上（腕の上 0.4m）
+        const x = sg.x + c * hx, z = sg.z - sn * hx;
+        extra.push({ x, z, y: terr.at(sg.x, sg.z) + armY + 0.45, yaw: sg.face, uv, sw: 1.5, sh: 0.38, h: 0, poleR: 0 });
+      });
+      out.guideCount = ng; out.plateCount = np; out.guideSpots = extra.filter(e => e.poleR).map(e => [+e.x.toFixed(1), +e.z.toFixed(1), +e.yaw.toFixed(2)]);
+    }
+    out.signAtlas = SA;   // 確認用
     const stex = new THREE.CanvasTexture(SA); stex.colorSpace = THREE.SRGBColorSpace; stex.anisotropy = 8;
     const signs = (mk.signs || []).map(sg => {
       // 車道の上なら、進む向きの左へ路肩の外まで押し出す
@@ -924,12 +960,12 @@ export function buildWorld(scene, W, gfx) {
       if (out.onRoadPt(x, z)) return null;
       const key = sg.type === 'speed' ? 'speed' + sg.val : sg.type, i = SL.indexOf(key); if (i < 0) return null;
       const size = sg.type === 'stop' ? 0.8 : sg.type === 'oneway' ? 0.8 : 0.6, h = sg.type === 'stop' ? 2.0 : 2.3;
-      return { x, z, y: terr.atRoad(x, z) + WALK_H, yaw: Math.atan2(sg.nx, sg.nz), i, size, h };
-    }).filter(Boolean);
+      return { x, z, y: terr.atRoad(x, z) + WALK_H, yaw: Math.atan2(sg.nx, sg.nz), uv: rectUV((i % 4) * 256, Math.floor(i / 4) * 256, 256, 256), sw: size, sh: size, h, poleR: 1 };
+    }).filter(Boolean).concat(extra);
     if (signs.length) {
       const pg = new THREE.PlaneGeometry(1, 1), bg3 = new THREE.PlaneGeometry(1, 1); bg3.rotateY(Math.PI); bg3.translate(0, 0, -0.012);
       const auv = new THREE.InstancedBufferAttribute(new Float32Array(signs.length * 4), 4);
-      signs.forEach((sg, k) => auv.setXYZW(k, (sg.i % 4) / 4, 1 - (Math.floor(sg.i / 4) + 1) / 2, 0.25, 0.5));
+      signs.forEach((sg, k) => auv.setXYZW(k, sg.uv[0], sg.uv[1], sg.uv[2], sg.uv[3]));
       pg.setAttribute('aUV', auv);
       const fm = new THREE.MeshStandardMaterial({ map: stex, roughness: 0.45, metalness: 0.1, alphaTest: 0.5, side: THREE.FrontSide });
       fm.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aUV;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvMapUv = uv * aUV.zw + aUV.xy;'); };
@@ -942,8 +978,9 @@ export function buildWorld(scene, W, gfx) {
       const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), V = new THREE.Vector3();
       signs.forEach((sg, k) => {
         Q.setFromAxisAngle(Y, sg.yaw);
-        M4.compose(V.set(sg.x, sg.y + sg.h, sg.z), Q, new THREE.Vector3(sg.size, sg.size, 1)); front.setMatrixAt(k, M4); back.setMatrixAt(k, M4);
-        M4.compose(V.set(sg.x, sg.y, sg.z), Q, new THREE.Vector3(1, sg.h + sg.size * 0.3, 1)); poles.setMatrixAt(k, M4);
+        M4.compose(V.set(sg.x, sg.y + sg.h, sg.z), Q, new THREE.Vector3(sg.sw, sg.sh, 1)); front.setMatrixAt(k, M4); back.setMatrixAt(k, M4);
+        // 柱（交差点名標識は信号の腕に付くので柱なし。方面案内は太い柱）
+        M4.compose(V.set(sg.x, sg.y, sg.z), Q, sg.poleR ? new THREE.Vector3(sg.poleR, sg.h + sg.sh * 0.3, sg.poleR) : new THREE.Vector3(0, 0, 0)); poles.setMatrixAt(k, M4);
       });
       [front, back, poles].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); out.group.add(m); });
       out.signCount = signs.length;
