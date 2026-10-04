@@ -118,7 +118,7 @@ export async function start(container, opt) {
   }
   renderer.info.autoReset = false;   // 後処理の各段の描画をまとめて数える（性能表示と予算のテスト用）
   let csm = null;   // カスケード影（高画質。下で作る）
-  function present() { renderer.info.reset(); if (csm) { cam.updateMatrixWorld(); csm.update(); } if (composer) composer.render(); else renderer.render(scene, cam); }
+  function present() { if (world.update) world.update(cam.position.x, cam.position.z, cam); renderer.info.reset(); if (csm) { cam.updateMatrixWorld(); csm.update(); } if (composer) composer.render(); else renderer.render(scene, cam); }
   function resize() { const w = container.clientWidth || 960, h = container.clientHeight || 600; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); } }
   resize(); setupPost(); resize(); window.addEventListener('resize', resize);
   const hud = document.createElement('div'); hud.className = 'w3-hud'; container.appendChild(hud);
@@ -594,13 +594,13 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     /** 検証用: 真上から見た正射投影（中心 x, z、半分の幅 half m、画素 px）。航空写真と並べて比べる */
     shotTop(x, z, half, px) {
       const oc = new THREE.OrthographicCamera(-half, half, half, -half, 1, 2000), y = W.terrain.at(x, z);
       oc.position.set(x, y + 600, z); oc.up.set(0, 0, -1); oc.lookAt(x, y, z);   // 画像の上が北（−z）
       const fog = scene.fog, sz = renderer.getSize(new THREE.Vector2()), pr = renderer.getPixelRatio(); scene.fog = null;
-      if (world.props && world.props.update) world.props.update(x, z);
+      if (world.props && world.props.update) world.props.update(x, z); if (world.update) world.update(x, z + 1e5);
       renderer.setPixelRatio(1); renderer.setSize(px || 800, px || 800, false); renderer.render(scene, oc);
       const url = renderer.domElement.toDataURL('image/jpeg', 0.92);
       scene.fog = fog; renderer.setPixelRatio(pr); renderer.setSize(sz.x, sz.y, false); return url;

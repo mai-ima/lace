@@ -3,7 +3,11 @@
   python3 tools/world/build_parking.py assets/data/world/center
 入力: /tmp/world/osm/*.xml（OSM の amenity=parking の面。立体・地下・屋上は除く）、建物（bldg.bin）、車道の範囲（road_area.json）、
       航空写真（国土地理院 z18、/tmp/world/ortho18。区画の向きを読み取るだけで、写真は含めない）。
-出力: parking.json … { q: 0.05, lots: [{ tri: { v, i }, lines: [x1, z1, x2, z2, ...] }] }（どれも 0.05m 単位の整数）
+出力: parking.json … { q: 0.05, lots: [{ tri: { v, i }, lines: [x1, z1, x2, z2, ...], stalls: [x, z, 奥の向き, ...], ent: [x, z, 向き, 幅] | null, kind }] }
+      （位置は 0.05m 単位の整数、向きは 0.01 ラジアン単位、幅は 0.1m 単位）
+      stalls: 区画の中心と、奥（車止めの側）への向き。ent: 車道に接する外形の一番長い所（出入口）の中央と、中へ向かう向き。
+      kind: 0 = 設備なし（店・住宅の駐車場など）、1 = ロック板式のコインパーキング、2 = ゲート式（発券機・開閉バー・精算機）
+      kind は OSM の fee・access から。分からないものは、駅からの距離による割合（駅の 1.2km 以内は 7 割、外は 3.5 割が有料）で、場所から決まる値で選ぶ。
 区画: 日本の一般的な寸法（幅 2.5m・奥行き 5.0m、通路 6.0m）。背中合わせの 2 列と通路をくり返す。
 向き: 駐車場の外形を囲む最小の長方形の 2 つの軸のうち、航空写真の模様（白線の縁）の向きに近い方を区画の線の向きにする。
       写真の模様がはっきりしないときは、長い辺に沿って区画を並べる（区画の線は短い辺の向き）。"""
@@ -24,7 +28,7 @@ X0, Z0, X1, Z1 = T['x0'], T['z0'], T['x0'] + (T['nx'] - 1) * T['cell'], T['z0'] 
 xz = lambda lat, lon: ((lon - LON0) * KX, (LAT0 - lat) * KZ)
 
 # --- OSM の駐車場の面 ---
-nodes, polys, seen = {}, [], set()
+nodes, polys, seen, ptags = {}, [], set(), []
 for f in sorted(glob.glob('/tmp/world/osm/*.xml')):
     r = ET.parse(f).getroot()
     for n in r.iter('node'): nodes[n.get('id')] = (float(n.get('lat')), float(n.get('lon')))
@@ -37,7 +41,7 @@ for f in sorted(glob.glob('/tmp/world/osm/*.xml')):
         seen.add(w.get('id'))
         pg = Polygon([xz(*nodes[i]) for i in ids])
         if not pg.is_valid: pg = pg.buffer(0)
-        if pg.area > 40: polys.append(pg)
+        if pg.area > 40: polys.append(pg); ptags.append(t)
 nOsm = len(polys)
 # --- PLATEAU の土地利用（都市計画基礎調査）の「その他③（平面駐車場）」: OSM に無い駐車場を補う ---
 import mapbox_vector_tile
@@ -63,6 +67,7 @@ for fn in sorted(glob.glob('/tmp/world/luse/16_*_*.mvt')):
                 if pg.area > 40: lpolys.append(pg)
             except Exception:
                 pass
+osmPolys, osmTree = list(polys), shapely.STRtree(polys)
 # OSM の面と重なる PLATEAU の面は、OSM の面と合わせて 1 つに（同じ駐車場の範囲の違い）
 allp = unary_union([p.buffer(0.05) for p in polys + lpolys]).buffer(-0.05)
 polys = [g for g in (allp.geoms if hasattr(allp, 'geoms') else [allp]) if g.geom_type == 'Polygon' and g.area > 40]
@@ -159,6 +164,39 @@ def phase(loc, inner, vAng, c, vx0, uy0, vx1, uy1, period):
 q05 = lambda v: int(round(v / 0.05))
 lots, nLines = [], 0
 STALL_W, STALL_D, AISLE = 2.5, 5.0, 6.0
+def lot_kind(pg, nStall, hasEnt):
+    tags = [ptags[i] for i in osmTree.query(pg, predicate='intersects')]
+    paid = None
+    for t in tags:
+        if t.get('fee') == 'yes': paid = True
+        elif t.get('fee') == 'no' or t.get('access') in ('private', 'customers'): paid = False if paid is None else paid
+    if paid is None:
+        c = pg.centroid; h = (math.sin(c.x * 12.9898 + c.y * 78.233) * 43758.5453) % 1.0
+        paid = h < (0.7 if math.hypot(c.x, c.y) < 1200 else 0.35)
+    if not paid or nStall < 2: return 0
+    return 2 if nStall >= 30 and hasEnt else 1
+def entrance(p):
+    """外形のうち車道から 1.2m 以内の所が続く一番長い所（3m 以上）の中央と、中へ向かう向き、長さ"""
+    ring = p.exterior; L = ring.length
+    if L < 6: return None
+    ds = np.arange(0, L, 0.5); pts = shapely.line_interpolate_point(ring, ds)
+    near = np.zeros(len(ds), bool); hit = rtree.query(pts, predicate='dwithin', distance=1.2)
+    near[np.unique(hit[0])] = True
+    if near.all() or not near.any(): return None
+    k0 = int(np.argmin(near)); order = np.roll(np.arange(len(ds)), -k0)   # 車道から離れた所から回る（輪の継ぎ目で途切れない）
+    best, run = None, []
+    for k in list(order) + [k0]:
+        if near[k]: run.append(k); continue
+        if run and (best is None or len(run) > len(best)): best = run
+        run = []
+    if not best or len(best) * 0.5 < 3: return None
+    m = best[len(best) // 2]; a, b = ds[best[0]], ds[best[-1]]
+    pa, pb = ring.interpolate(a), ring.interpolate(b); mid = ring.interpolate(ds[m])
+    tx, tz = pb.x - pa.x, pb.y - pa.y; tl = math.hypot(tx, tz) or 1; nx, nz = -tz / tl, tx / tl
+    if not p.contains(shapely.Point(mid.x + nx * 2, mid.y + nz * 2)): nx, nz = -nx, -nz
+    if not p.contains(shapely.Point(mid.x + nx * 2, mid.y + nz * 2)): return None
+    return mid.x, mid.y, math.atan2(nz, nx), min(len(best) * 0.5, 12.0)
+nStalls = nGate = nFlap = 0
 for pg in polys:
     pg = pg.intersection(box(X0, Z0, X1, Z1))
     if pg.is_empty: continue
@@ -187,7 +225,7 @@ for pg in polys:
         inner = loc.buffer(-0.6)
         if inner.is_empty: continue
         vx0, uy0, vx1, uy1 = loc.bounds
-        segs = []
+        segs, stalls = [], []
         period = 2 * STALL_D + AISLE
         L = vx1 - vx0
         start = vx0 + ((L - AISLE) % period) / 2 + AISLE / 2 if L > period else vx0 + max(0.3, (L - 2 * STALL_D) / 2)
@@ -203,6 +241,12 @@ for pg in polys:
                 u = u0
                 while u <= uy1:
                     segs.append(LineString([(a0, u), (a0 + STALL_D, u)]))
+                    # 区画（線と次の線の間）が外形の内側に収まれば、中心と奥の向き（背中合わせの間の線の側。1 列なら通路の反対側）
+                    if u + STALL_W <= uy1 and inner.contains(box(a0, u, a0 + STALL_D, u + STALL_W)):
+                        sx, sz = a0 + STALL_D / 2, u + STALL_W / 2; ca, sa = math.cos(vAng), math.sin(vAng)
+                        wx, wz = c.x + sx * ca - sz * sa, c.y + sx * sa + sz * ca
+                        ang = vAng + (math.pi if k == 1 else 0.0)
+                        stalls += [q05(wx), q05(wz), int(round(((ang + math.pi) % (2 * math.pi) - math.pi) * 100))]
                     u += STALL_W
             if rowsN == 2: segs.append(LineString([(v + STALL_D, uy0), (v + STALL_D, uy1)]))   # 背中合わせの区画の間の線
             v += period
@@ -230,7 +274,9 @@ for pg in polys:
                     for t in shapely.constrained_delaunay_triangles(cc).geoms:
                         xy = list(t.exterior.coords)[:3]
                         index.extend([vi(*xy[0]), vi(*xy[1]), vi(*xy[2])])
-        lots.append({'tri': {'v': verts, 'i': index}, 'lines': out_lines})
+        en = entrance(p); kind = lot_kind(p, len(stalls) // 3, en is not None)
+        nStalls += len(stalls) // 3; nGate += kind == 2; nFlap += kind == 1
+        lots.append({'tri': {'v': verts, 'i': index}, 'lines': out_lines, 'stalls': stalls, 'ent': [q05(en[0]), q05(en[1]), int(round(en[2] * 100)), int(round(en[3] * 10))] if en else None, 'kind': kind})
         nLines += len(out_lines) // 4
 json.dump({'q': 0.05, 'lots': lots, 'credit': '© OpenStreetMap contributors（amenity=parking）。区画の向きは国土地理院の航空写真から読み取り'}, open(os.path.join(out, 'parking.json'), 'w'), separators=(',', ':'))
-print('駐車場', len(lots), ' 区画の線', nLines, ' ', os.path.getsize(os.path.join(out, 'parking.json')) // 1024, 'KB')
+print('駐車場', len(lots), ' 区画の線', nLines, ' 区画', nStalls, ' ゲート式', nGate, ' ロック板式', nFlap, ' 出入口', sum(1 for l in lots if l['ent']), ' ', os.path.getsize(os.path.join(out, 'parking.json')) // 1024, 'KB')

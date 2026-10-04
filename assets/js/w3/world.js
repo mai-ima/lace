@@ -9,6 +9,7 @@ import { build, markings, signals, ribbon } from './roadnet.js';
 import { guideContents, drawGuide, drawNamePlate } from './guide.js';
 import { makeGrid } from './grid.js';
 import { NIGHT, syncNight } from './lights.js';
+import { buildStreet } from './street.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -120,8 +121,28 @@ export function buildWorld(scene, W, gfx) {
       if (i < w && j < h) ix.push(k, k + w + 1, k + 1, k + 1, k + w + 1, k + w + 2);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(ix); g.computeVertexNormals(); g.computeBoundingSphere();
-    terrGeos.push(g);
+    g.userData = { ci, cj }; terrGeos.push(g);
   }
+  // 遠くのまとまりは 2 × 2 を 1 つにまとめて描く（形は同じで、描画の回数だけが減る）。近くはまとめずに、画面の外を描かない
+  const LOD_R = 260, lodSets = [], terrItems = [];
+  function lodMerge(items, build) {
+    const P = new Map();
+    items.forEach(it => { const k = (it.i >> 1) + ',' + (it.j >> 1); let p = P.get(k); if (!p) P.set(k, p = { kids: [] }); p.kids.push(it.m); });
+    P.forEach(p => {
+      if (p.kids.length < 2) return;
+      p.m = build(p.kids); p.m.visible = false; const pg = p.m.geometry; if (!pg.boundingBox) pg.computeBoundingBox(); if (!pg.boundingSphere) pg.computeBoundingSphere(); p.box = p.m.geometry.boundingBox; out.group.add(p.m); lodSets.push(p);
+    });
+  }
+  // まとめるのは、4 つとも画面に入っていて遠い（影の範囲の外）ときだけ（三角形の数は変わらない）
+  const FR = new THREE.Frustum(), PM = new THREE.Matrix4();
+  out.update = (cx, cz, cam) => {
+    if (cam) { cam.updateMatrixWorld(); PM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorld.clone().invert()); FR.setFromProjectionMatrix(PM); }
+    lodSets.forEach(p => {
+      const dx = Math.max(p.box.min.x - cx, 0, cx - p.box.max.x), dz = Math.max(p.box.min.z - cz, 0, cz - p.box.max.z);
+      const far = dx * dx + dz * dz > LOD_R * LOD_R && (!cam || p.kids.every(k => FR.intersectsSphere(k.geometry.boundingSphere)));
+      if (p.m.visible === far) return; p.m.visible = far; p.kids.forEach(k => { k.visible = !far; });
+    });
+  };
   // 同梱の航空写真（tools/world/ortho.py で作成）を使う。無ければ地理院タイルから組み立てる
   out.orthoReady = new Promise(r => {
     out.ortho = new THREE.TextureLoader().load(W.base + 'ortho.jpg', () => r(), undefined, () => {
@@ -153,7 +174,8 @@ export function buildWorld(scene, W, gfx) {
           }`);
     };
   }
-  terrGeos.forEach(g => { const m = new THREE.Mesh(g, groundMat); m.receiveShadow = true; out.group.add(m); });
+  terrGeos.forEach(g => { const m = new THREE.Mesh(g, groundMat); m.receiveShadow = true; out.group.add(m); terrItems.push({ m, i: g.userData.ci / CH, j: g.userData.cj / CH }); });
+  lodMerge(terrItems, kids => { const m = new THREE.Mesh(mergeGeometries(kids.map(k => k.geometry)), groundMat); m.receiveShadow = true; return m; });
 
   /* --- 道路網 --- */
   const net = build(W.roads, (x, z) => terr.at(x, z), W.roadWidth);   // 道幅は PLATEAU の道路の範囲で実測した値（tools/world/build_tran.py）
@@ -588,14 +610,23 @@ export function buildWorld(scene, W, gfx) {
     const k = B.bid[B.idx[t]], key = Math.floor(cx[k] / cn[k] / 200) + ',' + Math.floor(cz[k] / cn[k] / 200);
     let c = chunks.get(key); if (!c) chunks.set(key, c = []); c.push(B.idx[t], B.idx[t + 1], B.idx[t + 2]);
   }
-  out.buildingMeshes = [];
-  chunks.forEach(ix => {
+  out.buildingMeshes = []; const bItems = [];
+  chunks.forEach((ix, key) => {
     const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
     g.setIndex(new THREE.BufferAttribute(new Uint32Array(ix), 1));
     const sp = new THREE.Sphere(), V = new THREE.Vector3(), box = new THREE.Box3();
     for (let i = 0; i < ix.length; i++) box.expandByPoint(V.fromArray(B.pos, ix[i] * 3));
     box.getBoundingSphere(sp); g.boundingSphere = sp; g.boundingBox = box;
     const m = new THREE.Mesh(g, bmat); m.castShadow = true; m.receiveShadow = true; out.group.add(m); out.buildingMeshes.push(m);
+    const [ki, kj] = key.split(',').map(Number); bItems.push({ m, i: ki, j: kj });
+  });
+  lodMerge(bItems, kids => {   // 頂点は共有のまま、三角形の番号だけをつなぐ
+    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
+    const n = kids.reduce((a, k) => a + k.geometry.index.count, 0), ix = new Uint32Array(n); let o = 0;
+    kids.forEach(k => { ix.set(k.geometry.index.array, o); o += k.geometry.index.count; });
+    g.setIndex(new THREE.BufferAttribute(ix, 1));
+    const box = new THREE.Box3(); kids.forEach(k => box.union(k.geometry.boundingBox)); g.boundingBox = box; g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    const m = new THREE.Mesh(g, bmat); m.castShadow = true; m.receiveShadow = true; return m;
   });
 
   /* --- 鉄道の高架橋（東海道新幹線・東海道本線・遠州鉄道。OSM では全区間が bridge）。
@@ -902,8 +933,9 @@ export function buildWorld(scene, W, gfx) {
     }
     out.markCount = { quads: nQuads, texts: TI.length / 6 };
     /* --- 標識（道路標識令の様式。図柄は Canvas で描く）: 表・裏・柱をそれぞれインスタンス描画（描画 3 回） --- */
-    // 標識の画像（4096 × 3072）: 左上 1024 × 512 に規制・警戒の標識（256 角 × 8）、右上に交差点名標識（512 × 128 × 24）、下に方面案内（512 × 320 × 64）
-    const SL = ['stop', 'speed30', 'speed40', 'speed50', 'cross', 'oneway', 'noentry', 'nopark'], SA = document.createElement('canvas'); SA.width = 4096; SA.height = 3072;
+    // 標識の画像（4096 × 3584）: 左上 1024 × 512 に規制・警戒の標識（256 角 × 8）、右上に交差点名標識（512 × 128 × 24）、中に方面案内（512 × 320 × 64）、
+    // 下の 512 と方面案内の空きに 256 角の板（バス停・時刻表・駐車場。street.js）
+    const SL = ['stop', 'speed30', 'speed40', 'speed50', 'cross', 'oneway', 'noentry', 'nopark'], SA = document.createElement('canvas'); SA.width = 4096; SA.height = 3584;
     const AW = SA.width, AH = SA.height, rectUV = (x, y, w, h) => [x / AW, 1 - (y + h) / AH, w / AW, h / AH];
     { const g = SA.getContext('2d');
       const slot = (i, fn) => { g.save(); g.translate((i % 4) * 256, Math.floor(i / 4) * 256); fn(g); g.restore(); };
@@ -950,6 +982,11 @@ export function buildWorld(scene, W, gfx) {
         extra.push({ x, z, y: terr.at(sg.x, sg.z) + armY + 0.45, yaw: sg.face, uv, sw: 1.5, sh: 0.38, h: 0, poleR: 0 });
       });
       out.guideCount = ng; out.plateCount = np; out.guideSpots = extra.filter(e => e.poleR).map(e => [+e.x.toFixed(1), +e.z.toFixed(1), +e.yaw.toFixed(2)]);
+      // バス停・駐車場の設備（street.js）。256 角の空き: 下の 512（32 枚）→ 方面案内の空いた枠（後ろから 1 枠に 2 枚）
+      let nc = 0;
+      const cellAt = () => { if (nc < 32) { const k = nc++; return [(k % 16) * 256, 3072 + Math.floor(k / 16) * 256]; } const k = nc++ - 32, s = 63 - (k >> 1); if (s < ng) return null; return [(s % 8) * 512 + (k & 1) * 256, 512 + Math.floor(s / 8) * 320 + 32]; };
+      out.street = buildStreet({ W, net, terr, onRoadPt: out.onRoadPt, walkG: out.walkG, WALK_H, group: out.group, atlas: { g, rectUV, cell: cellAt }, extra });
+      const prevUpdate = out.update; out.update = (cx, cz, cam) => { prevUpdate(cx, cz, cam); out.street.update(cx, cz); };
     }
     out.signAtlas = SA;   // 確認用
     const stex = new THREE.CanvasTexture(SA); stex.colorSpace = THREE.SRGBColorSpace; stex.anisotropy = 8;
@@ -976,13 +1013,29 @@ export function buildWorld(scene, W, gfx) {
       const poleG = new THREE.CylinderGeometry(0.03, 0.03, 1, 8, 1, true); poleG.translate(0, 0.5, -0.04);
       const poles = new THREE.InstancedMesh(poleG, new THREE.MeshStandardMaterial({ color: 0xa8acb0, roughness: 0.45, metalness: 0.6 }), signs.length);
       const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), V = new THREE.Vector3();
-      signs.forEach((sg, k) => {
+      const plateM = [], poleM = [], UV = signs.map(sg => sg.uv);
+      signs.forEach(sg => {
         Q.setFromAxisAngle(Y, sg.yaw);
-        M4.compose(V.set(sg.x, sg.y + sg.h, sg.z), Q, new THREE.Vector3(sg.sw, sg.sh, 1)); front.setMatrixAt(k, M4); back.setMatrixAt(k, M4);
+        plateM.push(new THREE.Matrix4().compose(V.set(sg.x, sg.y + sg.h, sg.z), Q, new THREE.Vector3(sg.sw, sg.sh, 1)));
         // 柱（交差点名標識は信号の腕に付くので柱なし。方面案内は太い柱）
-        M4.compose(V.set(sg.x, sg.y, sg.z), Q, sg.poleR ? new THREE.Vector3(sg.poleR, sg.h + sg.sh * 0.3, sg.poleR) : new THREE.Vector3(0, 0, 0)); poles.setMatrixAt(k, M4);
+        poleM.push(sg.poleR ? new THREE.Matrix4().compose(V.set(sg.x, sg.y, sg.z), Q, new THREE.Vector3(sg.poleR, sg.h + sg.sh * 0.3, sg.poleR)) : null);
       });
-      [front, back, poles].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); out.group.add(m); });
+      // カメラから SIGN_R 以内の標識だけを並べる（それより遠くは 1 画素に満たない）。20m 動くごとに並べ直す
+      const SIGN_R = 450; let slx = Infinity, slz = Infinity;
+      const placeSigns = (cx, cz) => {
+        if (Math.hypot(cx - slx, cz - slz) < 20) return; slx = cx; slz = cz;
+        let n = 0, np = 0;
+        signs.forEach((sg, k) => {
+          if ((sg.x - cx) ** 2 + (sg.z - cz) ** 2 > SIGN_R * SIGN_R) return;
+          front.setMatrixAt(n, plateM[k]); back.setMatrixAt(n, plateM[k]); auv.setXYZW(n, UV[k][0], UV[k][1], UV[k][2], UV[k][3]); n++;
+          if (poleM[k]) poles.setMatrixAt(np++, poleM[k]);
+        });
+        front.count = back.count = n; poles.count = np;
+        [front, back, poles].forEach(m => { m.instanceMatrix.needsUpdate = true; m.visible = m.count > 0; }); auv.needsUpdate = true;
+      };
+      placeSigns(0, 0);
+      [front, back, poles].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; out.group.add(m); });
+      const prevU = out.update; out.update = (cx, cz, cam) => { prevU(cx, cz, cam); placeSigns(cx, cz); };
       out.signCount = signs.length;
     }
   }
