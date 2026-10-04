@@ -257,6 +257,8 @@ export function buildWorld(scene, W, gfx) {
     const wl = WALL[kind], rf = ROOF[kind];
     const w = wl[Math.floor(hash(k, 1) * wl.length)], r = rf[Math.floor(hash(k, 2) * rf.length)], j = 0.94 + hash(k, 3) * 0.1;
     col.set([w[0] * j, w[1] * j, w[2] * j], v * 3); roof.set([r[0] * j, r[1] * j, r[2] * j], v * 3);
+    const rc = W.bldgRoof && W.bldgRoof.roof[k];   // 航空写真から求めた実際の屋根の色（sRGB → 線形）
+    if (rc) roof.set(rc.map(c => Math.pow(c / 255, 2.2) * 1.15), v * 3);
     bi.set([yLo[k], yHi[k], kind + hash(k, 4) * 0.5], v * 3);
     cen.set([Math.round(bcx[k] / bcn[k]), Math.round(bcz[k] / bcn[k])], v * 2);
   }
@@ -265,11 +267,21 @@ export function buildWorld(scene, W, gfx) {
   bg.setAttribute('aBld', new THREE.BufferAttribute(bi, 3));
   bg.setAttribute('aCen', new THREE.BufferAttribute(cen, 2));
   const bmat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02, flatShading: true });
+  // 外壁の写真素材（Poly Haven CC0、8 種を 1 枚に縦に並べた walls.jpg → 2D 配列テクスチャ）。読み込むまでは白
+  const wallTex = new THREE.DataArrayTexture(new Uint8Array([255, 255, 255, 255]).buffer ? new Uint8Array(4 * 8).fill(255) : null, 1, 1, 8);
+  wallTex.colorSpace = THREE.SRGBColorSpace; wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping; wallTex.needsUpdate = true;
+  { const im = new Image(); im.onload = () => {
+      const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height; const g = cv.getContext('2d'); g.drawImage(im, 0, 0);
+      const d = g.getImageData(0, 0, im.width, im.height).data, L = im.height / im.width;
+      wallTex.image = { data: new Uint8Array(d.buffer), width: im.width, height: im.width, depth: L };
+      wallTex.generateMipmaps = true; wallTex.minFilter = THREE.LinearMipmapLinearFilter; wallTex.magFilter = THREE.LinearFilter; wallTex.anisotropy = 4; wallTex.needsUpdate = true;
+    }; im.src = W.base + '../walls.jpg'; }
   // 窓（シェーダー）: 階の高さは種類ごと（戸建て 2.9m・共同住宅 2.9m・事務所 3.6m）、1 階は店の大きなガラス、屋上の手すり部分は窓なし
   bmat.onBeforeCompile = sh => {
+    sh.uniforms.tWall = { value: wallTex };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen; vRel = vec3(transformed.x - aCen.x, transformed.y - aBld.x, transformed.z - aCen.y);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nuniform highp sampler2DArray tWall;\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
         // 面の向きは建物の中心からの相対座標（値が小さく精度が高い）の微分で求める。ワールド座標だと数百 m の値の誤差で窓の縁がギザギザになる
         vec3 wdx = dFdx(vRel), wdy = dFdy(vRel); vec3 fn = normalize(cross(wdx, wdy));
@@ -280,6 +292,12 @@ export function buildWorld(scene, W, gfx) {
           // 壁に沿った座標（建物の中心を原点にして、法線の微小な誤差で値がぶれないようにする）
           vec2 wd = normalize(vec2(-fn.z, fn.x));
           float u = dot(vRel.xz, wd);
+          // 外壁の素材: 用途ごとに候補から建物ごとに選ぶ（0/1 タイル 2/3 塗り壁 4 プレキャスト 5 パネル 6 リブ 7 波形鋼板）
+          float hb = fract(fract(vBld.z) * 7.13 + 0.17);
+          float layer = kind < 0.5 ? (hb < 0.6 ? 2.0 : 3.0) : kind < 1.5 ? (hb < 0.3 ? 0.0 : hb < 0.55 ? 1.0 : hb < 0.8 ? 3.0 : 5.0)
+                      : kind < 2.5 ? (hb < 0.3 ? 0.0 : hb < 0.55 ? 1.0 : hb < 0.8 ? 4.0 : 5.0) : kind < 3.5 ? (hb < 0.6 ? 7.0 : 6.0) : (hb < 0.5 ? 4.0 : 2.0);
+          vec3 wt = texture(tWall, vec3(u / 3.0, rel / 3.0, layer)).rgb;
+          diffuseColor.rgb *= clamp(wt * 3.0, 0.0, 1.6);
           float fl = floor(rel / fh), fy = fract(rel / fh), fu = fract(u / bay), cell = h21(vec2(floor(u / bay), fl) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0);   // 建物ごとの値は補間の誤差を丸めてから使う
           float wy0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.32 : 0.22, wy1 = kind < 1.5 ? 0.78 : 0.86;
           float wu0 = kind < 0.5 ? 0.3 : kind < 1.5 ? 0.12 : 0.04, wu1 = 1.0 - wu0;

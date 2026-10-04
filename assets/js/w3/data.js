@@ -3,7 +3,7 @@
  */
 export async function loadWorld(base) {
   const opt = u => fetch(base + u).then(r => r.ok ? r.json() : null).catch(() => null);   // 無くても動く（道路の範囲・実測の道幅）
-  const [roadArea, roadWidth] = await Promise.all([opt('road_area.json'), opt('road_width.json')]);
+  const [roadArea, roadWidth, bldgRoof] = await Promise.all([opt('road_area.json'), opt('road_width.json'), opt('bldg_roof.json')]);
   const [roads, terr, bjs, bbin] = await Promise.all([
     fetch(base + 'roads.json').then(r => r.json()),
     fetch(base + 'terrain.bin').then(r => r.arrayBuffer()),
@@ -29,5 +29,5 @@ export async function loadWorld(base) {
   const bid = new Uint16Array(bbin.slice(off, off + hdr.nv * 2));
   const pos = new Float32Array(hdr.nv * 3);
   for (let i = 0; i < pos.length; i++) pos[i] = q[i] * hdr.q;
-  return { base, roads, roadArea, roadWidth, terrain, bldg: { pos, idx, bid, info: bjs.b, credit: bjs.credit } };
+  return { base, roads, roadArea, roadWidth, bldgRoof, terrain, bldg: { pos, idx, bid, info: bjs.b, credit: bjs.credit } };
 }
