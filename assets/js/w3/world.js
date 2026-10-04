@@ -7,7 +7,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { build, markings, signals, ribbon } from './roadnet.js';
 import { makeGrid } from './grid.js';
-import { NIGHT } from './lights.js';
+import { NIGHT, syncNight } from './lights.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -988,6 +988,31 @@ export function buildSky(scene, renderer, opt) {
     fragmentShader: 'varying vec3 vD; float h(vec3 p) { return fract(sin(dot(floor(p), vec3(12.99, 78.23, 37.71))) * 43758.55); } void main() { float y = max(vD.y, 0.0); vec3 c = mix(vec3(0.075, 0.07, 0.075), vec3(0.008, 0.013, 0.03), pow(y, 0.45)); float st = step(0.9965, h(vD * 420.0)) * smoothstep(0.08, 0.35, y) * 0.5; gl_FragColor = vec4(c + st, 1.0); }'
   }));
   nightSky.visible = false; nightSky.renderOrder = -1; nightSky.frustumCulled = false; scene.add(nightSky);
+  // 雲: 高度 2000m の雲の層を、視線と層の交わる所で数段の雑音（fbm）から作る。風で流れ、太陽の側は明るく縁が光り、厚い所は底が暗い。
+  // 地平線の近くは薄く（遠くの雲は空気でかすむ）。描画 1 回の球（空の手前、霧なし）
+  const cloudU = { uT: { value: 0 }, uSun: { value: new THREE.Vector3() }, uSunCol: { value: new THREE.Color(1, 1, 1) }, uAmb: { value: new THREE.Color(0.8, 0.85, 0.92) }, uCover: { value: 0.46 }, uDim: { value: 1 } };
+  const clouds = new THREE.Mesh(new THREE.SphereGeometry(14000, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, transparent: true, fog: false, uniforms: cloudU,
+    vertexShader: 'varying vec3 vD; void main() { vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
+    fragmentShader: `uniform float uT; uniform vec3 uSun; uniform vec3 uSunCol; uniform vec3 uAmb; uniform float uCover; uniform float uDim; varying vec3 vD;
+      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p) { float s = 0.0, a = 0.5; mat2 r = mat2(0.8, -0.6, 0.6, 0.8); for (int i = 0; i < 5; i++) { s += a * n(p); p = r * p * 2.03 + 11.7; a *= 0.5; } return s; }
+      void main() {
+        if (vD.y < 0.01) discard;
+        vec2 uv = vD.xz / vD.y * 2000.0 / 3200.0 + vec2(uT * 0.004, uT * 0.0015);
+        float d = fbm(uv), c = smoothstep(uCover, uCover + 0.25, d);
+        if (c < 0.01) discard;
+        float d2 = fbm(uv + uSun.xz * 0.05);   // 太陽の側へ少しずらした所の濃さ（光の通り道の厚み）
+        float lit = clamp(1.0 - (d2 - d) * 4.0, 0.35, 1.25), fw = pow(max(dot(vD, uSun), 0.0), 6.0);
+        vec3 col = mix(uAmb * 0.78, uSunCol, 0.55 * lit) + uSunCol * fw * (1.0 - c) * 1.6;   // 縁の光（薄い所ほど太陽の光が透ける）
+        col *= mix(1.0, 0.72, smoothstep(0.55, 0.95, d));   // 厚い所の底は暗く
+        float a = c * smoothstep(0.01, 0.12, vD.y) * 0.92;   // 地平線の近くは薄く
+        gl_FragColor = vec4(col * uDim, a);
+      }`
+  }));
+  clouds.frustumCulled = false; scene.add(clouds);   // 半透明なので、空（不透明）のあとに描かれる
+  clouds.onBeforeRender = (r, s, c) => { clouds.position.copy(c.position); cloudU.uT.value = performance.now() / 1000; };
   let envRT = null;
   function setTime(mode) {
     const T = TIMES[mode] || TIMES.day;
@@ -1001,9 +1026,39 @@ export function buildSky(scene, renderer, opt) {
     Object.keys(u).forEach(k => { if (sky2.material.uniforms[k]) sky2.material.uniforms[k].value = u[k].value; });
     if (T.env > 0) { if (envRT) envRT.dispose(); envRT = pm.fromScene(envScene, 0.02); scene.environment = envRT.texture; scene.environmentIntensity = T.env * (mode === 'dusk' ? 0.4 : 1); }
     else scene.environmentIntensity = 0.0;
-    NIGHT.value = T.night;
+    NIGHT.value = T.night; syncNight();
+    setFog(T, mode);
+    cloudU.uSun.value.copy(skyDir);
+    const CL = { day: [[1.0, 0.96, 0.9], [0.78, 0.84, 0.93], 1.0], dusk: [[1.0, 0.58, 0.32], [0.46, 0.42, 0.52], 0.9], night: [[0.5, 0.55, 0.7], [0.2, 0.22, 0.3], 0.07] }[mode] || [[1, 1, 1], [0.8, 0.85, 0.9], 1];
+    cloudU.uSunCol.value.setRGB(...CL[0]); cloudU.uAmb.value.setRGB(...CL[1]); cloudU.uDim.value = CL[2];
     out.mode = mode;
   }
+  /* 空気遠近法の霧: three.js の霧の共通部品（ShaderChunk の fog_*）を差し替えて、すべての材質に効かせる。
+     - 高さで薄くなる霧（指数の高さ霧、密度 a・高さの減衰 b。Quilez の式で視線に沿って積分）。低い所・遠くほど濃い。
+     - 太陽の方向を見たときは、霧が太陽の光で明るく色づく（前方散乱）。
+     - 描画距離の端（fogFar の 85〜100%）では必ず霧の色になる（描かない所が見えないように）。
+     太陽の向きと色は時間帯の切り替えのときだけ変わるので、数値として埋め込み、材質を作り直す */
+  function setFog(T, mode) {
+    const f = v => v.toFixed(5), sd = sunDir, sc = new THREE.Color(T.sun[0]).multiplyScalar(mode === 'night' ? 0.15 : mode === 'dusk' ? 1.4 : 1.0);
+    const a = mode === 'night' ? 0.0011 : mode === 'dusk' ? 0.00085 : 0.0006, b = 0.0045;
+    THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying float vFogDepth; varying vec3 vFogDir;\n#endif';
+    THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogDepth = - mvPosition.z; vFogDir = ( vec4( mvPosition.xyz, 0.0 ) * viewMatrix ).xyz;\n#endif';
+    THREE.ShaderChunk.fog_pars_fragment = '#ifdef USE_FOG\n uniform vec3 fogColor; varying float vFogDepth; varying vec3 vFogDir;\n #ifdef FOG_EXP2\n uniform float fogDensity;\n #else\n uniform float fogNear; uniform float fogFar;\n #endif\n#endif';
+    THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+      float fd = length( vFogDir ); vec3 rd = vFogDir / max( fd, 1e-3 );
+      float ry = abs( rd.y ) > 1e-4 ? rd.y : 1e-4;
+      float fogA = ( ${f(a)} / ${f(b)} ) * exp( - max( cameraPosition.y, 0.0 ) * ${f(b)} ) * ( 1.0 - exp( - fd * ry * ${f(b)} ) ) / ry;
+      #ifndef FOG_EXP2
+        fogA = max( clamp( fogA, 0.0, 1.0 ), smoothstep( fogFar * 0.85, fogFar, vFogDepth ) );
+      #endif
+      float sunA = max( dot( rd, vec3( ${f(sd.x)}, ${f(sd.y)}, ${f(sd.z)} ) ), 0.0 );
+      vec3 fc = mix( fogColor, vec3( ${f(sc.r)}, ${f(sc.g)}, ${f(sc.b)} ), pow( sunA, 8.0 ) * 0.55 );
+      gl_FragColor.rgb = mix( gl_FragColor.rgb, fc, clamp( fogA, 0.0, 1.0 ) );
+    #endif`;
+    scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; ms.forEach(m => { if (m.fog !== false) m.needsUpdate = true; }); });
+  }
+  setFog(TIMES.day, 'day');
+  cloudU.uSun.value.copy(sunDir);
   const out = { sky, nightSky, sun, sunDir, hemi, setTime, mode: 'day', dispose() { pm.dispose(); if (envRT) envRT.dispose(); sky2.material.dispose(); sky2.geometry.dispose(); } };
   if (opt.time && opt.time !== 'day') setTime(opt.time);
   return out;

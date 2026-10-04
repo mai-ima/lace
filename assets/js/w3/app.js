@@ -17,6 +17,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { CSM } from 'three/addons/csm/CSM.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /** 品質の段階（GPU 名で自動判定。iPhone 17 は高、Intel 内蔵は中） */
@@ -25,7 +27,7 @@ export function detectGfx(renderer, force) {
   try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) { /* ignore */ }
   const low = /SwiftShader|llvmpipe|Software/i.test(name), intel = /Intel/i.test(name), apple = /Apple/i.test(name);
   const tier = force || (low ? 'low' : intel ? 'mid' : apple ? 'high' : 'high');
-  const T = { low: { pr: 0.75, shadows: 0, far: 1400 }, mid: { pr: 0.85, shadows: 1, far: 1300, post: 'smaa' }, high: { pr: 1, shadows: 2, far: 2600, post: 'msaa' } }[tier];
+  const T = { low: { pr: 0.75, shadows: 0, far: 1400 }, mid: { pr: 0.85, shadows: 1, far: 1300, post: 'smaa' }, high: { pr: 1, shadows: 2, far: 2600, post: 'msaa', ao: true, csm: true } }[tier];
   return Object.assign({ tier, gpu: name, orthoZ: 17 }, T);
 }
 
@@ -98,12 +100,25 @@ export async function start(container, opt) {
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: gfx.post === 'msaa' ? 4 : 0 });
     composer = new EffectComposer(renderer, rt);
     composer.addPass(new RenderPass(scene, cam));
+    // 環境光の遮蔽（GTAO、高画質）: 建物の根元・壁の隅・縁石・車の下など、光が回り込みにくい所を暗くする（半径 1m、16 方向、ノイズ除去あり）
+    if ((gfx.ao || opt.ao) && !opt.noAo) {
+      const ao = new GTAOPass(scene, cam, size.x, size.y);
+      ao.blendIntensity = 0.85;
+      ao.normalMaterial.flatShading = true; ao.normalMaterial.needsUpdate = true;   // 建物は法線を持たず面の向きを画面上で求める（flatShading）ので、下書きの法線も同じ方法で
+      ao.updateGtaoMaterial({ radius: +(opt.aoR || 1.0), distanceExponent: 1, thickness: 1, scale: 1, samples: 16, screenSpaceRadius: false });
+      ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+      // 加算の光（灯り・光だまり）と電線（深度を書かない半透明）は、遮蔽の計算に入れない
+      const hide = ao._overrideVisibility.bind(ao);
+      ao._overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isMesh && o.visible && o.material && o.material.transparent && !o.material.depthWrite) { o.visible = false; ao._visibilityCache.push(o); } }); };
+      composer.addPass(ao);
+    }
     composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), gfx.post === 'msaa' ? 0.3 : 0.22, 0.35, 8.0));   // 強さ・広がり・しきい値（線形の明るさ 8 以上 = 灯火だけが光る。空は 8 未満）
     composer.addPass(new OutputPass());
     if (gfx.post === 'smaa') composer.addPass(new SMAAPass());
   }
   renderer.info.autoReset = false;   // 後処理の各段の描画をまとめて数える（性能表示と予算のテスト用）
-  function present() { renderer.info.reset(); if (composer) composer.render(); else renderer.render(scene, cam); }
+  let csm = null;   // カスケード影（高画質。下で作る）
+  function present() { renderer.info.reset(); if (csm) { cam.updateMatrixWorld(); csm.update(); } if (composer) composer.render(); else renderer.render(scene, cam); }
   function resize() { const w = container.clientWidth || 960, h = container.clientHeight || 600; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); } }
   resize(); setupPost(); resize(); window.addEventListener('resize', resize);
   const hud = document.createElement('div'); hud.className = 'w3-hud'; container.appendChild(hud);
@@ -292,7 +307,7 @@ export async function start(container, opt) {
     const G = GARAGE[i], old = car.st, esc = car.s.esc;
     if (i !== garageIdx || !carM) {
       garageIdx = i; toastMsg('読み込み中: ' + G.name);
-      await loadPlayer(G);
+      await loadPlayer(G); setupCsm();
       car = makeCar(carSpec(G)); car.s.esc = esc;
       Object.assign(car.st, { x: old.x, z: old.z, y: old.y, yaw: old.yaw }); setBox(); firstCam = true;
     }
@@ -304,6 +319,33 @@ export async function start(container, opt) {
   const garage = makeGarage(container, GARAGE.map(G => ({ key: G.key, name: G.name, color: G.color, s: makeCar(carSpec(G)).s, size: (carInfo.find(c => c.key === G.key) || {}).size, thumb: CARS + 'thumb_' + G.key + '.jpg' })),
     (i, color) => { last = performance.now(); selectCar(i, color); });
   const openGarage = () => { if (paused) setPause(false); Object.keys(keys).forEach(k => { keys[k] = false; }); garage.open(garageIdx, curColor); };
+  /* カスケード影（CSM、高画質）: 視界を手前から 3 段に分け、段ごとの影の地図（2048）で 700m 先まで影を落とす（手前ほど細かい）。
+     ふつうの太陽の影（車の周り 280m 四方）の代わり。材質の独自の加工（onBeforeCompile）は残して、影の計算をつなげる */
+  function setupCsm() {
+    if (!csm) return;
+    scene.traverse(o => {
+      const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      ms.forEach(m => {
+        if (!(m.isMeshStandardMaterial || m.isMeshPhysicalMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial) || (m.defines && m.defines.USE_CSM)) return;
+        const prev = m.onBeforeCompile; csm.setupMaterial(m); const cf = m.onBeforeCompile;
+        m.onBeforeCompile = function (sh, r) { if (prev && prev !== cf) prev.call(this, sh, r); cf.call(this, sh, r); };
+        m.needsUpdate = true;
+      });
+    });
+  }
+  function syncCsm() {
+    if (!csm) return;
+    csm.lightDirection.copy(sky.sunDir).negate();
+    csm.lights.forEach(l => { l.color.copy(sky.sun.color); l.intensity = sky.sun.intensity; });
+    sky.sun.intensity = 0; sky.sun.castShadow = false; sky.sun.visible = false;   // 非表示にして光の数から外す（CSM のシェーダーは最初の平行光を段の光とみなすので、順番がずれないように）
+  }
+  if (opt.csm) {   // 試験中（URL に csm=1）: 手前の路面が一様に暗くなる問題が残っているので、既定では使わない
+    csm = new CSM({ maxFar: 700, cascades: 3, mode: 'practical', parent: scene, shadowMapSize: 2048, lightDirection: sky.sunDir.clone().negate(), lightIntensity: sky.sun.intensity, lightNear: 1, lightFar: 3000, lightMargin: 250, camera: cam, shadowBias: +(opt.csmBias || -0.0006) });
+    csm.fade = true;
+    csm.lights.forEach(l => { l.shadow.normalBias = +(opt.csmNB || 0.1); l.shadow.camera.layers.enable(1); });   // 影だけを落とす粗い形（レイヤー 1）も
+    syncCsm();
+    const st0 = sky.setTime; sky.setTime = m => { st0(m); syncCsm(); };
+  }
   // 出発: 浜松駅北口の前の道（いちばん近い幹線の上）
   const startAt = opt.start || { x: -40, z: -260 };
   let best = null, bd = Infinity;
@@ -529,6 +571,7 @@ export async function start(container, opt) {
       '<br><small>' + CREDIT + '</small>';
     requestAnimationFrame(frame);
   }
+  setupCsm();   // ここまでに作った材質（道路・建物・一般車・自車）にカスケード影を
   requestAnimationFrame(frame);
   const api = {
     renderer, scene, cam, car, world, gfx, W, collide, traffic,

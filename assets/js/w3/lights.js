@@ -8,6 +8,9 @@
 import * as THREE from 'three';
 
 export const NIGHT = { value: 0 };
+// 夕方・夜だけ描く物（昼は描画の回数に入れない）。時間帯を切り替えたら syncNight() を呼ぶ
+const NIGHT_ONLY = [];
+export function syncNight() { NIGHT_ONLY.forEach(m => { m.visible = NIGHT.value > 0.01; }); }
 
 /**
  * 車のライト。max 台ぶん。set(i, 車の行列, 配置, ブレーキ) → commit(台数)
@@ -89,6 +92,7 @@ export function makeGlowPoints(scene, list, color, size) {
       void main() { float r = length(vC); float a = exp(-r * r * 6.0) * (1.0 - smoothstep(0.85, 1.0, r)); gl_FragColor = vec4(uCol * a * uNight, a); }`
   });
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 5; scene.add(m);
+  NIGHT_ONLY.push(m); m.visible = NIGHT.value > 0.01;
   return m;
 }
 
@@ -113,5 +117,6 @@ export function makeLightPools(scene, list, color) {
       void main() { float r = length(vP); float a = pow(max(0.0, 1.0 - r), 1.6); gl_FragColor = vec4(uCol * a * uNight, 1.0); }`
   });
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 4; scene.add(m);
+  NIGHT_ONLY.push(m); m.visible = NIGHT.value > 0.01;
   return m;
 }
