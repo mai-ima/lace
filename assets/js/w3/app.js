@@ -215,6 +215,14 @@ export async function start(container, opt) {
   let carM = null, garageIdx = Math.max(0, GARAGE.findIndex(c => c.key === (opt.carKey || 'compact_swift')));
   const headL = new THREE.SpotLight(0xfff2de, 380, 140, 0.5, 0.65, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22); headL.visible = false;   // 夜のヘッドライト（ロービーム: 前方 40m ほどの路面が見える明るさ。影なし）
   const myGlow = makeCarGlows(scene, 1); let myLay = null;
+  // 自車の接地影（車体の下のぼかした暗い楕円。影の地図では細かい隙間まで暗くならず、車が浮いて見えるため）
+  const myBlob = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 6, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(0,0,0,0.8)'); gr.addColorStop(0.65, 'rgba(0,0,0,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }));
+    m.renderOrder = 2; scene.add(m); return m;
+  })();
   async function loadPlayer(G) {
     const info = carInfo.find(i => i.key === G.key) || {}, hero = gfx.tier === 'high' && info.lods && info.lods.hero;
     let m;
@@ -418,6 +426,7 @@ export async function start(container, opt) {
   function carVisual(dt) {
     const st = car.st;
     if (carM.wheels) Object.values(carM.wheels).forEach(w => { w.spin.rotation.x += st.vx * dt / Math.max(0.2, w.r) * (carM.flip ? -1 : 1); if (w.front) w.steer.rotation.y = st.steer; });
+    if (carM.size) { const gy = ground(st.x, st.z).y; myBlob.position.set(st.x, gy + 0.03, st.z); myBlob.rotation.set(0, st.yaw, 0); myBlob.scale.set(carM.size.x * 1.05, 1, carM.size.z * 1.05); }
     if (carM.tails) carM.tails.forEach(m => { m.emissiveIntensity = ctl.brake > 0.1 ? 2.5 : Math.max(0.25, NIGHT.value * 1.1); });
     const nightOn = NIGHT.value > 0.3;
     if (headL.visible !== nightOn) headL.visible = nightOn;
