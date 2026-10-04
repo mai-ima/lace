@@ -54,6 +54,39 @@ export function buildWorld(scene, W, gfx) {
   const out = { group: new THREE.Group(), anim: [] };
   scene.add(out.group);
   const terr = W.terrain;
+  /* --- 地形の窪みを道路の範囲だけ埋める: 標高データ（5m）には、駅前の地下広場・地下道の入口などの掘り下げが入っていて、
+         その上の歩道や車道が急に下がる。道路の範囲（PLATEAU の車道・歩道）にある窪み（周り 45m の中央値より 0.8m 以上低い）は
+         中央値まで上げる。ただし OSM の道路の高さも下がっている所（線路の下をくぐるアンダーパスなど本物の掘り下げ）は残す --- */
+  if (W.roadArea && W.roadArea.car) {
+    const nx = terr.nx, nz = terr.nz, H = terr.H, C = terr.cell, K = 4, med = new Float32Array(nx * nz), buf = new Float32Array((2 * K + 1) ** 2);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      let n = 0; for (let b = -K; b <= K; b++) { const jj = Math.max(0, Math.min(nz - 1, j + b)); for (let a = -K; a <= K; a++) buf[n++] = H[jj * nx + Math.max(0, Math.min(nx - 1, i + a))]; }
+      const arr = buf.slice(0, n).sort(); med[j * nx + i] = arr[n >> 1];
+    }
+    const roadMask = makeGrid(terr.x0 - C / 2, terr.z0 - C / 2, (nx) * C, C), q = W.roadArea.q;
+    [W.roadArea.car, W.roadArea.walk].forEach(A => { if (!A) return; const v = A.v, I = A.i; for (let t = 0; t < I.length; t += 3) roadMask.tri(v[I[t] * 2] * q, v[I[t] * 2 + 1] * q, v[I[t + 1] * 2] * q, v[I[t + 1] * 2 + 1] * q, v[I[t + 2] * 2] * q, v[I[t + 2] * 2 + 1] * q); });
+    const keep = new Uint8Array(nx * nz), RP = W.roads.p;   // 本物の掘り下げ（OSM の道路の高さも中央値より 1m 以上低い）の周り 10m
+    W.roads.ways.forEach(w => { if (w.k !== 'road') return; w.n.forEach(k => {
+      const x = RP[k * 3], z = RP[k * 3 + 1], y = RP[k * 3 + 2], i = Math.round((x - terr.x0) / C), j = Math.round((z - terr.z0) / C); if (i < 0 || j < 0 || i >= nx || j >= nz) return;
+      if (y < med[j * nx + i] - 1.0) for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii < nx && jj < nz) keep[jj * nx + ii] = 1; }
+    }); });
+    // 道路の面の高さ（Hf）: 窪みをすべて中央値まで埋めた高さ。地形（H）は道路の範囲の中だけ埋める（地下広場そのものは残す）
+    const Hf = Float32Array.from(H);
+    let filled = 0;
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const k = j * nx + i; if (keep[k] || med[k] - H[k] < 0.8) continue;
+      Hf[k] = med[k];
+      if (roadMask.at(terr.x0 + i * C, terr.z0 + j * C)) { H[k] = med[k]; filled++; }
+    }
+    out.pitsFilled = filled;
+    terr.atRoad = (x, z) => {
+      const fi = (x - terr.x0) / C, fj = (z - terr.z0) / C;
+      const i = Math.max(0, Math.min(nx - 2, Math.floor(fi))), j = Math.max(0, Math.min(nz - 2, Math.floor(fj)));
+      const u = Math.max(0, Math.min(1, fi - i)), v = Math.max(0, Math.min(1, fj - j));
+      return (Hf[j * nx + i] * (1 - u) + Hf[j * nx + i + 1] * u) * (1 - v) + (Hf[(j + 1) * nx + i] * (1 - u) + Hf[(j + 1) * nx + i + 1] * u) * v;
+    };
+  }
+  if (!terr.atRoad) terr.atRoad = terr.at;
   /* --- 地形 --- */
   // 地形は 200m 四方（40 マス）のチャンクに分ける（画面外は描かない）。UV は全体の航空写真に合わせる
   // 格子の間隔: 低画質だけ 10m（中・高は DEM のまま 5m。粗くすると道路の下から地面が出る所がある）
@@ -142,16 +175,16 @@ export function buildWorld(scene, W, gfx) {
   net.junctions.forEach(n => {
     const P = n.poly, m = P.length, pos = new Float32Array((m + 1) * 3), ix = [];
     let cx = 0, cz = 0; P.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= m; cz /= m;
-    pos.set([cx, terr.at(cx, cz) + 0.055, cz], 0);
-    P.forEach((p, i) => { pos.set([p[0], terr.at(p[0], p[1]) + 0.055, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
+    pos.set([cx, terr.atRoad(cx, cz) + 0.055, cz], 0);
+    P.forEach((p, i) => { pos.set([p[0], terr.atRoad(p[0], p[1]) + 0.055, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
     roadGeos.push(upGeo(pos, ix));
   });
   // まとめた交差点（上下線が分かれた大通りどうし）: 外へ出る腕の切り口を包む面。中央分離帯の切れ目も舗装にする
   net.groups.forEach(C => {
     const P = C.poly, m = P.length; if (m < 3) return;
     const pos = new Float32Array((m + 1) * 3), ix = [];
-    pos.set([C.x, terr.at(C.x, C.z) + 0.045, C.z], 0);
-    P.forEach((p, i) => { pos.set([p[0], terr.at(p[0], p[1]) + 0.045, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
+    pos.set([C.x, terr.atRoad(C.x, C.z) + 0.045, C.z], 0);
+    P.forEach((p, i) => { pos.set([p[0], terr.atRoad(p[0], p[1]) + 0.045, p[1]], (i + 1) * 3); ix.push(0, i + 1, ((i + 1) % m) + 1); });
     roadGeos.push(upGeo(pos, ix));
   });
   const roadMat = new THREE.MeshStandardMaterial({ map: asph, color: 0xa4a6aa, roughness: 0.9, metalness: 0 });
@@ -171,7 +204,7 @@ export function buildWorld(scene, W, gfx) {
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor - 0.08 * big, 0.6, 1.0);');
   };
   // 道路の範囲（PLATEAU、測量に基づく道路縁）を舗装として敷く。交差点の角・道幅・接続の形が実際どおりになる
-  const triGeo = (T, dy) => { const n = T.v.length / 2, pos = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const x = T.v[i * 2] * W.roadArea.q, z = T.v[i * 2 + 1] * W.roadArea.q; pos.set([x, terr.at(x, z) + dy, z], i * 3); } return upGeo(pos, Array.from(T.i)); };
+  const triGeo = (T, dy) => { const n = T.v.length / 2, pos = new Float32Array(n * 3); for (let i = 0; i < n; i++) { const x = T.v[i * 2] * W.roadArea.q, z = T.v[i * 2 + 1] * W.roadArea.q; pos.set([x, terr.atRoad(x, z) + dy, z], i * 3); } return upGeo(pos, Array.from(T.i)); };
   const WALK_H = 0.15;   // 歩道の高さ（縁石の段）
   if (W.roadArea) {
     const A = W.roadArea;
@@ -217,7 +250,7 @@ export function buildWorld(scene, W, gfx) {
     // 縁石: 歩道の縁で車道に接する所に、高さ 15cm の側面
     const C = W.roadArea.curb || [], q = W.roadArea.q, cp = [], ci = [];
     for (let k = 0; k < C.length; k += 4) {
-      const ax = C[k] * q, az = C[k + 1] * q, bx = C[k + 2] * q, bz = C[k + 3] * q, ya = terr.at(ax, az), yb = terr.at(bx, bz), b = cp.length / 3;
+      const ax = C[k] * q, az = C[k + 1] * q, bx = C[k + 2] * q, bz = C[k + 3] * q, ya = terr.atRoad(ax, az), yb = terr.atRoad(bx, bz), b = cp.length / 3;
       cp.push(ax, ya + WALK_H, az, bx, yb + WALK_H, bz, ax, ya + 0.02, az, bx, yb + 0.02, bz); ci.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
     }
     if (cp.length) {
@@ -552,7 +585,7 @@ export function buildWorld(scene, W, gfx) {
   {
     const mk = markings(net, (x, z) => out.onRoadPt(x, z));
     const white = [0.92, 0.92, 0.9], yellow = [0.95, 0.66, 0.1];
-    const hAt = (x, z) => { const by = out.bridgeY(x, z); return by !== null ? by + 0.045 : terr.at(x, z) + 0.075; };
+    const hAt = (x, z) => { const by = out.bridgeY(x, z); return by !== null ? by + 0.045 : terr.atRoad(x, z) + 0.075; };
     // 交差点の中（腕の半幅の 9 割の円の中）には、外側線・中央線・車線境界線を引かない（線の重なりを防ぐ）
     const JG = new Map(), jk = (x, z) => Math.floor(x / 40) + ',' + Math.floor(z / 40);
     (net.groups || []).forEach(Cg => {   // まとめた交差点（上下線の分かれた大通りどうしなど）: 中心から最も遠い点 + 腕の半幅
@@ -629,6 +662,7 @@ export function buildSky(scene, renderer, opt) {
   sun.shadow.mapSize.set(opt.shadows > 1 ? 4096 : 2048, opt.shadows > 1 ? 4096 : 2048);
   const S = opt.shadows > 1 ? 140 : 100; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+  sun.shadow.camera.layers.enable(1);   // 影だけを落とす粗い形（レイヤー 1）
   scene.add(sun); scene.add(sun.target);
   const hemi = new THREE.HemisphereLight(0xd4dde8, 0x6a6458, 0.55); scene.add(hemi);
   scene.fog = new THREE.Fog(0xc4d2de, Math.min(400, (opt.far || 2600) * 0.3), opt.far || 2600);

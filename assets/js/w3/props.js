@@ -90,7 +90,7 @@ export function buildProps(scene, net, at, free, opt) {
   if (opt.models) {
     out.lods = [];
     if (opt.models.pole) out.lods.push(lodInstancer(scene, opt.models.pole, poleSpots, { near: 45, far: 260 }));
-    if (opt.models.light) out.lods.push(lodInstancer(scene, opt.models.light, lightSpots, { near: 55, far: 300 }));
+    if (opt.models.light) out.lods.push(lodInstancer(scene, opt.models.light, lightSpots, { near: 55, far: opt.lightFar || 300 }));
     out.update = (cx, cz) => out.lods.forEach(l => l.update(cx, cz));
   }
   const WH = opt.models && opt.models.pole ? opt.models.pole.h : 10;   // 電線をつなぐ高さの基準（電柱の地上高）

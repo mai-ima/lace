@@ -48,17 +48,28 @@ export function makeTraffic(scene, net, opt) {
       scene.add(im); return { im, paint: pt.paint };
     });
   }
-  types.forEach(T => { T.nearIM = makeParts(T.near.parts, NEAR, true); T.farIM = makeParts(T.far.parts, N, false); });
+  types.forEach(T => { T.nearIM = makeParts(T.near.parts, NEAR, opt.shadows !== false); T.farIM = makeParts(T.far.parts, N, false); });
+  // 接地影（車の下のぼかした暗い楕円）。すべての車に 1 回の描画で
+  const blobG = new THREE.PlaneGeometry(1, 1); blobG.rotateX(-Math.PI / 2);
+  const blobT = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 4, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.75)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+  const blob = new THREE.InstancedMesh(blobG, new THREE.MeshBasicMaterial({ map: blobT, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }), N);
+  blob.frustumCulled = false; blob.count = 0; blob.renderOrder = 2; scene.add(blob);
   let wSum = 0; types.forEach(T => { wSum += T.weight; });
   const pickType = () => { let t = rnd() * wSum; for (const T of types) { if ((t -= T.weight) < 0) return T; } return types[0]; };
   const ids = new Map();
+  const RW = rank => rank <= 2 ? 4 : rank <= 4 ? 2.5 : rank <= 6 ? 1 : 0.35;   // 交通量の重み（国道・主要地方道 > 県道 > 市道 > 住宅地の道）
+  edges.forEach(e => { const m = e.line[Math.floor(e.line.length / 2)]; e.cx = m[0]; e.cz = m[1]; });
   function spawn(px, pz, near) {
     // 自車から near〜400m の道の上の、ランダムな車線
+    // 道は「長さ × 道の格の重み」で選ぶ（幹線ほど車が多い）。自車の周り（半径 320m）の道だけから選ぶ
+    const cand = edges.filter(e => e.L >= 20 && Math.abs(e.cx - px) < 320 + e.L && Math.abs(e.cz - pz) < 320 + e.L);
+    if (!cand.length) return null;
+    let wsum = 0; const cum = cand.map(e => (wsum += e.L * RW(e.pr.rank)));
     for (let tries = 0; tries < 40; tries++) {
-      const e = edges[Math.floor(rnd() * edges.length)];
-      if (e.L < 20) continue;
+      const r = rnd() * wsum; let lo = 0, hi = cum.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < r) lo = m + 1; else hi = m; }
+      const e = cand[lo];
       const s = 5 + rnd() * (e.L - 10), p0 = at(e, s, 0), d = Math.hypot(p0.x - px, p0.z - pz);
-      if (d < near || d > 380) continue;
+      if (d < near || d > 300) continue;
       const pr = e.pr, dirs = []; if (pr.fw) dirs.push(1); if (pr.bw) dirs.push(-1);
       if (!dirs.length) continue;
       const dir = dirs[Math.floor(rnd() * dirs.length)], nl = dir > 0 ? pr.fw : pr.bw, k = Math.floor(rnd() * nl);
@@ -133,8 +144,9 @@ export function makeTraffic(scene, net, opt) {
   function step(dt, t, player) {
     step.t = t;
     // 自車の周りに保つ
-    for (let i = cars.length - 1; i >= 0; i--) { const p = pose(cars[i]); if (cars[i].dead || Math.hypot(p.x - player.x, p.z - player.z) > 450) cars.splice(i, 1); }
-    let budget = 3; while (cars.length < N && budget-- > 0) { const c = spawn(player.x, player.z, cars.length < N / 2 && !step.started ? 25 : 150); if (c) cars.push(c); else break; }
+    for (let i = cars.length - 1; i >= 0; i--) { const p = pose(cars[i]); if (cars[i].dead || Math.hypot(p.x - player.x, p.z - player.z) > 340) cars.splice(i, 1); }
+    // 最初は自車の周り（15m より外）にまとめて置く。そのあとは見えにくい 100m より外に 1 回 3 台まで足す
+    let budget = step.started ? 3 : N; while (cars.length < N && budget-- > 0) { const c = spawn(player.x, player.z, step.started ? 100 : 15); if (c) cars.push(c); else if (step.started) break; }
     step.started = true;
     // 同じ車線の並び（前の車）
     const lanes = new Map();
@@ -173,15 +185,18 @@ export function makeTraffic(scene, net, opt) {
     cars.forEach(c => { c.P = pose(c); c.d2 = (c.P.x - player.x) ** 2 + (c.P.z - player.z) ** 2; });
     const order = cars.slice().sort((a, b) => a.d2 - b.d2);
     types.forEach(T => { T.nn = 0; T.nf = 0; });
-    let ng = 0;   // 夜のライトの数
+    let ng = 0, nb = 0;   // 夜のライトの数・接地影の数
     order.forEach((c, r) => {
       if (c.d2 > FAR * FAR) return;
+      if (r >= NEAR + (opt.maxFar || 99)) return;   // 遠くの車は近い順に maxFar 台まで（三角形の数の上限）
       const P = c.P, T = c.T, near = r < NEAR && c.d2 < 90 * 90, ims = near ? T.nearIM : T.farIM, i = near ? T.nn++ : T.nf++;
       Q.setFromAxisAngle(Y, P.yaw); V.set(P.x, P.y + 0.02, P.z); M.compose(V, Q, S1);
       ims.forEach(p => { p.im.setMatrixAt(i, M); if (p.paint) p.im.setColorAt(i, col.setHex(c.color)); });
       if (opt.glows && T.lay) opt.glows.set(ng++, M, T.lay, c.brake);
+      { const L = T.len || 4.4; V.set(P.x, P.y + 0.06, P.z); blob.setMatrixAt(nb++, new THREE.Matrix4().compose(V, Q, new THREE.Vector3(1.9, 1, L * 1.05))); }
     });
     if (opt.glows) opt.glows.commit(ng);
+    blob.count = nb; blob.instanceMatrix.needsUpdate = true;
     types.forEach(T => {
       T.nearIM.forEach(p => { p.im.count = T.nn; p.im.visible = T.nn > 0; }); T.farIM.forEach(p => { p.im.count = T.nf; p.im.visible = T.nf > 0; });
       T.nearIM.concat(T.farIM).forEach(p => { if (!p.im.visible) return; p.im.instanceMatrix.needsUpdate = true; if (p.im.instanceColor) p.im.instanceColor.needsUpdate = true; });

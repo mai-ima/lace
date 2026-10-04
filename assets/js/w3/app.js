@@ -186,7 +186,7 @@ export async function start(container, opt) {
         m.head = { x: hx - 0.3, y: hy - 0.02 }; };
       models = { pole: await load('utility_pole_jp', m => tint(m, 0.74, 0.73, 0.70)), light: await load('streetlight_curve', m => { armX(m); tint(m, 0.62, 0.64, 0.66); }) };
     } catch (e) { console.warn('付属物のモデルを読めませんでした', e); }
-    world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, { models, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
+    world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, { models, lightFar: gfx.tier === 'high' ? 300 : 220, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
     // 並べ直しは毎フレームの更新で（自車の位置が決まってから）
     // 夕方・夜の灯り: 街灯（LED、白に近い）と防犯灯の光の点、真下の地面の光だまり
     { const P = world.props;
@@ -218,6 +218,11 @@ export async function start(container, opt) {
       const pc = playerCar(sc, opt.carColor || G.color), wheels = {}, g = new THREE.Group(); g.add(pc.root);
       if (pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
       m = { root: g, wheels, flip: false, tails: pc.tails, setColor: pc.setColor };
+      // 影は粗い形（lod1、約 3 万面）で落とす: 影のカメラにだけ見えるレイヤー 1 に置き、細かい形は影を落とさない（見た目の形はそのまま）
+      try {
+        const sh = await loadGLB(CARS + G.key + '_lod1.glb'); sh.traverse(o => { if (o.isMesh) { o.layers.set(1); o.castShadow = true; o.receiveShadow = false; } });
+        g.traverse(o => { if (o.isMesh) o.castShadow = false; }); g.add(sh);
+      } catch (e) { /* 粗い形が無ければ細かい形で影を落とす */ }
     } catch (e) {
       console.warn('自車のモデルを読めませんでした', e);
       m = { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 4.2), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
@@ -239,7 +244,7 @@ export async function start(container, opt) {
       return { key: c.key, weight: W_TYPES[c.key], len: c.size.l, near: fleetParts(n), far: fleetParts(f), colors: c.key === 'kei_van' ? KEI_COLORS : null };
     }));
     types.forEach(T => { T.lay = lampLayout(T.near.size); });
-    traffic = makeTraffic(scene, world.net, { types, glows: makeCarGlows(scene, 64), count: gfx.tier === 'low' ? 24 : 48, near: gfx.tier === 'high' ? 8 : 4, farDist: gfx.tier === 'high' ? 320 : 200 });
+    traffic = makeTraffic(scene, world.net, { types, glows: makeCarGlows(scene, 64), count: gfx.tier === 'low' ? 24 : 48, near: gfx.tier === 'high' ? 8 : 3, maxFar: gfx.tier === 'high' ? 40 : 10, shadows: gfx.tier === 'high', farDist: gfx.tier === 'high' ? 320 : 200 });
   } catch (e) { console.warn('一般車を読めませんでした', e); }
   function trafficStep(dt) {
     if (!traffic) return;
@@ -293,9 +298,9 @@ export async function start(container, opt) {
   // 接地の高さ: 橋の上は橋の路面、歩道は縁石の高さ（+0.2m）、それ以外は地形（道路の面と同じ高さ）。道の外は滑りやすく抵抗あり
   const ground = (x, z) => {
     const by = world.bridgeY(x, z); if (by !== null) return { y: by + 0.05, mu: 1 };
-    const t = W.terrain.at(x, z), onR = world.onRoadPt(x, z);
-    if (world.walkG.at(x, z)) return { y: t + 0.17, mu: 1 };   // 歩道（高さ 15cm。0.5m 格子）を車道（1m 格子）より優先
-    return onR ? { y: t + 0.06, mu: 1 } : { y: t + 0.02, mu: 0.8, drag: 0.08 };
+    const onR = world.onRoadPt(x, z), tr = W.terrain.atRoad ? W.terrain.atRoad(x, z) : W.terrain.at(x, z);   // 道路の面は窪みを埋めた高さ
+    if (world.walkG.at(x, z)) return { y: tr + 0.17, mu: 1 };   // 歩道（高さ 15cm。0.5m 格子）を車道（1m 格子）より優先
+    return onR ? { y: tr + 0.06, mu: 1 } : { y: W.terrain.at(x, z) + 0.02, mu: 0.8, drag: 0.08 };
   };
   car.st.y = ground(car.st.x, car.st.z).y;
   // 入力
