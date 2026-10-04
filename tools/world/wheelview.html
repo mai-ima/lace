@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>車輪の確認</title>
+<!-- 自車のモデル（assets/data/world/cars/<key>_lod0.glb）の車輪を、ゲームと同じ方法（cars.js の playerCar）で切り出し、
+     回転と操舵をかけて撮る（確認用）。?key=compact_swift&spin=0.8&steer=0.45 -->
+<script type="importmap">{ "imports": { "three": "../../assets/vendor/three/three.module.js", "three/addons/": "../../assets/vendor/three/addons/" } }</script>
+</head><body style="margin:0;background:#000">
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { loadGLB, playerCar } from '../../assets/js/w3/cars.js';
+const q = new URLSearchParams(location.search), key = q.get('key') || 'compact_swift';
+const R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(480, 300); R.toneMapping = THREE.AgXToneMapping; document.body.appendChild(R.domElement);
+const S = new THREE.Scene(); S.background = new THREE.Color(0x8a96a3);
+S.environment = new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.position.set(5, 8, 4); S.add(sun);
+const sc = await loadGLB('../../assets/data/world/cars/' + key + (q.get('lod') || '_lod0') + '.glb');
+const pc = playerCar(sc, 0xb01826); S.add(pc.root);
+const W = pc.wheels || {}, info = Object.values(W).map(w => ({ key: w.key, r: +w.r.toFixed(3), at: w.steer.position.toArray().map(v => +v.toFixed(2)), spinParts: w.spin.children.length, steerParts: w.steer.children.length - 1 }));
+const spin = +(q.get('spin') || 0.8), steer = +(q.get('steer') || 0.45), shots = [];
+const cam = new THREE.PerspectiveCamera(30, 480 / 300, 0.05, 100);
+const fl = W.LF || W.RF;
+for (const [s, st] of [[0, 0], [spin, 0], [spin, steer]]) {
+  Object.values(W).forEach(w => { w.spin.rotation.x = s; if (w.front) w.steer.rotation.y = st; });
+  if (fl) { const p = fl.steer.position; cam.position.set(p.x + Math.sign(p.x || 1) * 2.0, p.y + 0.35, p.z + 1.1); cam.lookAt(p); }
+  R.render(S, cam); shots.push(R.domElement.toDataURL('image/jpeg', 0.85));
+}
+window.__out = { shots, info, found: !!pc.wheels };
+document.title = 'done';
+</script></body></html>

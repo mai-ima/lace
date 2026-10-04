@@ -156,6 +156,31 @@ export function buildWorld(scene, W, gfx) {
 
   /* --- 道路網 --- */
   const net = build(W.roads, (x, z) => terr.at(x, z), W.roadWidth);   // 道幅は PLATEAU の道路の範囲で実測した値（tools/world/build_tran.py）
+  /* --- 橋の路面の高さ: データの高さ（標高データの点）は、川の上では川面を補間した低い値になり、橋の端で道路より最大 3m 以上低くなる
+         （車が落ち込む・跳ねる）。両端は、つながる道路の面の高さに合わせる（別の橋と続く端はそのまま）。
+         道路・線路をまたぐ高い橋（データが両端を結ぶ線より 2m 以上高い）はデータの高さを残し、それ以外（川の橋）は両端を結ぶ線に
+         小さな反り（長さの 1%、最大 0.4m）をつける。どちらも勾配は 10% までにならす --- */
+  {
+    const isBr = e => e.pr.bridge && !e.hidden;
+    const shared = (e, id) => { const n = net.nodes.get(id); return n && n.arms.some(a => a.e !== e && isBr(a.e)); };
+    net.edges.forEach(e => {
+      if (!isBr(e)) return;
+      [e.line, e.pts].forEach(L => {
+        if (!L || L.length < 2 || L[0].length < 3) return;
+        const s = [0]; for (let i = 1; i < L.length; i++) s.push(s[i - 1] + Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]));
+        const len = s[s.length - 1] || 1, n = L.length;
+        const pinA = !shared(e, e.a), pinB = !shared(e, e.b);
+        const yA = pinA ? terr.atRoad(L[0][0], L[0][1]) : L[0][2], yB = pinB ? terr.atRoad(L[n - 1][0], L[n - 1][1]) : L[n - 1][2];
+        const base = i => yA + (yB - yA) * s[i] / len;
+        let high = false; for (let i = 1; i < n - 1; i++) if (L[i][2] - base(i) > 2) high = true;
+        const y = L.map((p, i) => high ? Math.max(base(i), p[2]) : base(i) + Math.min(0.4, len * 0.01) * Math.sin(Math.PI * s[i] / len));
+        y[0] = yA; y[n - 1] = yB;
+        for (let i = 1; i < n; i++) y[i] = Math.min(y[i], y[i - 1] + 0.1 * (s[i] - s[i - 1]));   // 勾配 10% まで（a 端から）
+        for (let i = n - 2; i >= 0; i--) y[i] = Math.min(y[i], y[i + 1] + 0.1 * (s[i + 1] - s[i]));   // （b 端から）
+        L.forEach((p, i) => { p[2] = y[i]; });
+      });
+    });
+  }
   // PLATEAU の道路の範囲の外を通る細い道（駐車場の通路・敷地の中の私道など。住宅地の道より格下）は、帯も路面表示も描かない（地面は航空写真のまま）
   if (W.roadArea && W.roadArea.car) {
     const g = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0), q = W.roadArea.q;
@@ -174,12 +199,14 @@ export function buildWorld(scene, W, gfx) {
   function worldUV(g, s) { const p = g.attributes.position, uv = new Float32Array(p.count * 2); for (let i = 0; i < p.count; i++) { uv[i * 2] = p.getX(i) / s; uv[i * 2 + 1] = p.getZ(i) / s; } g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return g; }
   const roadGeos = [], walkGeos = [];
   function strip(R, y0, side, onTerrain) {   // R: ribbon の結果。2 本の縁の間の面。onTerrain: 高さを道路の面の地形（窪みを埋めた高さ）に合わせる（橋以外）
-    if (onTerrain) {   // 4m ごとに点を足して、途中でも地形に沿わせる（頂点の間の直線が地形より浮いて路面表示を覆わないように）
+    if (onTerrain) {   // 途中で地形に沿わせる点を足す（頂点の間の直線が地形より浮いて路面表示を覆わないように）。
+      // 地形が直線から 2cm 以上ずれる所だけ半分に分けていく（2m まで）。平らな直線の道は点を増やさない
+      const lerp = (a, b, u) => a.map((v, j) => v + (b[j] - v) * u);
+      const dev = (a, b) => [0.25, 0.5, 0.75].some(u => { const m = lerp(a, b, u);
+        return Math.abs(terr.atRoad(m[0], m[1]) - (terr.atRoad(a[0], a[1]) * (1 - u) + terr.atRoad(b[0], b[1]) * u)) > 0.02 || Math.abs(terr.atRoad(m[2], m[3]) - (terr.atRoad(a[2], a[3]) * (1 - u) + terr.atRoad(b[2], b[3]) * u)) > 0.02; });
       const D = [R[0]];
-      for (let i = 1; i < R.length; i++) {
-        const a = R[i - 1], b = R[i], l = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1]), Math.hypot(b[2] - a[2], b[3] - a[3])), m = Math.ceil(l / 4);
-        for (let k = 1; k <= m; k++) { const u = k / m; D.push(a.map((v, j) => v + (b[j] - v) * u)); }
-      }
+      const add = (a, b) => { const l = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1]), Math.hypot(b[2] - a[2], b[3] - a[3])); if (l > 2 && dev(a, b)) { const m = lerp(a, b, 0.5); add(a, m); add(m, b); } else D.push(b); };
+      for (let i = 1; i < R.length; i++) add(R[i - 1], R[i]);
       R = D;
     }
     const n = R.length, pos = new Float32Array(n * 6), ix = [];
@@ -187,6 +214,26 @@ export function buildWorld(scene, W, gfx) {
       const ya = onTerrain ? terr.atRoad(R[i][0], R[i][1]) : R[i][4], yb = onTerrain ? terr.atRoad(R[i][2], R[i][3]) : R[i][4];
       pos.set([R[i][0], ya + y0, R[i][1], R[i][2], yb + y0, R[i][3]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } }
     return upGeo(pos, ix);
+  }
+  // 地図全体の 1 つの形を、S m 四方のまとまりに分けて描く（画面の外のまとまりは描かない）。三角形の重心でまとまりを決める
+  function addChunked(g, mat, S, shadow) {
+    const pos = g.attributes.position.array, I = g.index ? g.index.array : null, nt = I ? I.length / 3 : pos.length / 9, M = new Map();
+    const vi = (t, k) => I ? I[t * 3 + k] : t * 3 + k;
+    for (let t = 0; t < nt; t++) {
+      const a = vi(t, 0) * 3, b = vi(t, 1) * 3, c = vi(t, 2) * 3;
+      const key = Math.floor((pos[a] + pos[b] + pos[c]) / 3 / S) + ',' + Math.floor((pos[a + 2] + pos[b + 2] + pos[c + 2]) / 3 / S);
+      let L = M.get(key); if (!L) M.set(key, L = []); L.push(t);
+    }
+    const names = Object.keys(g.attributes), meshes = [];
+    M.forEach(ts => {
+      const remap = new Map(), ix = [];
+      ts.forEach(t => { for (let k = 0; k < 3; k++) { const v = vi(t, k); let n = remap.get(v); if (n === undefined) { n = remap.size; remap.set(v, n); } ix.push(n); } });
+      const ng = new THREE.BufferGeometry();
+      names.forEach(nm => { const A = g.attributes[nm], s = A.itemSize, arr = new A.array.constructor(remap.size * s); remap.forEach((n, v) => { for (let k = 0; k < s; k++) arr[n * s + k] = A.array[v * s + k]; }); ng.setAttribute(nm, new THREE.BufferAttribute(arr, s, A.normalized)); });
+      ng.setIndex(ix); ng.computeBoundingSphere();
+      const m = new THREE.Mesh(ng, mat); m.receiveShadow = true; if (shadow) m.castShadow = true; out.group.add(m); meshes.push(m);
+    });
+    return meshes;
   }
   // 面が上を向くように三角形の向きをそろえる（上から見て反時計回り）
   function upGeo(pos, ix) {
@@ -258,12 +305,12 @@ export function buildWorld(scene, W, gfx) {
   const triEach = (gs, fn) => gs.forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) fn(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
   out.roadTris = fn => triEach(roadGeos.concat([out.areaGeo, out.walkAreaGeo].filter(Boolean)), fn);   // 走れる所（車道と歩道）
   out.carTris = fn => triEach(roadGeos.concat([out.areaGeo].filter(Boolean)), fn);   // 車道だけ
-  const roads = new THREE.Mesh(worldUV(mergeGeometries(roadGeos), 6), roadMat); roads.receiveShadow = true; out.group.add(roads);
+  addChunked(worldUV(mergeGeometries(roadGeos), 6), roadMat, 1200);
   if (out.areaGeo) {
     // 車道（PLATEAU の道路の範囲から歩道を除いた部分）: 車道の帯と同じアスファルト。帯より奥に描く
     const am = roadMat.clone(); am.onBeforeCompile = roadMat.onBeforeCompile; am.customProgramCacheKey = () => 'roadArea';
     am.polygonOffset = true; am.polygonOffsetFactor = 2; am.polygonOffsetUnits = 2;
-    const area = new THREE.Mesh(worldUV(out.areaGeo, 6), am); area.receiveShadow = true; out.group.add(area);
+    addChunked(worldUV(out.areaGeo.clone(), 6), am, 1200);
   }
   if (out.walkAreaGeo) {
     // 歩道・広場: 明るい灰色のブロック舗装（30cm 角を 1 枚ずつ明るさを変える）。高さ 15cm
@@ -289,7 +336,7 @@ export function buildWorld(scene, W, gfx) {
       sh.uniforms.tOrtho = { value: out.ortho }; sh.uniforms.uOX = { value: new THREE.Vector4(terr.x0, terr.z0, spanX, spanZ) }; sh.uniforms.uOrthoOn = { value: 1 };
       sh.fragmentShader = sh.fragmentShader.replace('varying vec2 vWXZ;\nfloat wh', 'varying vec2 vWXZ; uniform sampler2D tOrtho; uniform vec4 uOX; uniform float uOrthoOn;\nfloat wh');
     };
-    const walkM = new THREE.Mesh(out.walkAreaGeo, wm); walkM.receiveShadow = true; out.group.add(walkM);
+    addChunked(out.walkAreaGeo, wm, 1200);
     // 縁石: 歩道の縁で車道に接する所に、高さ 15cm の側面
     const C = W.roadArea.curb || [], q = W.roadArea.q, cp = [], ci = [];
     for (let k = 0; k < C.length; k += 4) {
@@ -298,12 +345,48 @@ export function buildWorld(scene, W, gfx) {
     }
     if (cp.length) {
       const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3)); cg.setIndex(ci); cg.computeVertexNormals();
-      const curb = new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.85, side: THREE.DoubleSide })); curb.receiveShadow = true; out.group.add(curb);
+      addChunked(cg, new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.85, side: THREE.DoubleSide }), 1200);
     }
   }
   if (walkGeos.length) {
     const walk = new THREE.Mesh(boxUV(mergeGeometries(walkGeos), 3), new THREE.MeshStandardMaterial({ map: asph, color: 0xd6d4ce, roughness: 0.9, side: THREE.DoubleSide })   /* 歩道: 明るめのアスファルト舗装 */);
     walk.receiveShadow = true; out.group.add(walk);
+  }
+  /* --- 平面駐車場（OSM と PLATEAU の土地利用。tools/world/build_parking.py）: アスファルトの舗装と、区画の白線（幅 15cm）。
+         地面（地形の高さ − 0.15m）の 6cm 上。1200m 四方のまとまりごとに描く --- */
+  if (W.parking && W.parking.lots) {
+    const q = W.parking.q, gY = (x, z) => terr.at(x, z) - 0.09, CHK = new Map();
+    const chunk = (x, z) => { const k = Math.floor(x / 1200) + ',' + Math.floor(z / 1200); let c = CHK.get(k); if (!c) CHK.set(k, c = { P: [], I: [], L: [], LI: [] }); return c; };
+    W.parking.lots.forEach(lot => {
+      const v = lot.tri.v, I = lot.tri.i; if (!I.length) return;
+      const c = chunk(v[0] * q, v[1] * q), b = c.P.length / 3;
+      for (let i = 0; i < v.length; i += 2) { const x = v[i] * q, z = v[i + 1] * q; c.P.push(x, gY(x, z), z); }
+      for (let t = 0; t < I.length; t += 3) {   // 法線が上を向く順に
+        const A = I[t] * 2, B = I[t + 1] * 2, Cc = I[t + 2] * 2;
+        const up = (v[B + 1] - v[A + 1]) * (v[Cc] - v[A]) - (v[B] - v[A]) * (v[Cc + 1] - v[A + 1]) > 0;
+        if (up) c.I.push(b + I[t], b + I[t + 1], b + I[t + 2]); else c.I.push(b + I[t], b + I[t + 2], b + I[t + 1]);
+      }
+      const Ls = lot.lines;
+      for (let i = 0; i < Ls.length; i += 4) {
+        const ax = Ls[i] * q, az = Ls[i + 1] * q, bx = Ls[i + 2] * q, bz = Ls[i + 3] * q, len = Math.hypot(bx - ax, bz - az); if (len < 0.5) continue;
+        const nx = -(bz - az) / len * 0.075, nz = (bx - ax) / len * 0.075, n = Math.max(1, Math.ceil(len / 2.5)), lb = c.L.length / 3;
+        for (let k = 0; k <= n; k++) { const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n, y = gY(x, z) + 0.012; c.L.push(x + nx, y, z + nz, x - nx, y, z - nz); }
+        for (let k = 0; k < n; k++) { const a = lb + k * 2; c.LI.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      }
+    });
+    const pm = new THREE.MeshStandardMaterial({ map: asph, color: 0x9c9ea2, roughness: 0.92, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    pm.onBeforeCompile = roadMat.onBeforeCompile; pm.customProgramCacheKey = () => 'parking';   // 車道と同じ舗装のむら
+    const lm = new THREE.MeshStandardMaterial({ color: 0xe8e8e4, roughness: 0.65, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, side: THREE.DoubleSide });
+    let nLots = 0;
+    CHK.forEach(c => {
+      if (c.I.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(c.P, 3)); g.setIndex(c.I); g.computeVertexNormals(); g.computeBoundingSphere(); const m = new THREE.Mesh(worldUV(g, 6), pm); m.receiveShadow = true; out.group.add(m); nLots++; }
+      if (c.LI.length) {
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(c.L, 3)); g.setIndex(c.LI);
+        const nrm = new Float32Array(c.L.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3)); g.computeBoundingSphere();
+        const m = new THREE.Mesh(g, lm); m.receiveShadow = true; out.group.add(m);
+      }
+    });
+    out.parkingChunks = nLots;
   }
   /* --- 建物（PLATEAU LOD2）: 用途と高さで、壁・屋根・窓を変える --- */
   const B = W.bldg, bg = new THREE.BufferGeometry(), nb = B.info.length;
@@ -501,6 +584,8 @@ export function buildWorld(scene, W, gfx) {
   /* --- 鉄道の高架橋（東海道新幹線・東海道本線・遠州鉄道。OSM では全区間が bridge）。
          桁（幅 5m・厚さ 1.4m）、壁高欄（高さ 1.0m）、橋脚（10m ごと）。レール面の高さは路線ごとの目安 --- */
   const railGeos = [], piers = [], deckGeos = [];
+  const chunkKey = p => Math.floor(p[0] / 400) + ',' + Math.floor(p[1] / 400);   // 400m 四方のまとまり
+  const byKey = gs => { const M = new Map(); gs.forEach(g => { const k = g.userData.key || ''; if (!M.has(k)) M.set(k, []); M.get(k).push(g); }); return M; };
   const viaG = out.viaductG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 1.0);
   out.underViaduct = (x, z, m) => { m = m || 0; for (let a = -m; a <= m; a += 1) for (let b = -m; b <= m; b += 1) if (viaG.at(x + a, z + b)) return true; return false; };
   // 道路の範囲（1m 格子）。高架橋は道路をまたぐので、道路の上（と 1.5m 以内）には橋脚を置かない
@@ -528,48 +613,67 @@ export function buildWorld(scene, W, gfx) {
   };
   const onRoad = out.onRoad = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (roadG.at(x + a * 0.75, z + b * 0.75)) return true; return false; };
   out.pierTris = [];
-  const railH = t => (/新幹線/.test(t.name || '') ? 11 : /遠州/.test(t.name || '') ? 8.5 + (+(t.layer || 1) - 1) * 5 : 8.5);
+  // レール面の高さ（地上から）。OSM の layer は「下を何かが通る」重なりの順で高さではないので使わない（遠州鉄道の高架も在来線と同じ程度）
+  const railH = t => (/新幹線/.test(t.name || '') ? 11 : 8.5);
   const RP = W.roads.p;
   W.roads.ways.forEach(w => {
     if (w.k !== 'rail' || !(w.t.bridge && w.t.bridge !== 'no')) return;
     const H = railH(w.t), pts = w.n.map(i => [RP[i * 3], RP[i * 3 + 1]]);
     // 3m ごとに分けて、地面の高さを長い範囲でならした上に置く（地面の細かい起伏で桁が波打たないように）
-    const L = []; for (let k = 1; k < pts.length; k++) { const a = pts[k - 1], b = pts[k], l = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.ceil(l / 3)); for (let j = k === 1 ? 0 : 1; j <= m; j++) L.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]); }
-    if (L.length < 2) return;
-    const yy = L.map(p => terr.at(p[0], p[1])), ys = yy.map((_, i) => { let s0 = 0, c = 0; for (let k = Math.max(0, i - 15); k <= Math.min(yy.length - 1, i + 15); k++) { s0 += yy[k]; c++; } return s0 / c + H; });
+    const L0 = []; for (let k = 1; k < pts.length; k++) { const a = pts[k - 1], b = pts[k], l = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.ceil(l / 3)); for (let j = k === 1 ? 0 : 1; j <= m; j++) L0.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]); }
+    if (L0.length < 2) return;
+    const yy = L0.map(p => terr.at(p[0], p[1])), ys0 = yy.map((_, i) => { let s0 = 0, c = 0; for (let k = Math.max(0, i - 15); k <= Math.min(yy.length - 1, i + 15); k++) { s0 += yy[k]; c++; } return s0 / c + H; });
+    // 直線で高さの変化が一定の所は区切りを間引く（間の点の、まっすぐ結んだ線からのずれが横 3cm・高さ 2cm 未満なら省く。最長 30m）
+    const keep = [0];
+    for (let i = 1; i < L0.length - 1; i++) {
+      const a = keep[keep.length - 1], b = i + 1, ax = L0[a][0], az = L0[a][1], dx = L0[b][0] - ax, dz = L0[b][1] - az, l2 = dx * dx + dz * dz;
+      let ok = l2 < 900;
+      for (let k = a + 1; ok && k < b; k++) { const u = ((L0[k][0] - ax) * dx + (L0[k][1] - az) * dz) / l2; if (Math.abs((L0[k][0] - ax) * dz - (L0[k][1] - az) * dx) / Math.sqrt(l2) > 0.03 || Math.abs(ys0[k] - (ys0[a] + (ys0[b] - ys0[a]) * u)) > 0.02) ok = false; }
+      if (!ok) keep.push(i);
+    }
+    keep.push(L0.length - 1);
+    const L = keep.map(i => L0[i]), ys = keep.map(i => ys0[i]);
     const hw = 2.5, n = L.length;
     const side = (off) => L.map((p, i) => { const q = L[Math.min(n - 1, i + 1)], r = L[Math.max(0, i - 1)], dx = q[0] - r[0], dz = q[1] - r[1], l = Math.hypot(dx, dz) || 1; return [p[0] - dz / l * off, p[1] + dx / l * off]; });
     const A = side(-hw), Bs = side(hw);
     for (let i = 1; i < n; i++) { viaG.tri(A[i - 1][0], A[i - 1][1], Bs[i - 1][0], Bs[i - 1][1], A[i][0], A[i][1]); viaG.tri(Bs[i - 1][0], Bs[i - 1][1], Bs[i][0], Bs[i][1], A[i][0], A[i][1]); }   // 高架の下の範囲
-    const quadStrip = (P, Q, yA, yB) => { const pos = new Float32Array(n * 6), ix = []; for (let i = 0; i < n; i++) { pos.set([P[i][0], yA(i), P[i][1], Q[i][0], yB(i), Q[i][1]], i * 6); if (i) { const a = (i - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g; };
-    { // 上面（道床）: 横 0〜1・長さ方向の距離の UV を付けて、砂利・枕木・レールをシェーダーで描く
-      const g = quadStrip(A, Bs, i => ys[i] + 0.02, i => ys[i] + 0.02), uv = new Float32Array(n * 4); let acc = 0;
-      for (let i = 0; i < n; i++) { if (i) acc += Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]); uv.set([0, acc, 1, acc], i * 4); }
-      g.setAttribute('aTU', new THREE.BufferAttribute(uv, 2)); g.userData.gauge = /新幹線/.test(w.t.name || '') ? 1.435 : 1.067; deckGeos.push(g);
+    // 300m ほどの区間に分けて作る（区間ごとのまとまりで、画面の外は描かない・影にも回さない）
+    const quadStrip = (P, Q, yA, yB, i0, i1) => { const m = i1 - i0 + 1, pos = new Float32Array(m * 6), ix = []; for (let k = 0; k < m; k++) { const i = i0 + k; pos.set([P[i][0], yA(i), P[i][1], Q[i][0], yB(i), Q[i][1]], k * 6); if (k) { const a = (k - 1) * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(ix); g.computeVertexNormals(); return g; };
+    const acc = [0]; for (let i = 1; i < n; i++) acc.push(acc[i - 1] + Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]));
+    for (let i0 = 0; i0 < n - 1;) {
+      let i1 = i0 + 1; while (i1 < n - 1 && acc[i1] - acc[i0] < 300) i1++;
+      const key = chunkKey(L[(i0 + i1) >> 1]);
+      { // 上面（道床）: 横 0〜1・長さ方向の距離の UV を付けて、砂利・枕木・レールをシェーダーで描く
+        const g = quadStrip(A, Bs, i => ys[i] + 0.02, i => ys[i] + 0.02, i0, i1), uv = new Float32Array((i1 - i0 + 1) * 4);
+        for (let i = i0; i <= i1; i++) uv.set([0, acc[i], 1, acc[i]], (i - i0) * 4);
+        g.setAttribute('aTU', new THREE.BufferAttribute(uv, 2)); g.userData.gauge = /新幹線/.test(w.t.name || '') ? 1.435 : 1.067; g.userData.key = key; deckGeos.push(g);
+      }
+      [quadStrip(A, Bs, i => ys[i], i => ys[i], i0, i1),                       // 上面
+       quadStrip(A, Bs, i => ys[i] - 1.4, i => ys[i] - 1.4, i0, i1),           // 下面
+       quadStrip(A, A, i => ys[i] + 1.0, i => ys[i] - 1.4, i0, i1),            // 側面と壁高欄
+       quadStrip(Bs, Bs, i => ys[i] + 1.0, i => ys[i] - 1.4, i0, i1)].forEach(g => { g.userData.key = key; railGeos.push(g); });
+      i0 = i1;
     }
-    railGeos.push(quadStrip(A, Bs, i => ys[i], i => ys[i]));                       // 上面
-    railGeos.push(quadStrip(A, Bs, i => ys[i] - 1.4, i => ys[i] - 1.4));           // 下面
-    railGeos.push(quadStrip(A, A, i => ys[i] + 1.0, i => ys[i] - 1.4));            // 側面と壁高欄
-    railGeos.push(quadStrip(Bs, Bs, i => ys[i] + 1.0, i => ys[i] - 1.4));
     // 橋脚（10m ごと、1.6m 角）
-    for (let i = 0; i < n; i += 3) {
-      const p = L[i], gy = terr.at(p[0], p[1]), h = ys[i] - 1.4 - gy; if (h < 1 || onRoad(p[0], p[1])) continue;
+    for (let i = 0; i < L0.length; i += 3) {
+      const p = L0[i], gy = terr.at(p[0], p[1]), h = ys0[i] - 1.4 - gy; if (h < 1 || onRoad(p[0], p[1])) continue;
       if (piers.some(q => Math.abs(q[0] - p[0]) < 6 && Math.abs(q[1] - p[1]) < 6)) continue;   // 平行な線路の橋脚は共有する（林のように並ばないように）
       piers.push(p);
-      const g = new THREE.BoxGeometry(1.6, h, 1.6); g.translate(p[0], gy + h / 2, p[1]); railGeos.push(g);
+      const g = new THREE.BoxGeometry(1.6, h, 1.6); g.translate(p[0], gy + h / 2, p[1]); g.userData.key = chunkKey(p); railGeos.push(g);
       out.pierTris.push([p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8], [p[0] - 0.8, p[1] - 0.8, p[0] + 0.8, p[1] + 0.8, p[0] - 0.8, p[1] + 0.8]);
     }
   });
   if (railGeos.length) {
-    const rg = mergeGeometries(railGeos.map(g => { g.deleteAttribute('uv'); g.deleteAttribute('normal'); return g; }));
-    rg.computeVertexNormals();
     const rmat = new THREE.MeshStandardMaterial({ color: 0xb4b2ac, roughness: 0.9, side: THREE.DoubleSide });   // 打ち放しコンクリートの明るい灰色
-    const rail = new THREE.Mesh(boxUV(rg, 4), rmat); rail.castShadow = true; rail.receiveShadow = true; out.group.add(rail);
+    byKey(railGeos).forEach(gs => {
+      const rg = mergeGeometries(gs.map(g => { g.deleteAttribute('uv'); g.deleteAttribute('normal'); return g; }));
+      rg.computeVertexNormals(); rg.computeBoundingSphere();
+      const rail = new THREE.Mesh(boxUV(rg, 4), rmat); rail.castShadow = true; rail.receiveShadow = true; out.group.add(rail);
+    });
   }
   if (deckGeos.length) {
     // 高架の上の線路: 砂利（バラスト）、0.6m ごとのコンクリート枕木、2 本のレール（狭軌 1.067m・新幹線 1.435m）
-    const dg = mergeGeometries(deckGeos.map(g => { const n2 = g.attributes.position.count, ga = new Float32Array(n2).fill(g.userData.gauge); g.setAttribute('aGauge', new THREE.BufferAttribute(ga, 1)); return g; }));
-    dg.computeVertexNormals();
+    deckGeos.forEach(g => { const n2 = g.attributes.position.count, ga = new Float32Array(n2).fill(g.userData.gauge); g.setAttribute('aGauge', new THREE.BufferAttribute(ga, 1)); });
     const dm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
     dm.onBeforeCompile = sh => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aGauge; attribute vec2 aTU; varying vec2 vTU; varying float vGauge;').replace('#include <uv_vertex>', '#include <uv_vertex>\nvTU = aTU; vGauge = aGauge;');
@@ -588,7 +692,7 @@ export function buildWorld(scene, W, gfx) {
           float fw2 = fwidth(along); diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.5, 0.49, 0.46), vec3(0.36, 0.34, 0.31), bed), smoothstep(0.08, 0.3, fw2));`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.3, 1.0 - smoothstep(0.03, 0.05, abs(abs((vTU.x - 0.5) * 5.0) - (vGauge * 0.5 + 0.035))));');
     };
-    const deck = new THREE.Mesh(dg, dm); deck.receiveShadow = true; out.group.add(deck);
+    byKey(deckGeos).forEach(gs => { const dg = mergeGeometries(gs); dg.computeVertexNormals(); dg.computeBoundingSphere(); const deck = new THREE.Mesh(dg, dm); deck.receiveShadow = true; out.group.add(deck); });
   }
 
   /* --- 信号機（LED 薄型の横型 3 灯、φ250、フードなし）。下端 5.6m、柱は進んでくる車の左、アームは車線の上へ。

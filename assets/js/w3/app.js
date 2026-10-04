@@ -228,8 +228,9 @@ export async function start(container, opt) {
     let m;
     try {
       const sc = await loadGLB(CARS + G.key + (hero ? '_hero' : '_lod0') + '.glb');
-      const pc = playerCar(sc, opt.carColor || G.color), wheels = {}, g = new THREE.Group(); g.add(pc.root);
-      if (pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
+      const pc = playerCar(sc, opt.carColor || G.color), g = new THREE.Group(); g.add(pc.root);
+      const wheels = pc.wheels || {};   // 形で見つけた車輪（タイヤ・ホイール・ナットが一緒に回る）
+      if (!pc.wheels && pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
       m = { root: g, wheels, flip: false, tails: pc.tails, setColor: pc.setColor };
       // 影は粗い形（lod1、約 3 万面）で落とす: 影のカメラにだけ見えるレイヤー 1 に置き、細かい形は影を落とさない（見た目の形はそのまま）
       try {
