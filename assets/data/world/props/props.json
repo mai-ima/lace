@@ -1,0 +1,48 @@
+[
+ {
+  "key": "streetlight_curve",
+  "name": "道路照明（カーブしたテーパーポール・LED 灯具）",
+  "h": 10,
+  "lods": {
+   "lod0": {
+    "tris": 7553,
+    "kb": 70
+   },
+   "lod1": {
+    "tris": 1427,
+    "kb": 43
+   }
+  },
+  "source": {
+   "title": "City streetlight 2",
+   "author": "daffyxxcoolxx",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/30b63ebb00054efcb2bbb2ed3884cb39",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・原点・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "utility_pole_jp",
+  "name": "電柱（日本・腕金・碍子・変圧器つき）",
+  "h": 12,
+  "lods": {
+   "lod0": {
+    "tris": 8663,
+    "kb": 47
+   },
+   "lod1": {
+    "tris": 1419,
+    "kb": 11
+   }
+  },
+  "source": {
+   "title": "Japanese Electric Pole",
+   "author": "LiliumLetifer",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/f3dc37ced5d548ef98c7ee8bd2ad5491",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・原点・面の間引き・圧縮"
+  }
+ }
+]

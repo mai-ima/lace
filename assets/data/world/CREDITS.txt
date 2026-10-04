@@ -23,3 +23,8 @@ assets/data/world/ の出典（加工して作成）
   実在の車名・エンブレムは商標のため、ゲーム内では車名を使わない（車種は「小型ハッチバック」などの一般名で扱う）。
 - 道路の範囲・車道と歩道・縁石（center/road_area.json）と実測の道幅（center/road_width.json）: 国土交通省 PLATEAU
   （浜松市 交通（道路）モデル LOD1、2023 年度）を tools/world/build_tran.py で加工して作成（OSM の道路網と組み合わせ）。
+- 道路の付属物（props/streetlight_curve_*.glb, utility_pole_jp_*.glb）: Objaverse に収録された Sketchfab の CC BY 4.0 作品を、
+  tools/world/props_glb.mjs で縮尺・原点・面の間引き・圧縮を加工して作成。作品ごとの出典:
+  - 道路照明（カーブしたテーパーポール・LED 灯具）: 「City streetlight 2」 作者 daffyxxcoolxx（CC BY 4.0） https://sketchfab.com/3d-models/30b63ebb00054efcb2bbb2ed3884cb39
+  - 電柱（日本・腕金・碍子・変圧器つき）: 「Japanese Electric Pole」 作者 LiliumLetifer（CC BY 4.0） https://sketchfab.com/3d-models/f3dc37ced5d548ef98c7ee8bd2ad5491
+- 木の位置（center/trees.json）: 国土地理院（地理院タイル 全国最新写真（シームレス））から樹冠を検出して作成（tools/world/trees_from_ortho.py）。

@@ -133,7 +133,16 @@ export async function start(container, opt) {
         while (next <= acc + sl) {
           const u = (next - acc) / sl, x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u, dx = (b[0] - a[0]) / sl, dz = (b[1] - a[1]) / sl;
           [-1, 1].forEach(sd => {
-            const off = pr.hw + pr.walk * 0.5, tx = x - dz * off * sd, tz = z + dx * off * sd;
+            let off = pr.hw + pr.walk * 0.5;
+            // 実測の歩道があれば、外へ探して歩道の幅の中ほど（車道側から 1.2m、狭ければ中央）に植える
+            if (W.roadArea && W.roadArea.walk) {
+              let o1 = Math.max(1, pr.hw - 2); while (o1 < pr.hw + 8 && !world.walkG.at(x - dz * o1 * sd, z + dx * o1 * sd)) o1 += 0.25;
+              if (o1 >= pr.hw + 8) return;
+              let o2 = o1; while (o2 < o1 + 8 && world.walkG.at(x - dz * o2 * sd, z + dx * o2 * sd)) o2 += 0.25;
+              if (o2 - o1 < 2.0) return;   // 2m 未満の歩道には植えない
+              off = o1 + Math.min(1.2, (o2 - o1) / 2);
+            }
+            const tx = x - dz * off * sd, tz = z + dx * off * sd;
             if (collide.grid.at(tx, tz) || sigNear(tx, tz) || world.underViaduct(tx, tz, 4)) return;
             if (W.roadArea && W.roadArea.walk ? !world.walkG.at(tx, tz) : world.onRoadPt(tx, tz)) return;   // 実測の歩道の上だけに植える   // 高架の下（4m 以内）には植えない
             const r = hsh(tx, tz);
@@ -144,6 +153,16 @@ export async function start(container, opt) {
         acc += sl;
       }
     });
+    // 航空写真から見つけた実際の樹冠（tools/world/trees_from_ortho.py）があれば、それを使う（道路沿いの規則で植えた木は使わない）
+    const real = await fetch('assets/data/world/center/trees.json').then(r => r.ok ? r.json() : null).catch(() => null);
+    if (real && real.trees.length) {
+      spots.length = 0;
+      real.trees.forEach(([x, z, r]) => {
+        if (collide.grid.at(x, z) || world.onRoadPt(x, z) || sigNear(x, z) || world.underViaduct(x, z, 3)) return;
+        const k = hsh(x, z);
+        spots.push({ x, y: W.terrain.at(x, z) + (world.walkG.at(x, z) ? 0.14 : 0), z, h: Math.max(5, Math.min(14, 4 + r * 1.7)) * (0.9 + k * 0.2), yaw: k * 6.283 });
+      });
+    }
     world.trees = plantTrees(scene, imp, spots, { shadows: gfx.shadows > 0 });
     spots.forEach(p => { const r = 0.35; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });   // 幹の当たり判定
     world.treeSpots = spots;
@@ -152,7 +171,18 @@ export async function start(container, opt) {
   {
     const T = world.treeSpots || [];
     const free = (x, z) => !collide.grid.at(x, z) && !world.onRoadPt(x, z) && !world.underViaduct(x, z, 3) && !world.signals.some(s => Math.abs(s.x - x) < 3 && Math.abs(s.z - z) < 3) && !T.some(t => Math.abs(t.x - x) < 2.5 && Math.abs(t.z - z) < 2.5);
-    world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, {});
+    // 外部のモデル（電柱: 日本の腕金・碍子・変圧器つき、道路照明: カーブしたテーパーポール）。距離で細かい形と粗い形を切り替える
+    let models = null;
+    try {
+      const PR = 'assets/data/world/props/', pinfo = await fetch(PR + 'props.json').then(r => r.json());
+      const load = async (key, fix) => { const [a, b] = await Promise.all(['lod0', 'lod1'].map(l => loadGLB(PR + key + '_' + l + '.glb'))); const m = { lod0: fleetParts(a).parts, lod1: fleetParts(b).parts, h: pinfo.find(x => x.key === key).h }; if (fix) fix(m); return m; };
+      const tint = (m, r, g, b) => ['lod0', 'lod1'].forEach(k => m[k].forEach(pt => { const c = pt.geometry.attributes.color; if (c && c.itemSize === 3) { for (let i = 0; i < c.count; i++) c.setXYZ(i, c.getX(i) * r, c.getY(i) * g, c.getZ(i) * b); c.needsUpdate = true; } }));
+      // 道路照明はアームがローカルの +x を向くように（モデルの向きを頂点の重心で判定）
+      const armX = m => { let sx = 0, n = 0; m.lod0.forEach(pt => { const P = pt.geometry.attributes.position; for (let i = 0; i < P.count; i++) if (P.getY(i) > m.h * 0.8) { sx += P.getX(i); n++; } }); if (n && sx / n < 0) ['lod0', 'lod1'].forEach(k => m[k].forEach(pt => pt.geometry.rotateY(Math.PI))); };
+      models = { pole: await load('utility_pole_jp', m => tint(m, 0.74, 0.73, 0.70)), light: await load('streetlight_curve', m => { armX(m); tint(m, 0.62, 0.64, 0.66); }) };
+    } catch (e) { console.warn('付属物のモデルを読めませんでした', e); }
+    world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, { models, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
+    // 並べ直しは毎フレームの更新で（自車の位置が決まってから）
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }
   // 車: 外部の高品質なモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/vehicles.mjs で変換）
@@ -381,6 +411,7 @@ export async function start(container, opt) {
       acc -= STEP; simT += STEP;
     }
     trafficStep(dt);
+    if (world.props && world.props.update) world.props.update(car.st.x, car.st.z);
     if (hitT > 0) hitT -= dt;
     const st = car.st;
     carM.root.position.set(st.x, st.y, st.z);
@@ -419,7 +450,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; drawGauge(); drawMini(); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     pose(x, z, yaw) { car.st.x = x; car.st.z = z; car.st.yaw = yaw; car.st.vx = car.st.vy = car.st.r = 0; firstCam = true; }
   };
   return api;

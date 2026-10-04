@@ -15,6 +15,30 @@ function walkLine(L, start, step, fn) {   // 折れ線に沿って start から 
     acc += sl;
   }
 }
+/**
+ * 距離で形を切り替えるインスタンス描画。model: { lod0: parts, lod1: parts }（cars.js の fleetParts の parts）。
+ * near より近い物は細かい形（影あり）、far まで粗い形（影なし）、その先は描かない。update(カメラの x, z) を時々呼ぶ
+ */
+function lodInstancer(scene, model, spots, o) {
+  const mk = (parts, shadow) => parts.map(pt => { const im = new THREE.InstancedMesh(pt.geometry, pt.material, spots.length); im.castShadow = shadow; im.receiveShadow = true; im.frustumCulled = false; im.count = 0; scene.add(im); return im; });
+  const L0 = mk(model.lod0, true), L1 = mk(model.lod1, false);
+  const mats = spots.map(p => new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw), new THREE.Vector3(1, 1, 1)));
+  let lastX = Infinity, lastZ = Infinity;
+  return {
+    update(cx, cz) {
+      if (Math.hypot(cx - lastX, cz - lastZ) < 8) return;   // 8m 動くごとに並べ直す
+      lastX = cx; lastZ = cz;
+      let n0 = 0, n1 = 0;
+      spots.forEach((p, i) => {
+        const d = Math.hypot(p.x - cx, p.z - cz);
+        if (d < o.near) { L0.forEach(im => im.setMatrixAt(n0, mats[i])); n0++; }
+        else if (d < o.far) { L1.forEach(im => im.setMatrixAt(n1, mats[i])); n1++; }
+      });
+      L0.forEach(im => { im.count = n0; im.visible = n0 > 0; im.instanceMatrix.needsUpdate = true; });
+      L1.forEach(im => { im.count = n1; im.visible = n1 > 0; im.instanceMatrix.needsUpdate = true; });
+    }
+  };
+}
 const hsh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
 
 /**
@@ -38,12 +62,15 @@ export function buildProps(scene, net, at, free, opt) {
         poleSpots.push(p); if (prev && Math.hypot(prev.x - px, prev.z - pz) < 45) spans.push([prev, p]); prev = p;
       });
     }
-    // 街灯: 幹線と 2 車線の道の歩道（rank ≤ 4）。両側に互い違い
-    if (pr.rank <= 4 && pr.walk > 0) {
-      walkLine(e.line, 10, () => 34, (x, z, dx, dz, k) => {
-        const side = k % 2 ? 1 : -1, off = pr.hw + 0.6, px = x - dz * off * side, pz = z + dx * off * side;
+    // 街灯（道路照明）: 歩道のある道（rank ≤ 6）。両側に互い違いに約 32m ごと。柱は歩道の車道側（縁石から 0.6m）
+    if (pr.rank <= 6 && pr.walk > 0) {
+      walkLine(e.line, 10, () => 32, (x, z, dx, dz, k) => {
+        const side = k % 2 ? 1 : -1;
+        let off = pr.hw + 0.6;
+        if (opt.onWalk) { let o = Math.max(1, pr.hw - 1.5); while (o < pr.hw + 8 && !opt.onWalk(x - dz * o * side, z + dx * o * side)) o += 0.25; if (o >= pr.hw + 8) return; off = o + 0.6; }
+        const px = x - dz * off * side, pz = z + dx * off * side;
         if (!free(px, pz)) return;
-        lightSpots.push({ x: px, z: pz, y: at(px, pz), yaw: Math.atan2(dx * side, dz * side) });   // ローカルの +x（アームの向き）が車道を向く
+        lightSpots.push({ x: px, z: pz, y: at(px, pz), yaw: Math.atan2(dx * side, dz * side), reach: off });   // ローカルの +x（アームの向き）が車道を向く
       });
     }
   });
@@ -59,8 +86,17 @@ export function buildProps(scene, net, at, free, opt) {
     m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); m.castShadow = !noShadow; m.receiveShadow = true; scene.add(m); return m;
   }
   const at0 = (p, dy, h) => { Q.setFromAxisAngle(Y, p.yaw); V.set(p.x, p.y + dy, p.z); return M.compose(V, Q, S); };
+  // 外部のモデル（tools/world/props_glb.mjs で変換）があれば、距離で細かい形と粗い形を切り替えて描く
+  if (opt.models) {
+    out.lods = [];
+    if (opt.models.pole) out.lods.push(lodInstancer(scene, opt.models.pole, poleSpots, { near: 45, far: 260 }));
+    if (opt.models.light) out.lods.push(lodInstancer(scene, opt.models.light, lightSpots, { near: 55, far: 300 }));
+    out.update = (cx, cz) => out.lods.forEach(l => l.update(cx, cz));
+  }
+  const WH = opt.models && opt.models.pole ? opt.models.pole.h : 10;   // 電線をつなぐ高さの基準（電柱の地上高）
   // 電柱（地上 10m、上へ細くなる）
   const poleG = new THREE.CylinderGeometry(0.095, 0.17, 10, 8, 1, true); poleG.translate(0, 5, 0);
+  if (!(opt.models && opt.models.pole)) {
   inst(poleG, conc, poleSpots, p => at0(p, 0));
   // 腕金（高圧 9.4m、低圧 8.2m）。道路と直角
   const armG = new THREE.BoxGeometry(1.8, 0.09, 0.09); const armList = [];
@@ -73,8 +109,9 @@ export function buildProps(scene, net, at, free, opt) {
   // 柱上変圧器（2 割の電柱）
   const trG = new THREE.CylinderGeometry(0.28, 0.28, 0.85, 10); trG.translate(0, 0, 0);
   inst(trG, trans, poleSpots.filter(p => p.tr), p => { at0(p, 7.0); M.multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.42)); return M; });
+  }
   // 電線（たるみ 2%）: 高圧 3 本 + 低圧 2 本 + 通信 1 本
-  const lines = [], wires = [[-0.8, 9.6], [0, 9.6], [0.8, 9.6], [-0.45, 8.25], [0.45, 8.25], [0.3, 6.2]];
+  const lines = [], wires = [[-0.8, WH * 0.95], [0, WH * 0.95], [0.8, WH * 0.95], [-0.45, WH * 0.82], [0.45, WH * 0.82], [0.3, WH * 0.62]];
   spans.forEach(([a, b]) => {
     const len = Math.hypot(b.x - a.x, b.z - a.z), sag = len * 0.02;
     wires.forEach(([o, h]) => {
@@ -91,7 +128,8 @@ export function buildProps(scene, net, at, free, opt) {
     const wl = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x1c1d20, transparent: true, opacity: 0.85 }));
     scene.add(wl);
   }
-  // 街灯（高さ 10m の柱、車道側へ 1.8m のアーム、LED 灯具）
+  // 街灯（高さ 10m の柱、車道側へ 1.8m のアーム、LED 灯具）。外部のモデルがあればそれを使う
+  if (!(opt.models && opt.models.light)) {
   const lpG = new THREE.CylinderGeometry(0.07, 0.11, 10, 8, 1, true); lpG.translate(0, 5, 0);
   inst(lpG, steel, lightSpots, p => at0(p, 0));
   const laG = new THREE.CylinderGeometry(0.045, 0.045, 1.9, 5, 1, true); laG.rotateZ(Math.PI / 2); laG.translate(0.95, 0, 0);
@@ -100,6 +138,7 @@ export function buildProps(scene, net, at, free, opt) {
   const lampM = new THREE.MeshStandardMaterial({ color: 0x55595e, roughness: 0.4, metalness: 0.5, emissive: 0xfff2dc, emissiveIntensity: 0 });
   out.lampMaterial = lampM;
   inst(lhG, lampM, lightSpots, p => at0(p, 9.8));
+  }
   out.poles = poleSpots; out.lights = lightSpots; out.wireCount = spans.length;
   return out;
 }
