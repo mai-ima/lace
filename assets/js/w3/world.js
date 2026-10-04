@@ -140,11 +140,14 @@ export function buildWorld(scene, W, gfx) {
         .replace('#include <map_fragment>', `#include <map_fragment>
           float dist = length(vGP - cameraPosition), near = 1.0 - smoothstep(25.0, 140.0, dist);
           if (near > 0.0) {
+            // 近くでは航空写真をぼかした色（約 5m 単位。写り込んだ車や細かい影が消える）を使い、細かい模様は素材の質感で描く
+            vec3 lo = texture2D(map, vMapUv, 3.5).rgb * vec3(1.04, 1.0, 0.9);   // 写真全体の青緑の色かぶりを少し戻す
+            diffuseColor.rgb = mix(diffuseColor.rgb, lo, near * 0.8);
             vec3 o = diffuseColor.rgb; float green = clamp((o.g - max(o.r, o.b)) * 8.0 + 0.2, 0.0, 1.0);
             vec3 g1 = texture2D(tGrass, vGP.xz / 1.6).rgb * 0.5 + texture2D(tGrass, vGP.xz / 7.0).rgb * 0.5, d1 = texture2D(tDirt, vGP.xz / 2.2).rgb * 0.6 + texture2D(tGrass, vGP.xz / 9.0).rgb * 0.4;
             float lg = dot(g1, vec3(0.333)) / 0.118, ld = dot(d1, vec3(0.333)) / 0.106;   // 質感の明るさ（線形の色で平均を 1 に）
             float detail = mix(ld, lg, green);
-            detail = 1.0 + (detail - 1.0) * 1.6;   // 質感の濃淡を強める（写真の素材は濃淡が小さい）
+            detail = 1.0 + (detail - 1.0) * 2.2;   // 質感の濃淡を強める（写真の素材は濃淡が小さい。ぼかした色の上なので強めに）
             diffuseColor.rgb = mix(o, o * clamp(detail, 0.5, 1.6), near * 0.9);
           }`);
     };
@@ -212,6 +215,7 @@ export function buildWorld(scene, W, gfx) {
     });
   });
   net.junctions.forEach(n => {
+    if (n.arms && n.arms.length && n.arms.every(a => a.e.offArea || a.e.hidden)) return;   // 描かない私道どうしの交差点
     const P = n.poly, m = P.length, pos = new Float32Array((m + 1) * 3), ix = [];
     let cx = 0, cz = 0; P.forEach(p => { cx += p[0]; cz += p[1]; }); cx /= m; cz /= m;
     pos.set([cx, terr.atRoad(cx, cz) + 0.03, cz], 0);
