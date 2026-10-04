@@ -1,71 +1,5 @@
 [
  {
-  "key": "compact_swift",
-  "name": "小型ハッチバック（スイフト型）",
-  "kind": "compact",
-  "size": {
-   "w": 1.85,
-   "l": 3.85,
-   "h": 1.63
-  },
-  "lods": {
-   "lod0": {
-    "tris": 134652,
-    "kb": 2156
-   },
-   "lod1": {
-    "tris": 34566,
-    "kb": 383
-   },
-   "lod2": {
-    "tris": 6081,
-    "kb": 101
-   }
-  },
-  "paint": true,
-  "source": {
-   "title": "Suzuki Swift",
-   "author": "CasacadeOperations",
-   "license": "CC BY 4.0",
-   "url": "https://sketchfab.com/3d-models/218c3c0c6afd4d0eb343bd50d8868fd0",
-   "via": "Objaverse (allenai/objaverse)",
-   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
-  }
- },
- {
-  "key": "sedan_sylphy",
-  "name": "セダン（シルフィ型）",
-  "kind": "sedan",
-  "size": {
-   "w": 2.04,
-   "l": 4.61,
-   "h": 1.48
-  },
-  "lods": {
-   "lod0": {
-    "tris": 119511,
-    "kb": 890
-   },
-   "lod1": {
-    "tris": 31057,
-    "kb": 283
-   },
-   "lod2": {
-    "tris": 5276,
-    "kb": 56
-   }
-  },
-  "paint": true,
-  "source": {
-   "title": "Nissan Sentra B17",
-   "author": "a0930582398",
-   "license": "CC BY 4.0",
-   "url": "https://sketchfab.com/3d-models/4e261bd2d93a438ebdabf8cc6b41cf58",
-   "via": "Objaverse (allenai/objaverse)",
-   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
-  }
- },
- {
   "key": "sedan_accord",
   "name": "セダン（アコード型）",
   "kind": "sedan",
@@ -76,16 +10,16 @@
   },
   "lods": {
    "lod0": {
-    "tris": 120000,
-    "kb": 1787
+    "tris": 160000,
+    "kb": 2074
    },
    "lod1": {
     "tris": 30000,
-    "kb": 1046
+    "kb": 1030
    },
    "lod2": {
-    "tris": 7120,
-    "kb": 91
+    "tris": 6000,
+    "kb": 41
    }
   },
   "paint": false,
@@ -113,12 +47,16 @@
     "kb": 1072
    },
    "lod1": {
-    "tris": 33901,
-    "kb": 479
+    "tris": 41131,
+    "kb": 973
    },
    "lod2": {
-    "tris": 6210,
-    "kb": 78
+    "tris": 6431,
+    "kb": 81
+   },
+   "hero": {
+    "tris": 49620,
+    "kb": 1072
    }
   },
   "paint": true,
@@ -142,16 +80,20 @@
   },
   "lods": {
    "lod0": {
-    "tris": 120010,
-    "kb": 1829
+    "tris": 161080,
+    "kb": 2071
    },
    "lod1": {
-    "tris": 30232,
+    "tris": 30030,
     "kb": 1269
    },
    "lod2": {
-    "tris": 6111,
-    "kb": 66
+    "tris": 6295,
+    "kb": 64
+   },
+   "hero": {
+    "tris": 238188,
+    "kb": 2467
    }
   },
   "paint": true,
@@ -175,16 +117,20 @@
   },
   "lods": {
    "lod0": {
-    "tris": 119992,
-    "kb": 2019
+    "tris": 151416,
+    "kb": 2208
    },
    "lod1": {
-    "tris": 33039,
-    "kb": 1124
+    "tris": 36928,
+    "kb": 1508
    },
    "lod2": {
-    "tris": 6108,
-    "kb": 61
+    "tris": 6025,
+    "kb": 71
+   },
+   "hero": {
+    "tris": 151416,
+    "kb": 2208
    }
   },
   "paint": true,
@@ -193,6 +139,76 @@
    "author": "ProPolyModels",
    "license": "CC BY 4.0",
    "url": "https://sketchfab.com/3d-models/5c0007c0c6ed4d298b8c80646efa09d2",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "compact_swift",
+  "name": "小型ハッチバック（スイフト型）",
+  "kind": "compact",
+  "size": {
+   "w": 1.85,
+   "l": 3.85,
+   "h": 1.63
+  },
+  "lods": {
+   "lod0": {
+    "tris": 171636,
+    "kb": 2448
+   },
+   "lod1": {
+    "tris": 42477,
+    "kb": 800
+   },
+   "lod2": {
+    "tris": 6305,
+    "kb": 110
+   },
+   "hero": {
+    "tris": 424168,
+    "kb": 4370
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Suzuki Swift",
+   "author": "CasacadeOperations",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/218c3c0c6afd4d0eb343bd50d8868fd0",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "sedan_sylphy",
+  "name": "セダン（シルフィ型）",
+  "kind": "sedan",
+  "size": {
+   "w": 2.04,
+   "l": 4.61,
+   "h": 1.48
+  },
+  "lods": {
+   "lod0": {
+    "tris": 174964,
+    "kb": 1227
+   },
+   "lod1": {
+    "tris": 30050,
+    "kb": 286
+   },
+   "lod2": {
+    "tris": 5811,
+    "kb": 65
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Nissan Sentra B17",
+   "author": "a0930582398",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/4e261bd2d93a438ebdabf8cc6b41cf58",
    "via": "Objaverse (allenai/objaverse)",
    "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
   }
@@ -208,20 +224,20 @@
   },
   "lods": {
    "lod0": {
-    "tris": 119868,
-    "kb": 1233
+    "tris": 169590,
+    "kb": 1596
    },
    "lod1": {
-    "tris": 31427,
-    "kb": 491
+    "tris": 30257,
+    "kb": 478
    },
    "lod2": {
-    "tris": 6434,
-    "kb": 96
+    "tris": 6027,
+    "kb": 104
    },
    "hero": {
-    "tris": 249970,
-    "kb": 2176
+    "tris": 400231,
+    "kb": 3177
    }
   },
   "paint": true,
@@ -230,6 +246,39 @@
    "author": "3Duae",
    "license": "CC BY 4.0",
    "url": "https://sketchfab.com/3d-models/784e4656aca649cca55d6b18740a19b2",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "kei_truck_acty",
+  "name": "軽トラック（アクティ型）",
+  "kind": "kei",
+  "size": {
+   "w": 1.7,
+   "l": 3.39,
+   "h": 1.75
+  },
+  "lods": {
+   "lod0": {
+    "tris": 160745,
+    "kb": 7596
+   },
+   "lod1": {
+    "tris": 30196,
+    "kb": 4184
+   },
+   "lod2": {
+    "tris": 6040,
+    "kb": 276
+   }
+  },
+  "paint": false,
+  "source": {
+   "title": "Honda Acty Ha3",
+   "author": "mr.rip",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/58e7efac08a54a2b9a163bf194cb2a5c",
    "via": "Objaverse (allenai/objaverse)",
    "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
   }

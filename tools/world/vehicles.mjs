@@ -19,13 +19,14 @@ await MeshoptSimplifier.ready; await MeshoptEncoder.ready;
 
 /* 車ごとの設定: 全長（m、カタログ値）、向きの補正（度）、塗装の材質（正規表現）、消す材質、元の色（塗装の基本色。一般車ではゲームで色を変える） */
 const CARS = [
-  { key: 'compact_swift', name: '小型ハッチバック（スイフト型）', len: 3.845, paint: /Pearl_Ablaze_Red/, drop: /License_Plate/, kind: 'compact' },
+  { key: 'compact_swift', name: '小型ハッチバック（スイフト型）', len: 3.845, paint: /Pearl_Ablaze_Red/, drop: /License_Plate/, kind: 'compact', hero: 400000 },
   { key: 'sedan_sylphy', name: 'セダン（シルフィ型）', len: 4.615, paint: /^wire_008008136_3$/, kind: 'sedan' },
   { key: 'sedan_accord', name: 'セダン（アコード型）', len: 4.9, paint: null, kind: 'sedan', yaw: 180 },
-  { key: 'sedan_mazda3', name: 'セダン（マツダ 3 型）', len: 4.58, paint: /^material$/, kind: 'sedan', yaw: 180 },
-  { key: 'suv_cx5', name: 'SUV（CX-5 型）', len: 4.545, paint: /^Main$/, kind: 'suv' },
-  { key: 'super_svj', name: 'スーパーカー（V12 ミッドシップ）', len: 4.943, paint: /^CARROSSERIE$/, kind: 'super', hero: 250000, yaw: 180 },
-  { key: 'kei_van', name: '軽バン（キャリイ型）', len: 3.3, paint: /^S_Boya$/, drop: /^Zemin$/, kind: 'kei', yaw: 180 }
+  { key: 'sedan_mazda3', name: 'セダン（マツダ 3 型）', len: 4.58, paint: /^material$/, kind: 'sedan', yaw: 180 , hero: 400000 },
+  { key: 'suv_cx5', name: 'SUV（CX-5 型）', len: 4.545, paint: /^Main$/, kind: 'suv' , hero: 400000 },
+  { key: 'super_svj', name: 'スーパーカー（V12 ミッドシップ）', len: 4.943, paint: /^CARROSSERIE$/, kind: 'super', hero: 400000, yaw: 180 },
+  { key: 'kei_truck_acty', name: '軽トラック（アクティ型）', len: 3.395, paint: null, kind: 'kei' },
+  { key: 'kei_van', name: '軽バン（キャリイ型）', len: 3.3, paint: /^S_Boya$/, drop: /^Zemin$/, kind: 'kei', yaw: 180 , hero: 400000 }
 ];
 const OUT = new URL('../../assets/data/world/cars/', import.meta.url).pathname;
 fs.mkdirSync(OUT, { recursive: true });
@@ -140,30 +141,53 @@ for (const C of CARS) {
       await doc.transform(fn.prune());
       if (lod === 'lod0') console.log('  エンブレム等の小部品を削除', nb, '面');
     }
-    // 面を間引く（LOD）。目標: lod0 は元のまま（12 万面を超えるときは 12 万）、lod1 は約 1.4 万、lod2 は約 3 千
+    // 面を間引く（LOD）。目標: hero は元のまま（上限は車ごと）、lod0 は 16 万まで、lod1 は約 3 万、lod2 は約 6 千
     let tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3;
     // 一般車（lod1・lod2）は車内を省く（色の濃いガラス越しにはほぼ見えない）
-    if (lod !== 'lod0' && lod !== 'hero') { for (const m of root.listMeshes()) for (const p of m.listPrimitives()) { const mat = p.getMaterial(); if (mat && /interior|seat|dash|steer/i.test(mat.getName())) p.dispose(); } await doc.transform(fn.prune()); tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3; }
-    const target = lod === 'hero' ? Math.min(tris, C.hero) : lod === 'lod0' ? Math.min(tris, 120000) : lod === 'lod1' ? 30000 : 6000;
-    if (target < tris) await doc.transform(fn.simplify({ simplifier: MeshoptSimplifier, ratio: target / tris, error: lod === 'lod2' ? 0.02 : 0.004, lockBorder: false }), fn.prune());
-    // 細かい部品が多くて減らないときは、部品の形を保たない間引き（sloppy）を材質ごとに使う
-    {
-      let t1 = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) t1 += p.getIndices().getCount() / 3;
-      if (t1 > target * 1.3) {
-        const r = target / t1;
-        for (const m of root.listMeshes()) for (const p of m.listPrimitives()) {
-          const I = p.getIndices(), n = I.getCount(); if (n / 3 < 200) continue;
-          if (p.getMaterial() && /^PAINT$|glass|Glass|GLASS/.test(p.getMaterial().getName()) && lod === 'lod1') continue;   // 車体とガラスは形を保つ（穴が開かないように）
-          const pos = p.getAttribute('POSITION').getArray(), P32 = pos instanceof Float32Array ? pos : Float32Array.from(pos);
-          const [ni] = MeshoptSimplifier.simplifySloppy(Uint32Array.from(I.getArray()), P32, 3, null, Math.max(36, Math.floor(n * r / 3) * 3), 1.0);
-          if (ni.length >= 3) I.setArray(ni.length > 65535 * 3 || p.getAttribute('POSITION').getCount() > 65535 ? ni : Uint16Array.from(ni)); else p.dispose();
-        }
-        await doc.transform(fn.prune());
+    if (lod !== 'lod0' && lod !== 'hero') { for (const m of root.listMeshes()) for (const p of m.listPrimitives()) { const mat = p.getMaterial(); if (mat && /interior|seat|dash|steer|_INT|meter|sheet|pedal|lever/i.test(mat.getName())) p.dispose(); } await doc.transform(fn.prune()); tris = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) tris += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3; }
+    const target = lod === 'hero' ? Math.min(tris, C.hero) : lod === 'lod0' ? Math.min(tris, 160000) : lod === 'lod1' ? 30000 : 6000;
+    // 間引きは法線も考える（simplifyWithAttributes）。位置だけで間引くと、向きの違う頂点がまとまって車体の映り込みがまだらにへこんで見える。
+    // 形を保たない間引き（sloppy）は使わない（車体・車輪が崩れる）。許容誤差は実寸（m）で、目標の面数に近づくまで段階的に広げる:
+    // 高画質 2mm、自車用 2mm → 3mm、一般車の近く 6mm → 12mm → 2cm → 3.5cm、遠く 3cm → 6cm → 12cm → 25cm
+    const ERRS = lod === 'lod2' ? [0.03, 0.06, 0.12, 0.25] : lod === 'lod1' ? [0.006, 0.012, 0.02, 0.035] : lod === 'lod0' ? [0.002, 0.003] : [0.002];
+    const count = () => { let t = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) t += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3; return t; };
+    // 遠く（lod2）はテクスチャを使わないので、法線と UV を外して同じ位置の頂点をまとめる（面ごとに頂点が分かれたモデルでも間引けるように）。法線は最後に計算し直す
+    if (lod === 'lod2' && count() > target * 1.15) {
+      for (const m of root.listMeshes()) for (const p of m.listPrimitives()) p.listSemantics().forEach(sem => { if (sem !== 'POSITION') p.setAttribute(sem, null); });
+      await doc.transform(fn.weld(), fn.prune());
+    }
+    // 近く（lod1）でも、面ごとに頂点が分かれていて減らないモデル（目標の 1.5 倍を超える）は、テクスチャの無い部品だけ同じ位置の頂点をまとめる
+    const weldLoose = async () => {
+      for (const m of root.listMeshes()) for (const p of m.listPrimitives()) { const mt = p.getMaterial(); if (mt && (mt.getBaseColorTexture() || mt.getNormalTexture())) continue; p.listSemantics().forEach(sem => { if (sem !== 'POSITION') p.setAttribute(sem, null); }); }
+      await doc.transform(fn.weld(), fn.prune());
+    };
+    for (let pass = 0; pass < 2; pass++) {
+    if (pass === 1) { if (lod !== 'lod1' || count() <= target * 1.5) break; await weldLoose(); }
+    for (const err of ERRS) {
+      const cur = count(); if (cur <= target * 1.15) break;
+      const ratio = target / cur;
+      for (const m of root.listMeshes()) for (const p of m.listPrimitives()) {
+        const I = p.getIndices(), Pa = p.getAttribute('POSITION'), Na = p.getAttribute('NORMAL'); if (!I || I.getCount() < (lod === 'lod2' ? 12 : 300)) continue;
+        const pos = Float32Array.from(Pa.getArray()), idx = Uint32Array.from(I.getArray());
+        const want = Math.min(idx.length, Math.max(36, Math.floor(idx.length * ratio / 3) * 3));
+        const fl = lod === 'lod2' ? ['ErrorAbsolute', 'Prune'] : ['ErrorAbsolute'];   // 遠くは、許容誤差より小さい塊（ボルト・細かい部品）を消す
+        const [ni] = Na ? MeshoptSimplifier.simplifyWithAttributes(idx, pos, 3, Float32Array.from(Na.getArray()), 3, [0.6, 0.6, 0.6], null, want, err, fl)
+                        : MeshoptSimplifier.simplify(idx, pos, 3, want, err, fl);
+        if (ni.length >= 3) { I.setArray(Pa.getCount() > 65535 ? ni : Uint16Array.from(ni)); fn.compactPrimitive(p); } else p.dispose();
       }
+      await doc.transform(fn.prune());
+    }
     }
     let t2 = 0; for (const m of root.listMeshes()) for (const p of m.listPrimitives()) t2 += (p.getIndices() ? p.getIndices().getCount() : p.getAttribute('POSITION').getCount()) / 3;
     // 遠くの車はテクスチャを使わない（色だけ）。近くは元のまま
     if (lod === 'lod2') for (const mat of root.listMaterials()) { mat.setBaseColorTexture(null); mat.setNormalTexture(null); mat.setMetallicRoughnessTexture(null); mat.setOcclusionTexture(null); }
+    { for (const m of root.listMeshes()) for (const p of m.listPrimitives()) {   // 法線を外した部品は、滑らかな法線（まとめた頂点で、まわりの面の向きを面積の重みで平均）
+      if (p.getAttribute('NORMAL') || !p.getIndices()) continue;
+      const P = p.getAttribute('POSITION').getArray(), I = p.getIndices().getArray(), N = new Float32Array(P.length);
+      for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3, ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2], nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const k of [a, b, c]) { N[k] += nx; N[k + 1] += ny; N[k + 2] += nz; } }
+      for (let i = 0; i < N.length; i += 3) { const l = Math.hypot(N[i], N[i + 1], N[i + 2]) || 1; N[i] /= l; N[i + 1] /= l; N[i + 2] /= l; }
+      p.setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(N).setBuffer(root.listBuffers()[0]));
+    } }
     await doc.transform(fn.prune(), fn.reorder({ encoder: MeshoptEncoder }), fn.quantize());
     doc.createExtension(ext.EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: ext.EXTMeshoptCompression.EncoderMethod.QUANTIZE });
     const file = path.join(OUT, C.key + '_' + lod + '.glb');

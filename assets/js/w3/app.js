@@ -9,6 +9,7 @@ import { makeCar, makeColliders } from './vehicle.js';
 import { makeGrid } from './grid.js';
 import { loadImpostor, plantTrees } from './trees.js';
 import { buildProps } from './props.js';
+import { makeGarage } from './garage.js';
 import { makeTraffic } from './traffic.js';
 import { loadGLB, fleetParts, playerCar, toFloat as toFloatGeo } from './cars.js';
 import { NIGHT, makeCarGlows, lampLayout, makeGlowPoints, makeLightPools } from './lights.js';
@@ -206,7 +207,7 @@ export async function start(container, opt) {
   const carInfo = await fetch(CARS + 'cars.json').then(r => r.json());
   // 自車（車庫）: 切り替えられる車。モデルは高画質のときは hero（面が多い）があればそれを使う。物理の値は車ごと
   const GARAGE = [
-    { key: 'compact_swift', name: '小型ハッチバック', color: 0xb3121c, spec: {} },
+    { key: 'compact_swift', name: '小型ハッチバック', color: 0xb3121c, spec: { mass: 920, wb: 2.45, track: 1.5, cgH: 0.5, Iz: 1300, power: 67e3, maxRpm: 6400, gears: [3.545, 1.904, 1.28, 0.966, 0.757], final: 4.388, wheelR: 0.29, tqR: 118 / 0.29, drive: 'ff', cd: 0.32, area: 2.1 } },   // 1.2L・5 速 MT・FF（91PS、車両重量 約 900kg）
     { key: 'super_svj', name: 'スーパーカー（V12・4WD）', color: 0xe8740c, spec: { mass: 1525, wb: 2.7, track: 1.7, cgH: 0.42, Iz: 2500, power: 566e3, maxRpm: 8700, idleRpm: 1000, gears: [3.91, 2.44, 1.81, 1.46, 1.19, 0.97, 0.84], final: 3.3, wheelR: 0.35, mu: 1.28, cd: 0.36, area: 1.9, brake: 1.3, drive: '4wd', steerMax: 0.58, rearMu: 1.12, tqR: 720 / 0.35 } },
     { key: 'sedan_mazda3', name: 'セダン', color: 0x8c1c1c, spec: { mass: 1350, wb: 2.73, power: 115e3, tqR: 213 / 0.32, drive: 'ff', wheelR: 0.32 } },
     { key: 'suv_cx5', name: 'SUV', color: 0x2a3d66, spec: { mass: 1600, wb: 2.7, track: 1.6, cgH: 0.62, power: 140e3, tqR: 252 / 0.35, drive: '4wd', wheelR: 0.35, mu: 1.0 } },
@@ -232,9 +233,10 @@ export async function start(container, opt) {
       const wheels = pc.wheels || {};   // 形で見つけた車輪（タイヤ・ホイール・ナットが一緒に回る）
       if (!pc.wheels && pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
       m = { root: g, wheels, flip: false, tails: pc.tails, setColor: pc.setColor };
-      // 影は粗い形（lod1、約 3 万面）で落とす: 影のカメラにだけ見えるレイヤー 1 に置き、細かい形は影を落とさない（見た目の形はそのまま）
+      // 影は粗い形（lod2、約 6 千面。法線をならした滑らかな形）で落とす: 影のカメラにだけ見えるレイヤー 1 に置き、細かい形は影を落とさない
+      // （影の地図の 1 画素は数 cm なので、影の形は細かい形と見分けがつかない）
       try {
-        const sh = await loadGLB(CARS + G.key + '_lod1.glb'); sh.traverse(o => { if (o.isMesh) { o.layers.set(1); o.castShadow = true; o.receiveShadow = false; } });
+        const sh = await loadGLB(CARS + G.key + '_lod2.glb'); sh.traverse(o => { if (o.isMesh) { o.layers.set(1); o.castShadow = true; o.receiveShadow = false; } });
         g.traverse(o => { if (o.isMesh) o.castShadow = false; }); g.add(sh);
       } catch (e) { /* 粗い形が無ければ細かい形で影を落とす */ }
     } catch (e) {
@@ -248,8 +250,8 @@ export async function start(container, opt) {
     myLay = lampLayout(size); carM.size = size;
   }
   await loadPlayer(GARAGE[garageIdx] || { key: 'compact_swift', color: 0xb3121c, spec: {} });
-  // 一般車: 6 車種。日本の交通に近い割合（軽・コンパクト・セダン・SUV）と、車種ごとの色の割合
-  const W_TYPES = { kei_van: 22, compact_swift: 24, sedan_sylphy: 14, sedan_accord: 10, sedan_mazda3: 14, suv_cx5: 16 };
+  // 一般車: 7 車種。日本の交通に近い割合（軽バン・軽トラ・コンパクト・セダン・SUV）と、車種ごとの色の割合
+  const W_TYPES = { kei_van: 20, kei_truck_acty: 10, compact_swift: 22, sedan_sylphy: 13, sedan_accord: 9, sedan_mazda3: 12, suv_cx5: 14 };
   const KEI_COLORS = [0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0xc9ccd0, 0x9aa0a6];
   let traffic = null;
   try {
@@ -283,20 +285,25 @@ export async function start(container, opt) {
   let car = makeCar(carSpec(GARAGE[garageIdx]));
   const setBox = () => { car.st.HL = carM.size.z / 2 - 0.05; car.st.HW = Math.max(0.7, carM.size.x / 2 - 0.12); };   // ミラーの分を少し引く
   setBox();
-  // 車の切り替え（一時停止画面のボタンと C キー）。位置と向きは引き継いで、止まった状態から
-  let switching = false;
-  async function switchCar(step) {
-    if (switching || GARAGE.length < 2) return; switching = true;
-    garageIdx = (garageIdx + step + GARAGE.length) % GARAGE.length;
-    const G = GARAGE[garageIdx], old = car.st, esc = car.s.esc;
-    toastMsg('読み込み中: ' + G.name);
-    await loadPlayer(G);
-    car = makeCar(carSpec(G)); car.s.esc = esc;
-    Object.assign(car.st, { x: old.x, z: old.z, y: old.y, yaw: old.yaw }); setBox(); firstCam = true;
-    toastMsg('車: ' + G.name); if (carBtn) carBtn.textContent = '車: ' + G.name + '（C）';
+  // 車の切り替え: ガレージ画面（C キー・一時停止画面のボタン）で車と塗装を選ぶ。位置と向きは引き継いで、止まった状態から
+  let switching = false, curColor = opt.carColor || (GARAGE[garageIdx] && GARAGE[garageIdx].color);
+  async function selectCar(i, color) {
+    if (switching) return; switching = true;
+    const G = GARAGE[i], old = car.st, esc = car.s.esc;
+    if (i !== garageIdx || !carM) {
+      garageIdx = i; toastMsg('読み込み中: ' + G.name);
+      await loadPlayer(G);
+      car = makeCar(carSpec(G)); car.s.esc = esc;
+      Object.assign(car.st, { x: old.x, z: old.z, y: old.y, yaw: old.yaw }); setBox(); firstCam = true;
+    }
+    if (color !== undefined && carM.setColor) { carM.setColor(color); curColor = color; }
+    toastMsg('車: ' + G.name);
     switching = false;
   }
-  let carBtn = null;
+  const switchCar = step => selectCar((garageIdx + step + GARAGE.length) % GARAGE.length, GARAGE[(garageIdx + step + GARAGE.length) % GARAGE.length].color);
+  const garage = makeGarage(container, GARAGE.map(G => ({ key: G.key, name: G.name, color: G.color, s: makeCar(carSpec(G)).s, size: (carInfo.find(c => c.key === G.key) || {}).size, thumb: CARS + 'thumb_' + G.key + '.jpg' })),
+    (i, color) => { last = performance.now(); selectCar(i, color); });
+  const openGarage = () => { if (paused) setPause(false); Object.keys(keys).forEach(k => { keys[k] = false; }); garage.open(garageIdx, curColor); };
   // 出発: 浜松駅北口の前の道（いちばん近い幹線の上）
   const startAt = opt.start || { x: -40, z: -260 };
   let best = null, bd = Infinity;
@@ -323,7 +330,7 @@ export async function start(container, opt) {
   let paused = false;
   const pauseEl = document.createElement('div');
   pauseEl.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,10,14,.55);color:#fff;font-size:18px;text-align:center;line-height:2;z-index:5';
-  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切　T 時間帯　C 車の切り替え</small></div>';
+  pauseEl.innerHTML = '<div><b style="font-size:28px">一時停止</b><br>Esc / タップで再開　　Enter / Q で終了<br><small>操作: ←→ ハンドル　↑ アクセル　↓ ブレーキ・後退　スペース サイドブレーキ　X 横滑り防止（ESC）の入・切　T 時間帯　C ガレージ（車と塗装）</small></div>';
   pauseEl.addEventListener('pointerdown', () => setPause(false));
   { const b = document.createElement('button'); b.textContent = '横滑り防止（ESC）の入・切'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
     b.addEventListener('pointerdown', e => { e.stopPropagation(); car.s.esc = !car.s.esc; b.textContent = '横滑り防止（ESC）: ' + (car.s.esc ? '入' : '切'); }); pauseEl.appendChild(b); }
@@ -331,15 +338,16 @@ export async function start(container, opt) {
   const nextTime = () => { const m = TIME_ORDER[(TIME_ORDER.indexOf(sky.mode) + 1) % 3]; sky.setTime(m); return m; };
   { const b = document.createElement('button'); b.textContent = '時間帯: ' + TIME_NAME[sky.mode] + '（T）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
     b.addEventListener('pointerdown', e => { e.stopPropagation(); b.textContent = '時間帯: ' + TIME_NAME[nextTime()] + '（T）'; }); pauseEl.appendChild(b); }
-  { const b = document.createElement('button'); carBtn = b; b.textContent = '車: ' + (GARAGE[garageIdx] ? GARAGE[garageIdx].name : '') + '（C）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(138px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
-    b.addEventListener('pointerdown', e => { e.stopPropagation(); switchCar(1); }); pauseEl.appendChild(b); }
+  { const b = document.createElement('button'); b.textContent = 'ガレージ（車と塗装を選ぶ・C）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(138px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
+    b.addEventListener('pointerdown', e => { e.stopPropagation(); openGarage(); }); pauseEl.appendChild(b); }
   container.appendChild(pauseEl);
   function setPause(v) { paused = v; if (engineAudio) engineAudio.mute(v); pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
   const onKey = (e, d) => {
+    if (garage.isOpen) { if (d) garage.key(e.key); return; }   // ガレージを開いている間は、キーはガレージの操作
     if (d && e.key === 'Escape') { setPause(!paused); return; }
     if (d && paused && (e.key === 'Enter' || e.key === 'q' || e.key === 'Q')) { if (opt.onExit) opt.onExit(); return; }
     if (d && (e.key === 'x' || e.key === 'X')) { car.s.esc = !car.s.esc; toastMsg(car.s.esc ? '横滑り防止（ESC）: 入' : '横滑り防止（ESC）: 切（ドリフトしやすい）'); return; }
-    if (d && (e.key === 'c' || e.key === 'C')) { switchCar(1); return; }
+    if (d && (e.key === 'c' || e.key === 'C')) { openGarage(); return; }
     if (d && (e.key === 't' || e.key === 'T')) { toastMsg('時間帯: ' + TIME_NAME[nextTime()]); return; }
     keys[e.key] = d;
   };
@@ -495,7 +503,7 @@ export async function start(container, opt) {
     if (!running) return;
     // 遅い端末でも実時間で進める（物理は固定刻みで最大 0.25 秒ぶんまで追いつく）
     const dt = Math.min(0.25, (now - last) / 1000); last = now;
-    if (paused) { requestAnimationFrame(frame); return; }
+    if (paused || garage.isOpen) { last = performance.now(); requestAnimationFrame(frame); return; }
     readInput(dt);
     acc += dt;
     while (acc >= STEP) {

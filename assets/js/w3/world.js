@@ -395,6 +395,22 @@ export function buildWorld(scene, W, gfx) {
   // 建物ごとの下端と上端（頂点から）
   const yLo = new Float32Array(nb).fill(1e9), yHi = new Float32Array(nb).fill(-1e9);
   for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v], y = B.pos[v * 3 + 1]; if (y < yLo[k]) yLo[k] = y; if (y > yHi[k]) yHi[k] = y; }
+  // 道路の上の屋根（アーケード・歩道の上の屋根。tools/world/bldg_over.py）: PLATEAU では地面からの箱なので、屋根の厚み 0.6m だけ残して浮かせ、
+  // 歩道の上に柱（直径 0.3m）を立てる。下は車・人が通れる（当たり判定は柱だけ）
+  if (W.bldgOver && W.bldgOver.over) {
+    const over = new Map(W.bldgOver.over.map(o => [o.id, o]));
+    for (let v = 0; v < B.bid.length; v++) { const o = over.get(B.bid[v]); if (o && B.pos[v * 3 + 1] < o.top - 0.6) B.pos[v * 3 + 1] = o.top - 0.6; }
+    const cols = [], q = W.bldgOver.q;
+    over.forEach(o => { yLo[o.id] = o.top - 0.6; for (let i = 0; i < o.cols.length; i += 2) cols.push([o.cols[i] * q, o.cols[i + 1] * q, o.top - 0.6]); });
+    if (cols.length) {
+      const cg = new THREE.CylinderGeometry(0.15, 0.15, 1, 10, 1, true); cg.translate(0, 0.5, 0);
+      const cm = new THREE.InstancedMesh(cg, new THREE.MeshStandardMaterial({ color: 0x9a9da2, roughness: 0.5, metalness: 0.55 }), cols.length);
+      const M4 = new THREE.Matrix4();
+      cols.forEach(([x, z, top], i) => { const g = terr.atRoad(x, z) + 0.15; M4.makeScale(1, Math.max(0.5, top - g), 1).setPosition(x, g, z); cm.setMatrixAt(i, M4); });
+      cm.castShadow = true; cm.receiveShadow = true; cm.computeBoundingSphere(); out.group.add(cm);
+      out.overCols = cols;
+    }
+  }
   // 種類: 0 戸建て 1 共同住宅 2 店舗・事務所 3 工場・倉庫 4 学校・病院など
   const KIND = { '住宅': 0, '店舗等併用住宅': 0, '共同住宅': 1, '店舗等併用共同住宅': 1, '宿泊施設': 1, '商業施設': 2, '業務施設': 2, '商業系複合施設': 2, '運輸倉庫施設': 3, '工場': 3, '文教厚生施設': 4 };
   // 外壁（浜松の写真で多い色: 白〜ベージュのサイディング、灰色のタイル、薄茶のタイル）と屋根（灰・こげ茶・青灰・赤茶）
@@ -613,6 +629,7 @@ export function buildWorld(scene, W, gfx) {
   };
   const onRoad = out.onRoad = (x, z) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (roadG.at(x + a * 0.75, z + b * 0.75)) return true; return false; };
   out.pierTris = [];
+  (out.overCols || []).forEach(([x, z]) => { const r = 0.2; out.pierTris.push([x - r, z - r, x + r, z - r, x + r, z + r], [x - r, z - r, x + r, z + r, x - r, z + r]); });   // 道路の上の屋根の柱
   // レール面の高さ（地上から）。OSM の layer は「下を何かが通る」重なりの順で高さではないので使わない（遠州鉄道の高架も在来線と同じ程度）
   const railH = t => (/新幹線/.test(t.name || '') ? 11 : 8.5);
   const RP = W.roads.p;

@@ -29,15 +29,31 @@ export function toFloat(src) {
 export function fleetParts(scene) {
   scene.updateMatrixWorld(true);
   const opaque = [], others = [];
+  // テクスチャのある不透明な材質が多い車（材質ごとに別の画像）は、テクスチャの色を頂点の色に焼き込んで 1 回で描く
+  // （一般車は 8m より遠くで見るので、頂点の色で十分。描画の回数が車種ごとに 10 回近く増えるのを防ぐ）
+  const texMats = new Set(); scene.traverse(o => { if (o.isMesh && o.material.map && !(o.material.transparent || o.material.opacity < 0.99)) texMats.add(o.material); });
+  const bake = texMats.size > 4, pix = new Map();
+  const texel = (tex, u, v) => {
+    let P = pix.get(tex);
+    if (P === undefined) {
+      P = null; const im = tex.image;
+      if (im && im.width) { const cv = document.createElement('canvas'), w = Math.min(256, im.width), h = Math.min(256, im.height); cv.width = w; cv.height = h; const g2 = cv.getContext('2d', { willReadFrequently: true }); g2.drawImage(im, 0, 0, w, h); P = { d: g2.getImageData(0, 0, w, h).data, w, h }; }
+      pix.set(tex, P);
+    }
+    if (!P) return [1, 1, 1];
+    u = u - Math.floor(u); v = v - Math.floor(v);   // glTF のテクスチャは上下を反転しない（flipY = false）
+    const x = Math.min(P.w - 1, Math.floor(u * P.w)), y = Math.min(P.h - 1, Math.floor(v * P.h)), k = (y * P.w + x) * 4, lin = c => Math.pow(c / 255, 2.2);
+    return [lin(P.d[k]), lin(P.d[k + 1]), lin(P.d[k + 2])];
+  };
   scene.traverse(o => {
     if (!o.isMesh) return;
     const m = o.material, g = toFloat(o.geometry); g.applyMatrix4(o.matrixWorld);
     const transparent = m.transparent || m.opacity < 0.99 || m.alphaMode === 'BLEND';
-    if (transparent || m.map) { others.push({ g, m }); return; }
+    if (transparent || (m.map && !(bake && g.attributes.uv))) { others.push({ g, m }); return; }
     // 色・金属感・粗さ・塗装かどうかを頂点に
     const n = g.attributes.position.count, col = new Float32Array(n * 3), mr = new Float32Array(n * 2), pt = new Float32Array(n);
-    const c = m.color || new THREE.Color(1, 1, 1), e = m.emissive || new THREE.Color(0, 0, 0), isPaint = m.name === 'PAINT';
-    for (let i = 0; i < n; i++) { col[i * 3] = c.r + e.r * 0.5; col[i * 3 + 1] = c.g + e.g * 0.5; col[i * 3 + 2] = c.b + e.b * 0.5; mr[i * 2] = m.metalness ?? 0; mr[i * 2 + 1] = m.roughness ?? 0.6; pt[i] = isPaint ? 1 : 0; }
+    const c = m.color || new THREE.Color(1, 1, 1), e = m.emissive || new THREE.Color(0, 0, 0), isPaint = m.name === 'PAINT', UV = m.map ? g.attributes.uv : null;
+    for (let i = 0; i < n; i++) { const t = UV ? texel(m.map, UV.getX(i), UV.getY(i)) : null; col[i * 3] = c.r * (t ? t[0] : 1) + e.r * 0.5; col[i * 3 + 1] = c.g * (t ? t[1] : 1) + e.g * 0.5; col[i * 3 + 2] = c.b * (t ? t[2] : 1) + e.b * 0.5; mr[i * 2] = m.metalness ?? 0; mr[i * 2 + 1] = m.roughness ?? 0.6; pt[i] = isPaint ? 1 : 0; }
     const h = new THREE.BufferGeometry();
     h.setAttribute('position', g.attributes.position); h.setAttribute('normal', g.attributes.normal || g.computeVertexNormals() || g.attributes.normal);
     h.setAttribute('color', new THREE.BufferAttribute(col, 3)); h.setAttribute('aMR', new THREE.BufferAttribute(mr, 2)); h.setAttribute('aPaint', new THREE.BufferAttribute(pt, 1));
@@ -72,15 +88,20 @@ export function fleetParts(scene) {
     });
     parts.push({ geometry: mergeGeometries(gs), material: new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.08, metalness: 0.1, depthWrite: false }), paint: false });
   }
-  // テクスチャのある部品は材質ごとにまとめる
-  const byMat = new Map();
-  textured.forEach(({ g, m }) => { if (!byMat.has(m)) byMat.set(m, []); byMat.get(m).push(g); });
-  byMat.forEach((gs, m) => {
-    const keep = ['position', 'normal', 'uv'].filter(a => gs.every(g => g.attributes[a]));
-    gs = gs.map(g => { const h = new THREE.BufferGeometry(); keep.forEach(a => h.setAttribute(a, g.attributes[a])); h.setIndex(g.index); return h; });
+  // テクスチャのある部品は、同じテクスチャの画像を使うものを 1 つにまとめる（描画の回数を減らす）。材質ごとの色は頂点の色に入れる
+  const byTex = new Map();
+  textured.forEach(({ g, m }) => { const key = (m.map.source && m.map.source.uuid || m.map.uuid) + (m.name === 'PAINT' ? ':paint' : ''); if (!byTex.has(key)) byTex.set(key, []); byTex.get(key).push({ g, m }); });
+  byTex.forEach(list => {
+    const m0 = list[0].m, keep = ['position', 'normal', 'uv'].filter(a => list.every(({ g }) => g.attributes[a]));
+    const gs = list.map(({ g, m }) => {
+      const h = new THREE.BufferGeometry(); keep.forEach(a => h.setAttribute(a, g.attributes[a])); h.setIndex(g.index);
+      const n = g.attributes.position.count, col = new Float32Array(n * 3), c = m.name === 'PAINT' ? new THREE.Color(1, 1, 1) : (m.color || new THREE.Color(1, 1, 1));
+      for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+      h.setAttribute('color', new THREE.BufferAttribute(col, 3)); return h;
+    });
     const geo = gs.length > 1 ? mergeGeometries(gs) : gs[0];
-    const mm = m.clone(); if (m.name === 'PAINT' && mm.color) mm.color.setRGB(1, 1, 1);
-    parts.push({ geometry: geo, material: mm, paint: m.name === 'PAINT' });
+    const mm = m0.clone(); mm.vertexColors = true; if (mm.color) mm.color.setRGB(1, 1, 1);
+    parts.push({ geometry: geo, material: mm, paint: m0.name === 'PAINT' });
   });
   const box = new THREE.Box3().setFromObject(scene), size = box.getSize(new THREE.Vector3());
   return { parts, size };

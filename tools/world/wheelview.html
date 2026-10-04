@@ -7,14 +7,20 @@
 <script type="module">
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { loadGLB, playerCar } from '../../assets/js/w3/cars.js';
+import { loadGLB, playerCar, fleetParts } from '../../assets/js/w3/cars.js';
 const q = new URLSearchParams(location.search), key = q.get('key') || 'compact_swift';
 const R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(480, 300); R.toneMapping = THREE.AgXToneMapping; document.body.appendChild(R.domElement);
 const S = new THREE.Scene(); S.background = new THREE.Color(0x8a96a3);
 S.environment = new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(), 0.04).texture;
 const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.position.set(5, 8, 4); S.add(sun);
 const sc = await loadGLB('../../assets/data/world/cars/' + key + (q.get('lod') || '_lod0') + '.glb');
-const pc = playerCar(sc, 0xb01826); S.add(pc.root);
+let pc;
+if (q.get('fleet')) {   // 一般車の描き方（fleetParts。テクスチャの多い車は頂点の色に焼き込む）
+  const fp = fleetParts(sc), root = new THREE.Group();
+  fp.parts.forEach(p => { const m = new THREE.Mesh(p.geometry, p.material); root.add(m); });
+  pc = { root };
+} else pc = playerCar(sc, q.get('color') ? parseInt(q.get('color'), 16) : 0xb01826);
+S.add(pc.root);
 const W = pc.wheels || {}, info = Object.values(W).map(w => ({ key: w.key, r: +w.r.toFixed(3), at: w.steer.position.toArray().map(v => +v.toFixed(2)), spinParts: w.spin.children.length, steerParts: w.steer.children.length - 1 }));
 const spin = +(q.get('spin') || 0.8), steer = +(q.get('steer') || 0.45), shots = [];
 const cam = new THREE.PerspectiveCamera(30, 480 / 300, 0.05, 100);
@@ -23,6 +29,12 @@ for (const [s, st] of [[0, 0], [spin, 0], [spin, steer]]) {
   Object.values(W).forEach(w => { w.spin.rotation.x = s; if (w.front) w.steer.rotation.y = st; });
   if (fl) { const p = fl.steer.position; cam.position.set(p.x + Math.sign(p.x || 1) * 2.0, p.y + 0.35, p.z + 1.1); cam.lookAt(p); }
   R.render(S, cam); shots.push(R.domElement.toDataURL('image/jpeg', 0.85));
+}
+// 車全体（斜め前・真横・斜め後ろ）。&full=1 のとき
+if (q.get('full')) {
+  Object.values(W).forEach(w => { w.spin.rotation.x = 0; w.steer.rotation.y = 0; });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x55585c })); ground.rotation.x = -Math.PI / 2; S.add(ground);
+  for (const a of [35, 90, 150]) { const t = a * Math.PI / 180; cam.position.set(Math.sin(t) * 6.5, 1.5, Math.cos(t) * 6.5); cam.lookAt(0, 0.6, 0); R.render(S, cam); shots.push(R.domElement.toDataURL('image/jpeg', 0.9)); }
 }
 window.__out = { shots, info, found: !!pc.wheels };
 document.title = 'done';
