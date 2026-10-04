@@ -1,0 +1,200 @@
+[
+ {
+  "key": "compact_swift",
+  "name": "小型ハッチバック（スイフト型）",
+  "kind": "compact",
+  "size": {
+   "w": 1.85,
+   "l": 3.85,
+   "h": 1.63
+  },
+  "lods": {
+   "lod0": {
+    "tris": 134652,
+    "kb": 2156
+   },
+   "lod1": {
+    "tris": 34566,
+    "kb": 383
+   },
+   "lod2": {
+    "tris": 6081,
+    "kb": 101
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Suzuki Swift",
+   "author": "CasacadeOperations",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/218c3c0c6afd4d0eb343bd50d8868fd0",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "sedan_sylphy",
+  "name": "セダン（シルフィ型）",
+  "kind": "sedan",
+  "size": {
+   "w": 2.04,
+   "l": 4.61,
+   "h": 1.48
+  },
+  "lods": {
+   "lod0": {
+    "tris": 119511,
+    "kb": 890
+   },
+   "lod1": {
+    "tris": 31057,
+    "kb": 283
+   },
+   "lod2": {
+    "tris": 5276,
+    "kb": 56
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Nissan Sentra B17",
+   "author": "a0930582398",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/4e261bd2d93a438ebdabf8cc6b41cf58",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "suv_cx5",
+  "name": "SUV（CX-5 型）",
+  "kind": "suv",
+  "size": {
+   "w": 2.17,
+   "l": 4.55,
+   "h": 1.64
+  },
+  "lods": {
+   "lod0": {
+    "tris": 120010,
+    "kb": 1829
+   },
+   "lod1": {
+    "tris": 30232,
+    "kb": 1269
+   },
+   "lod2": {
+    "tris": 6111,
+    "kb": 66
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Mazda CX-5",
+   "author": "tnnv",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/0ca0354c7b2a41bbb84c835ff046e8e5",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "sedan_accord",
+  "name": "セダン（アコード型）",
+  "kind": "sedan",
+  "size": {
+   "w": 2.14,
+   "l": 4.9,
+   "h": 1.44
+  },
+  "lods": {
+   "lod0": {
+    "tris": 120000,
+    "kb": 1787
+   },
+   "lod1": {
+    "tris": 30000,
+    "kb": 1046
+   },
+   "lod2": {
+    "tris": 7120,
+    "kb": 91
+   }
+  },
+  "paint": false,
+  "source": {
+   "title": "2018 Honda Accord",
+   "author": "roflowhale",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/54c227442c4b42dfbaa25e474ad9d736",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "sedan_mazda3",
+  "name": "セダン（マツダ 3 型）",
+  "kind": "sedan",
+  "size": {
+   "w": 2.03,
+   "l": 4.58,
+   "h": 1.48
+  },
+  "lods": {
+   "lod0": {
+    "tris": 49620,
+    "kb": 1072
+   },
+   "lod1": {
+    "tris": 33901,
+    "kb": 479
+   },
+   "lod2": {
+    "tris": 6210,
+    "kb": 78
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Mazda-3",
+   "author": "David_Holiday",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/0811f0d3785243a5ad05bd1b84457273",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ },
+ {
+  "key": "kei_van",
+  "name": "軽バン（キャリイ型）",
+  "kind": "kei",
+  "size": {
+   "w": 1.62,
+   "l": 3.3,
+   "h": 1.88
+  },
+  "lods": {
+   "lod0": {
+    "tris": 119992,
+    "kb": 2019
+   },
+   "lod1": {
+    "tris": 33039,
+    "kb": 1124
+   },
+   "lod2": {
+    "tris": 6108,
+    "kb": 61
+   }
+  },
+  "paint": true,
+  "source": {
+   "title": "Suzuki Carry Minivan",
+   "author": "ProPolyModels",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/5c0007c0c6ed4d298b8c80646efa09d2",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・向き・塗装の材質・部品の削除・面の間引き・圧縮"
+  }
+ }
+]

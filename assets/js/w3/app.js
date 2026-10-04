@@ -10,6 +10,7 @@ import { makeGrid } from './grid.js';
 import { loadImpostor, plantTrees } from './trees.js';
 import { buildProps } from './props.js';
 import { makeTraffic } from './traffic.js';
+import { loadGLB, fleetParts, playerCar, toFloat as toFloatGeo } from './cars.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -153,19 +154,32 @@ export async function start(container, opt) {
     world.props = buildProps(scene, world.net, (x, z) => W.terrain.at(x, z) + 0.15, free, {});
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }
-  // 車（Khronos Car Concept。高品質なリアル調の車がそろうまでの暫定）
-  if (!(TB.RaceRealCars && TB.RaceRealCars.concept)) await new Promise(r => { const s = document.createElement('script'); s.src = 'assets/vendor/real-concept.js'; s.onload = s.onerror = r; document.head.appendChild(s); });
-  // 自車: 高画質は元の形（約 18 万面）、中・低は間引いた形（約 4 万面、tools/world/car_lod.mjs）
-  let carData = TB.RaceRealCars && TB.RaceRealCars.concept;
-  if (carData && gfx.tier !== 'high') { try { carData = await fetch('assets/data/world/props/car_concept_lod0.json').then(r => r.json()); } catch (e) { /* 元の形のまま */ } }
-  const carM = carData ? decodeCar(carData, true) : { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 4.4), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
+  // 車: 外部の高品質なモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/vehicles.mjs で変換）
+  const CARS = 'assets/data/world/cars/';
+  const carInfo = await fetch(CARS + 'cars.json').then(r => r.json());
+  // 自車: スズキ スイフト型（約 13 万面、車内つき）。車輪は 4 輪に分けて回す
+  let carM;
+  try {
+    const sc = await loadGLB(CARS + (opt.carKey || 'compact_swift') + '_lod0.glb');
+    const pc = playerCar(sc, opt.carColor || 0xb3121c), wheels = {}, g = new THREE.Group(); g.add(pc.root);
+    if (pc.wheelGeo) splitWheels(pc.wheelGeo, pc.wheelMat, g, wheels);
+    const tails = pc.tails;
+    carM = { root: g, wheels, flip: false, tails, setColor: pc.setColor };
+  } catch (e) {
+    console.warn('自車のモデルを読めませんでした', e);
+    carM = { root: new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 4.2), new THREE.MeshStandardMaterial({ color: 0xb01826 })) };
+  }
   scene.add(carM.root);
-  // 一般車（自車の周り 400m に 40 台。低画質は 20 台）
+  // 一般車: 6 車種。日本の交通に近い割合（軽・コンパクト・セダン・SUV）と、車種ごとの色の割合
+  const W_TYPES = { kei_van: 22, compact_swift: 24, sedan_sylphy: 14, sedan_accord: 10, sedan_mazda3: 14, suv_cx5: 16 };
+  const KEI_COLORS = [0xf4f4f2, 0xf4f4f2, 0xf4f4f2, 0xc9ccd0, 0x9aa0a6];
   let traffic = null;
   try {
-    const [l1, l2] = await Promise.all(['car_concept_lod1', 'car_concept_lod2'].map(n => fetch('assets/data/world/props/' + n + '.json').then(r => r.json())));
-    const near = decodeCar(l1), far = decodeCar(l2);
-    traffic = makeTraffic(scene, world.net, { near: { root: near.root, paint: near.mats.paint }, far: { root: far.root, paint: far.mats.paint }, count: gfx.tier === 'low' ? 20 : 40 });
+    const types = await Promise.all(carInfo.filter(c => W_TYPES[c.key]).map(async c => {
+      const [n, f] = await Promise.all([loadGLB(CARS + c.key + '_lod1.glb'), loadGLB(CARS + c.key + '_lod2.glb')]);
+      return { key: c.key, weight: W_TYPES[c.key], len: c.size.l, near: fleetParts(n), far: fleetParts(f), colors: c.key === 'kei_van' ? KEI_COLORS : null };
+    }));
+    traffic = makeTraffic(scene, world.net, { types, count: gfx.tier === 'low' ? 24 : 48, near: gfx.tier === 'high' ? 8 : 4, farDist: gfx.tier === 'high' ? 320 : 200 });
   } catch (e) { console.warn('一般車を読めませんでした', e); }
   function trafficStep(dt) {
     if (!traffic) return;
@@ -308,7 +322,7 @@ export async function start(container, opt) {
   function carVisual(dt) {
     const st = car.st;
     if (carM.wheels) Object.values(carM.wheels).forEach(w => { w.spin.rotation.x += st.vx * dt / Math.max(0.2, w.r) * (carM.flip ? -1 : 1); if (w.front) w.steer.rotation.y = st.steer; });
-    if (carM.mats) carM.mats.tail.emissiveIntensity = ctl.brake > 0.1 ? 3.0 : 0.6;
+    if (carM.tails) carM.tails.forEach(m => { m.emissiveIntensity = ctl.brake > 0.1 ? 2.5 : 0.25; });
   }
   function drawGauge() {
     const g = gauge.getContext('2d'), S = 170 * DPR, c = S / 2, r = S * 0.44, st = car.st;
@@ -349,8 +363,8 @@ export async function start(container, opt) {
     g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 2 * DPR; g.beginPath(); g.arc(c, c, c - DPR, 0, Math.PI * 2); g.stroke();
   }
   // 出典（狭い画面は短く。全文はクレジットの一覧 assets/data/world/CREDITS.txt）
-  const CREDIT = window.innerWidth < 900 ? '出典: 国交省 PLATEAU・地理院タイルを加工 / © OSM / 車: Khronos（CC BY 4.0）'
-    : '出典: 国土交通省 PLATEAU を加工して作成 / 地理院タイル（航空写真・標高）を加工して作成 / © OpenStreetMap contributors / 車: Khronos glTF Sample Assets「Car Concept」（CC BY 4.0）';
+  const CREDIT = window.innerWidth < 900 ? '出典: 国交省 PLATEAU・地理院タイルを加工 / © OSM / 車: Sketchfab の CC BY 4.0 作品（作者は一覧に）'
+    : '出典: 国土交通省 PLATEAU を加工して作成 / 地理院タイル（航空写真・標高）を加工して作成 / © OpenStreetMap contributors / 車: ' + carInfo.map(c => c.source.author).join('・') + '（Sketchfab、CC BY 4.0。assets/data/world/CREDITS.txt）';
   let last = performance.now(), acc = 0, simT = 0, running = true, frames = 0, fpsT = 0, fps = 0, hitT = 0;
   const STEP = 1 / 120;
   function frame(now) {

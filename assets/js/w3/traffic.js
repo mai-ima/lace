@@ -39,22 +39,18 @@ export function makeTraffic(scene, net, opt) {
   /* 見た目: 自車と同じ形を、インスタンス描画で色違いに（白・銀・黒が多い日本の色の比率） */
   const COLORS = [[0xf2f2f0, 30], [0xb8bcc2, 20], [0x1a1c20, 18], [0x6b6f75, 8], [0x2a3d66, 6], [0x8c1c1c, 6], [0xd7cfc0, 5], [0x2f4a3a, 3], [0x5a3a24, 4]];
   const pickColor = () => { let t = rnd() * 100; for (const [c, w] of COLORS) { if ((t -= w) < 0) return c; } return 0xf2f2f0; };
-  // 近い車（最大 8 台）は細かい形で影も落とす。遠い車は粗い形で影なし
-  function makeParts(model, paint, n, shadow) {
-    const parts = [];
-    model.updateMatrixWorld(true);
-    model.traverse(o => {
-      if (!o.isMesh) return;
-      const local = new THREE.Matrix4().copy(model.matrixWorld).invert().multiply(o.matrixWorld);
-      const mat = o.material.clone(); if (o.material === paint) mat.color.setHex(0xffffff);   // 塗装の色はインスタンスごとの色で
-      const im = new THREE.InstancedMesh(o.geometry, mat, n);
-      im.castShadow = shadow; im.receiveShadow = true; im.frustumCulled = false; im.count = 0;
-      scene.add(im); parts.push({ im, local, paint: o.material === paint });
+  // 車種（cars.js の fleetParts でまとめた部品）。近い車（最大 8 台）は細かい形で影も落とす。遠い車は粗い形で影なし
+  const NEAR = opt.near || 8, FAR = opt.farDist || 220, types = opt.types;   // 細かい形で描く台数、描く距離（それより遠い車は動かすだけ）
+  function makeParts(parts, n, shadow) {
+    return parts.map(pt => {
+      const im = new THREE.InstancedMesh(pt.geometry, pt.material, n);
+      im.castShadow = shadow; im.receiveShadow = true; im.frustumCulled = false; im.count = 0; im.visible = false;
+      scene.add(im); return { im, paint: pt.paint };
     });
-    return parts;
   }
-  const NEAR = 8;
-  const nearParts = makeParts(opt.near.root, opt.near.paint, NEAR, true), farParts = makeParts(opt.far.root, opt.far.paint, N, false);
+  types.forEach(T => { T.nearIM = makeParts(T.near.parts, NEAR, true); T.farIM = makeParts(T.far.parts, N, false); });
+  let wSum = 0; types.forEach(T => { wSum += T.weight; });
+  const pickType = () => { let t = rnd() * wSum; for (const T of types) { if ((t -= T.weight) < 0) return T; } return types[0]; };
   const ids = new Map();
   function spawn(px, pz, near) {
     // 自車から near〜400m の道の上の、ランダムな車線
@@ -69,7 +65,8 @@ export function makeTraffic(scene, net, opt) {
       const ss = dir > 0 ? s : e.L - s;   // 進む向きの距離
       if (cars.some(c => c.e === e && c.dir === dir && c.k === k && Math.abs(c.s - ss) < 12)) continue;
       if (e.L - STOP_BACK - ss < 30) continue;   // 交差点（停止線）の直前には出さない（赤で止まりきれないため）
-      return { born: step.t || 0, e, dir, k, s: ss, v: limitOf(pr) * (0.6 + rnd() * 0.3), color: pickColor(), jx: null, len: 4.4, id: Math.random() };
+      const T = pickType();
+      return { born: step.t || 0, e, dir, k, s: ss, v: limitOf(pr) * (0.6 + rnd() * 0.3), color: T.colors ? T.colors[Math.floor(rnd() * T.colors.length)] : pickColor(), T, jx: null, len: T.len, id: Math.random() };
     }
     return null;
   }
@@ -172,17 +169,20 @@ export function makeTraffic(scene, net, opt) {
       }
     });
     // 描画
-    const M = new THREE.Matrix4(), T = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S1 = new THREE.Vector3(1, 1, 1), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S1 = new THREE.Vector3(1, 1, 1), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
     cars.forEach(c => { c.P = pose(c); c.d2 = (c.P.x - player.x) ** 2 + (c.P.z - player.z) ** 2; });
     const order = cars.slice().sort((a, b) => a.d2 - b.d2);
-    let nn = 0, nf = 0;
+    types.forEach(T => { T.nn = 0; T.nf = 0; });
     order.forEach((c, r) => {
-      const P = c.P, near = r < NEAR && c.d2 < 90 * 90, parts = near ? nearParts : farParts, i = near ? nn++ : nf++;
-      Q.setFromAxisAngle(Y, P.yaw); V.set(P.x, P.y + 0.06, P.z); M.compose(V, Q, S1);
-      parts.forEach(p => { p.im.setMatrixAt(i, T.multiplyMatrices(M, p.local)); if (p.paint) p.im.setColorAt(i, col.setHex(c.color)); });
+      if (c.d2 > FAR * FAR) return;
+      const P = c.P, T = c.T, near = r < NEAR && c.d2 < 90 * 90, ims = near ? T.nearIM : T.farIM, i = near ? T.nn++ : T.nf++;
+      Q.setFromAxisAngle(Y, P.yaw); V.set(P.x, P.y + 0.02, P.z); M.compose(V, Q, S1);
+      ims.forEach(p => { p.im.setMatrixAt(i, M); if (p.paint) p.im.setColorAt(i, col.setHex(c.color)); });
     });
-    nearParts.forEach(p => { p.im.count = nn; }); farParts.forEach(p => { p.im.count = nf; });
-    nearParts.concat(farParts).forEach(p => { p.im.instanceMatrix.needsUpdate = true; if (p.im.instanceColor) p.im.instanceColor.needsUpdate = true; });
+    types.forEach(T => {
+      T.nearIM.forEach(p => { p.im.count = T.nn; p.im.visible = T.nn > 0; }); T.farIM.forEach(p => { p.im.count = T.nf; p.im.visible = T.nf > 0; });
+      T.nearIM.concat(T.farIM).forEach(p => { if (!p.im.visible) return; p.im.instanceMatrix.needsUpdate = true; if (p.im.instanceColor) p.im.instanceColor.needsUpdate = true; });
+    });
   }
   return { cars, step, stats };
 }

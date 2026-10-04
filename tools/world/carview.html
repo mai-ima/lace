@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>車のモデルの確認</title>
+<!-- 外部の車のモデル（glb）を、実寸の全長に合わせて 4 方向から撮る（確認用）。?src=&len=全長(m)&yaw=向きの補正(度) -->
+<script type="importmap">{ "imports": { "three": "../../assets/vendor/three/three.module.js", "three/addons/": "../../assets/vendor/three/addons/" } }</script>
+</head><body style="margin:0;background:#000">
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+const q = new URLSearchParams(location.search);
+const R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(480, 300); R.toneMapping = THREE.AgXToneMapping; document.body.appendChild(R.domElement);
+const S = new THREE.Scene(); S.background = new THREE.Color(0x8a96a3);
+S.environment = new THREE.PMREMGenerator(R).fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight(0xffffff, 2.5); sun.position.set(5, 8, 4); S.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x55585c })); ground.rotation.x = -Math.PI / 2; S.add(ground);
+const L = new GLTFLoader(); const dl = new DRACOLoader(); dl.setDecoderPath('../../assets/vendor/three/addons/libs/draco/'); L.setDRACOLoader(dl); L.setMeshoptDecoder(MeshoptDecoder);
+const g = await L.loadAsync(q.get('src')); const m = g.scene;
+m.rotation.y = (+q.get('yaw') || 0) * Math.PI / 180; m.updateMatrixWorld(true);
+let box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3());
+const k = (+q.get('len') || 4.4) / Math.max(sz.x, sz.z); m.scale.multiplyScalar(k); m.updateMatrixWorld(true);
+box = new THREE.Box3().setFromObject(m); const c = box.getCenter(new THREE.Vector3());
+m.position.set(-c.x, -box.min.y, -c.z); S.add(m); box = new THREE.Box3().setFromObject(m); sz = box.getSize(new THREE.Vector3());
+let tris = 0, mats = new Set(); m.traverse(o => { if (o.isMesh) { tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; mats.add(o.material.name); } });
+const cam = new THREE.PerspectiveCamera(35, 480 / 300, 0.1, 100), shots = [];
+for (const a of [30, 120, 210, 300]) { const r = 9, t = a * Math.PI / 180; cam.position.set(Math.sin(t) * r, 2.2, Math.cos(t) * r); cam.lookAt(0, 0.7, 0); R.render(S, cam); shots.push(R.domElement.toDataURL('image/jpeg', 0.85)); }
+window.__out = { shots, size: [sz.x, sz.y, sz.z].map(v => +v.toFixed(2)), tris, mats: [...mats].slice(0, 30) };
+document.title = 'done';
+</script></body></html>

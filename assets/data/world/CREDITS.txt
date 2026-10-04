@@ -12,3 +12,12 @@ assets/data/world/ の出典（加工して作成）
   水平 8 方向の色と法線の画像（インポスター）に焼き付けて作成。
 - 一般車の軽いモデル（props/car_concept_lod1.json, car_concept_lod2.json）: Khronos glTF Sample Assets「Car Concept」
   （CC BY 4.0）を tools/world/car_lod.mjs と meshoptimizer（MIT）で間引いて作成。
+- 車（cars/*.glb）: Objaverse（allenai/objaverse）に収録された Sketchfab の CC BY 4.0 作品を、tools/world/vehicles.mjs で
+  縮尺・向き・塗装の材質・不要部品の削除・面の間引き・圧縮を加工して作成。作品ごとの出典:
+  - 小型ハッチバック（スイフト型）: 「Suzuki Swift」 作者 CasacadeOperations（CC BY 4.0） https://sketchfab.com/3d-models/218c3c0c6afd4d0eb343bd50d8868fd0
+  - セダン（シルフィ型）: 「Nissan Sentra B17」 作者 a0930582398（CC BY 4.0） https://sketchfab.com/3d-models/4e261bd2d93a438ebdabf8cc6b41cf58
+  - SUV（CX-5 型）: 「Mazda CX-5」 作者 tnnv（CC BY 4.0） https://sketchfab.com/3d-models/0ca0354c7b2a41bbb84c835ff046e8e5
+  - セダン（アコード型）: 「2018 Honda Accord」 作者 roflowhale（CC BY 4.0） https://sketchfab.com/3d-models/54c227442c4b42dfbaa25e474ad9d736
+  - セダン（マツダ 3 型）: 「Mazda-3」 作者 David_Holiday（CC BY 4.0） https://sketchfab.com/3d-models/0811f0d3785243a5ad05bd1b84457273
+  - 軽バン（キャリイ型）: 「Suzuki Carry Minivan」 作者 ProPolyModels（CC BY 4.0） https://sketchfab.com/3d-models/5c0007c0c6ed4d298b8c80646efa09d2
+  実在の車名・エンブレムは商標のため、ゲーム内では車名を使わない（車種は「小型ハッチバック」などの一般名で扱う）。
