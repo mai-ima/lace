@@ -26,11 +26,13 @@ export function buildPhotoMarks(data, o) {
   const V2 = THREE.Vector2;
   // 長い辺は 3m ごとに点を足す（路面の高さの変化に沿わせる）
   const dens = ring => { const out = []; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], n = Math.max(1, Math.ceil(a.distanceTo(b) / 3)); for (let k = 0; k < n; k++) out.push(new V2(a.x + (b.x - a.x) * k / n, a.y + (b.y - a.y) * k / n)); } return out; };
+  // 色: 0 白、1 黄、2 赤の色付き舗装、3 緑の色付き舗装（写真の色に近い、くすんだ色）
+  const PAL = [o.white, o.yellow, [0.52, 0.2, 0.17], [0.24, 0.42, 0.27]];
   let nItems = 0;
   for (const [ti, tj, st, len] of hdr.tiles) {
     const ox = ti * T, oz = tj * T; let p = st; const end = st + len;
     while (p < end) {
-      const kind = body[p++], col = body[p++] ? o.yellow : o.white;
+      const kind = body[p++], ci = body[p++], col = PAL[ci] || o.white, dy = ci >= 2 ? -0.004 : 0;   // 色付き舗装は白・黄の表示の 4mm 下
       if (kind === 0) {
         const w = body[p++] / 100, n = body[p++], P = [];
         for (let k = 0; k < n; k++) { P.push([ox + body[p] / 100, oz + body[p + 1] / 100]); p += 2; }
@@ -41,7 +43,7 @@ export function buildPhotoMarks(data, o) {
         const c = chunkOf(mx, mz), b0 = c.P.length / 3;
         Q.forEach((q, k) => {   // 折れ目では前後の向きの平均で横に広げる
           const a = Q[Math.max(0, k - 1)], b = Q[Math.min(Q.length - 1, k + 1)], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
-          c.P.push(q[0] + nx, o.hAt(q[0] + nx, q[1] + nz), q[1] + nz, q[0] - nx, o.hAt(q[0] - nx, q[1] - nz), q[1] - nz); c.C.push(...col, ...col);
+          c.P.push(q[0] + nx, o.hAt(q[0] + nx, q[1] + nz) + dy, q[1] + nz, q[0] - nx, o.hAt(q[0] - nx, q[1] - nz) + dy, q[1] - nz); c.C.push(...col, ...col);
         });
         for (let k = 0; k + 1 < Q.length; k++) { const a = b0 + k * 2; c.I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
         nItems++;
@@ -53,7 +55,7 @@ export function buildPhotoMarks(data, o) {
         if (o.keep && !o.keep(mx, mz)) continue;
         let tris; try { tris = THREE.ShapeUtils.triangulateShape(outer, holes); } catch (e) { continue; }
         const all = outer.concat(...holes), c = chunkOf(mx, mz), b0 = c.P.length / 3;
-        all.forEach(v => { c.P.push(v.x, o.hAt(v.x, v.y), v.y); c.C.push(...col); });
+        all.forEach(v => { c.P.push(v.x, o.hAt(v.x, v.y) + dy, v.y); c.C.push(...col); });
         tris.forEach(t => c.I.push(b0 + t[0], b0 + t[2], b0 + t[1]));   // 上から見て反時計回り（法線が上）
         nItems++;
       }

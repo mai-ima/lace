@@ -6,7 +6,7 @@
       本体は 100m 四方のまとまりごとに、まとまりの左上からの cm で:
         線: 0, 色, 幅（cm）, 点の数, x, z, x, z, ...（塗った線の中心線）
         形: 1, 色, 輪の数, 点の数, x, z, ...（外側の輪）, 点の数, x, z, ...（穴）...（矢印・文字・ひし形・横断歩道の縞・停止線・導流帯など）
-      色: 0 = 白、1 = 黄。
+      色: 0 = 白、1 = 黄、2 = 赤の色付き舗装、3 = 緑の色付き舗装（面。白・黄の表示より下に描く）。
 方法:
   1. 100m 四方ごとに、写真を 10cm の格子で読み、車道の中だけを見る。
   2. 明るさから「1.5m より細い明るい所」を取り出す（トップハット変換。影の中でも周りより明るければ取れる）。黄色は色の差で取る。
@@ -59,14 +59,15 @@ def extract(vs, mask_fn, x0, z0, size):
     # しきい値は、周り 0.9m のいちばん明るい所との中間（横断歩道の縞の間は写真のにじみで明るくなるが、縞よりは暗い）
     lmax = cv2.dilate(gray, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
     white = (th > np.maximum(np.maximum(20, bg * 0.16), 0.5 * (lmax - bg))) & (sat < 60)
-    yel = (r - b > 45) & (r > 105) & (r - g < 95) & (th > 6)   # 黄・橙（はみ出し禁止の線・バスの文字など。写真では橙に写る）
+    S3 = r + g + b + 1; white &= ~(((r - g) / S3 > 0.045) & ((r - b) / S3 > 0.06))   # 色あせた赤の舗装を白と取り違えない（赤の上の白い文字は残る）
+    yel = (r - b > 45) & (r > 105) & (r - g < 95) & (th > 6) & ((g - b) / (r + g + b + 1) > 0.07)   # 赤の色付き舗装（緑と青がほぼ同じ）は除く   # 黄・橙（はみ出し禁止の線・バスの文字など。写真では橙に写る）
     # 木の葉（緑・黄葉）とその周り 0.6m は見ない（木漏れ日の明るい点が線に見える）
     # 写真は全体に緑がかっている（アスファルトで 2G−R−B ≈ 18）ので、明るさで割った値で見る
     leaf = (((2 * g - r - b) / (r + g + b + 1) > 0.15) & (sat > 30)) | ((r - b > 60) & (g - b > 45) & (sat > 70) & (th < 25))
     leaf = cv2.dilate(leaf.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (13, 13))).astype(bool)
     m = (white | yel) & road & ~leaf
     m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8))
-    return m, yel & road, rgb, road
+    return m, yel & road, rgb, road, th
 
 
 # 道路標示の型（u: 矢印の進む向き、0 が後ろの端・5 が先、w: 横。単位 m）。道路標示の様式に合わせた形（roadnet.js の矢印と同じ）
@@ -133,7 +134,7 @@ def match_template(sub, holes):
     return name, out
 
 
-def classify(m, yel, x0, z0):
+def classify(m, yel, x0, z0, th=None, protect=None):
     """塊を線・長方形・形に分ける。返り値: lines [(色, 幅m, [(x,z)...])], polys [(色, [(x,z)...])], 除いた塊の数"""
     nlab, lab, st, cen = cv2.connectedComponentsWithStats(m, connectivity=8)
     lines, polys, rej = [], [], 0
@@ -151,6 +152,13 @@ def classify(m, yel, x0, z0):
         L, W = max(rw, rh) * RES, max(min(rw, rh), 1) * RES
         fill = area / max(1.0, rw * rh)
         color = 1 if yel[y:y + h, x:x + w][sub > 0].mean() > 0.5 else 0
+        if protect is not None and protect[y:y + h, x:x + w][sub > 0].mean() > 0.5:
+            # 色付き舗装の上の白い塊は文字（通学路・スクールゾーンなど）。小さな画でも残す
+            cnts2, _ = cv2.findContours(sub, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            for cc in cnts2:
+                ap = cv2.approxPolyDP(cc, 0.6, True)[:, 0, :]
+                if len(ap) >= 3 and cv2.contourArea(cc) >= 3: polys.append((color, [[(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in ap]]))
+            continue
         toW = lambda P: [(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in P]
         # 車らしい塊（幅 1.2m 以上、長さ 6.5m 以下、中が詰まっている）は除く
         if W >= 1.2 and L <= 6.5 and fill > (0.5 if holes else 0.45): rej += 1; continue   # 窓の穴がある車も
@@ -159,7 +167,8 @@ def classify(m, yel, x0, z0):
         if W >= 0.75 and L <= 2.6 and fill > 0.6 and not holes: rej += 1; continue   # 車の屋根・ボンネット
         if color == 1 and not ((W <= 0.35 and L >= 1.2) or (fill > 0.55 and L >= 0.8)): rej += 1; continue   # 黄色は線か文字だけ（黄葉を除く）
         if area * RES * RES < 0.5 and fill < 0.6: rej += 1; continue   # 小さくて形の崩れた塊（木漏れ日・汚れ・縁石の粒）
-        if W > 0.5 and (perim / (area * RES * RES) > 9 or len(cnts) / (area * RES * RES) > 2.5): rej += 1; continue   # 小さな穴だらけ（縁石の石）も   # 面積の割に輪郭が長い（縁石の石・模様の舗装のざらざら）。矢印・導流帯は 6 前後
+        con = float(th[y:y + h, x:x + w][sub > 0].mean()) if th is not None else 99   # 塊の明るさの差（塗料は 60 以上、縁石の石・模様の舗装は低い）
+        if W > 0.5 and con < 55 and (perim / (area * RES * RES) > 9 or len(cnts) / (area * RES * RES) > 2.5): rej += 1; continue   # 小さな穴だらけ（縁石の石）も。文字（塗料）は残す   # 面積の割に輪郭が長い（縁石の石・模様の舗装のざらざら）。矢印・導流帯は 6 前後
         # 矢印・ひし形: 型と比べて、合えばきれいな型の形で置く
         mt = match_template(sub, holes) if 3.0 <= L <= 7.5 and 0.75 <= W <= 2.4 else None   # 矢印の頭は幅 0.9m（横断歩道の縞 0.45m を矢印と取り違えない）
         if mt:
@@ -196,6 +205,34 @@ def classify(m, yel, x0, z0):
     return lines, polys, rej
 
 
+def color_areas(rgb, road, x0, z0):
+    """色付き舗装（赤: 通学路・路側帯・交差点のカラー舗装、緑: 自転車帯・路側帯）の面。返り値: [(色 2 = 赤 / 3 = 緑, [外側の輪, 穴...])]
+    影の中でも分かるように、明るさで割った色の差で見る"""
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]; S = r + g + b + 1
+    out = []; allm = np.zeros(road.shape, np.uint8)
+    for code, cm in ((2, ((r - g) / S > 0.055) & ((r - b) / S > 0.07) & (S > 120)), (3, ((g - r) / S > 0.06) & ((g - b) / S > 0.03) & (S > 120) & (r < 150))):
+        m = (cm & road).astype(np.uint8)
+        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)); m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))   # 白い文字の穴は塞ぐ（文字は上に白で描く）
+        allm |= m
+        nlab, lab, st, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+        for i in range(1, nlab):
+            if st[i, cv2.CC_STAT_AREA] * RES * RES < 1.2: continue   # 1.2m² 未満（車の色・看板の影など）
+            x, y, w, h = st[i, :4]; sub = (lab[y:y + h, x:x + w] == i).astype(np.uint8)
+            (cx, cy), (rw, rh), ang = cv2.minAreaRect(np.column_stack(np.nonzero(sub))[:, ::-1].astype(np.float32))
+            if min(rw, rh) * RES < 0.6: continue   # 細い色の線（赤い車の縁など）は面にしない
+            if st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.35: continue   # まだらの塊（屋根の影・落ち葉）
+            cnts, hier = cv2.findContours(sub, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+            rings = []
+            for k, cc in enumerate(cnts):
+                if hier[0][k][3] >= 0 and hier[0][hier[0][k][3]][3] >= 0: continue
+                if cv2.contourArea(cc) < 6: continue
+                ap = cv2.approxPolyDP(cc, 1.2, True)[:, 0, :]
+                if len(ap) >= 3: rings.append((hier[0][k][3] < 0, [(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in ap]))
+            outer = [rg for o, rg in rings if o]
+            if outer: out.append((code, [outer[0]] + [rg for o, rg in rings if not o]))
+    return out, allm
+
+
 def main():
     out = sys.argv[1]
     vs = VS(); mask_fn = car_mask_fn(out)
@@ -207,8 +244,10 @@ def main():
     while tz < Z1:
         tx = X0
         while tx < X1:
-            m, yel, _, _ = extract(vs, mask_fn, tx - PAD, tz - PAD, TILE + 2 * PAD)
-            lines, polys, rej = classify(m, yel, tx - PAD, tz - PAD)
+            m, yel, rgb, road, th = extract(vs, mask_fn, tx - PAD, tz - PAD, TILE + 2 * PAD)
+            ca, cmask = color_areas(rgb, road, tx - PAD, tz - PAD)
+            lines, polys, rej = classify(m, yel, tx - PAD, tz - PAD, th, cmask)
+            polys = ca + polys   # 色付き舗装は先に（白い文字の下に描く）
             inside = lambda P: tx <= np.mean([p[0] for p in P]) < tx + TILE and tz <= np.mean([p[1] for p in P]) < tz + TILE   # 重なりの分は中心のあるまとまりだけ
             L += [l for l in lines if inside(l[2])]; Pp += [p for p in polys if inside(p[1][0])]; nrej += rej
             tx += TILE
