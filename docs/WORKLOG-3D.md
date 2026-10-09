@@ -46,6 +46,10 @@
 - 高画質の航空写真: VIRTUAL SHIZUOKA の航空レーザのオルソ（1 画素 20cm、CC BY 4.0）。tools/world/vs_ortho.py で /tmp/world/vs_ortho に 63 図郭（ゲームの範囲）を集める。
   読むのは tools/world/vsimg.py（ゲームの座標 → 平面直角座標系 第 8 系 → 画素。pyproj が要る: pip install pyproj scipy opencv-python-headless）。
 - 路面表示の読み取り: tools/world/road_marks.py → road_marks.bin（写真の白・黄の塗装を、車道の中でトップハット変換で取り出し、線・長方形・穴あきの形に分ける。木の葉・車・小さな塊は除く）。
+  - 描画は assets/js/w3/marks.js（100m のまとまりを 200m ごとに 1 つの形に。描く距離は 低 250m・中 350m・高 700m・超高 すべて）。色: 0 白・1 黄・2 赤の色付き舗装・3 緑。
+  - 車線の位置（marks.js の fitLanes）: 道の 15〜85% の区間の縦の線（破線・実線・細長い形の主軸。幅 0.3m の矢印の軸は除く）を道に投げ、長さの重みで横のずれを集めて山を探す。
+    山の間が 2.4〜4.3m の所を車線にし、e.lanes = { f, b } に入れる。一般車（traffic.js の nLanes・laneOffE）はこれを使う。線の上を走る一般車の割合が 13.4% → 5.9% に減った。
+  - 交通島（縁石の島）は、写真の島の中がアスファルトと同じ色の所が多く、明るさでは分けられない。縁石の段（影）を手がかりにする方法を後で考える。
 - 描画回数の内訳を調べる: scratchpad の calls.expr（renderBufferDirect を包んで数える）を dbg2.js で（VW=960 VH=600 EXPR="$(cat calls.expr)"）。三角形は tri.expr。
 - 近くで見る: scratchpad の look.js（TARGETS=[[x,z,手前m,向きのずれ度]]、道路の上から）、freecam.js（CAMS=[[目x,高さ,目z,先x,先高さ,先z,fov]]、車を隠す）。
 

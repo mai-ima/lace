@@ -28,6 +28,9 @@ function at(e, s, off) {
 function laneOff(pr, dir, k) {   // dir +1: a→b（− 側を走る）、−1: b→a（+ 側）。k: 0 = いちばん左の車線
   return dir > 0 ? -pr.hw + pr.edge + pr.lw * (k + 0.5) : pr.hw - pr.edge - pr.lw * (k + 0.5);
 }
+// 写真から測った車線（marks.js の fitLanes。e.lanes）があればその位置と数を使う
+const nLanes = (e, dir) => e.lanes ? (dir > 0 ? e.lanes.f.length : e.lanes.b.length) : (dir > 0 ? e.pr.fw : e.pr.bw);
+const laneOffE = (e, dir, k) => { const L = e.lanes && (dir > 0 ? e.lanes.f : e.lanes.b); return L && L.length ? L[Math.min(L.length - 1, k)] : laneOff(e.pr, dir, k); };
 const limitOf = pr => (pr.rank <= 2 ? 50 : pr.rank <= 4 ? 40 : 30) / 3.6;
 
 export function makeTraffic(scene, net, opt) {
@@ -72,7 +75,7 @@ export function makeTraffic(scene, net, opt) {
       if (d < near || d > 300) continue;
       const pr = e.pr, dirs = []; if (pr.fw) dirs.push(1); if (pr.bw) dirs.push(-1);
       if (!dirs.length) continue;
-      const dir = dirs[Math.floor(rnd() * dirs.length)], nl = dir > 0 ? pr.fw : pr.bw, k = Math.floor(rnd() * nl);
+      const dir = dirs[Math.floor(rnd() * dirs.length)], nl = nLanes(e, dir), k = Math.floor(rnd() * nl);
       const ss = dir > 0 ? s : e.L - s;   // 進む向きの距離
       if (cars.some(c => c.e === e && c.dir === dir && c.k === k && Math.abs(c.s - ss) < 12)) continue;
       if (e.L - STOP_BACK - ss < 30) continue;   // 交差点（停止線）の直前には出さない（赤で止まりきれないため）
@@ -90,7 +93,7 @@ export function makeTraffic(scene, net, opt) {
       const tz = 3 * v * v * (J.p1[1] - J.p0[1]) + 6 * v * u * (J.p2[1] - J.p1[1]) + 3 * u * u * (J.p3[1] - J.p2[1]);
       return { x, z, y: J.y0 + (J.y1 - J.y0) * u, yaw: Math.atan2(tx, tz) };
     }
-    const sl = c.dir > 0 ? c.s : c.e.L - c.s, p = at(c.e, sl, laneOff(c.e.pr, c.dir, c.k));
+    const sl = c.dir > 0 ? c.s : c.e.L - c.s, p = at(c.e, sl, laneOffE(c.e, c.dir, c.k));
     return { x: p.x, z: p.z, y: p.y, yaw: Math.atan2(p.dx * c.dir, p.dz * c.dir) };
   }
   // 交差点を抜ける曲線を作る（次の道と車線を選ぶ）
@@ -102,7 +105,7 @@ export function makeTraffic(scene, net, opt) {
     // 出口の候補ごとに曲線を作り、短いもの（50m 以下）から重みつきで選ぶ
     const cands = [];
     opts.forEach(a => {
-      const e2 = a.e, dir2 = a.end === 0 ? 1 : -1, nl = dir2 > 0 ? e2.pr.fw : e2.pr.bw;
+      const e2 = a.e, dir2 = a.end === 0 ? 1 : -1, nl = nLanes(e2, dir2);
       const st = pose({ e: e2, dir: dir2, k: 0, s: 0 }), turn = Math.atan2(Math.sin(st.yaw - end.yaw), Math.cos(st.yaw - end.yaw));
       if (Math.abs(turn) > 2.7) return;   // U ターンに近いものは選ばない
       // 左折は左の車線へ、右折は右の車線へ

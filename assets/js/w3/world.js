@@ -10,7 +10,7 @@ import { guideContents, drawGuide, drawNamePlate } from './guide.js';
 import { makeGrid } from './grid.js';
 import { NIGHT, syncNight } from './lights.js';
 import { buildStreet } from './street.js';
-import { buildPhotoMarks } from './marks.js';
+import { buildPhotoMarks, fitLanes } from './marks.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -918,6 +918,7 @@ export function buildWorld(scene, W, gfx) {
       // 描く距離: 低 250m・中 350m・高 700m・超高 すべて（遠くの線は 1 画素に満たない）
       const R = gfx.ultra ? 1e9 : gfx.hi ? 700 : gfx.tier === 'low' ? 250 : 350;
       out.photoMarks = buildPhotoMarks(W.photoMarks, { group: out.group, hAt, mat: markMat, white, yellow, R, keep: (x, z) => out.onRoadPt(x, z) });   // ゲームの車道の外（歩道の上）に出る物は置かない
+      out.laneFit = fitLanes(net.edges, out.photoMarks.segs);   // 写真の線から道ごとの車線の位置（一般車が使う）
       const prevPM = out.update; out.update = (cx, cz, cam) => { prevPM(cx, cz, cam); out.photoMarks.update(cx, cz); };
     }
     // 文字（止まれ・速度の数字）: 文字の画像を道路の向きに長く引き伸ばして貼る（実際の路面の文字と同じ縦横比）
