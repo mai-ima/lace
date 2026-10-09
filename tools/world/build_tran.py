@@ -4,8 +4,10 @@
 出力:
   road_area.json  … 道路の範囲（車道と歩道を含む。数値地形図の道路縁）の多角形。座標はゲームの x（東）z（南）、0.05m 単位の整数
   road_width.json … OSM の道路（way の id）ごとに、中心線から直角に測った道路の範囲の幅（中央値, m）と、中心線のずれ（m、+ は進行方向の右）
-出典: 国土交通省 PLATEAU（3D 都市モデル 浜松市 交通（道路）モデル LOD1、2023 年度）を加工して作成。"""
+中の島（中央分離帯・交通島）は、国土地理院ベクトルタイルの道路構成線（/tmp/world/gsibv）で囲まれた所だけにする（塗装だけの導流帯は車道）。
+出典: 国土交通省 PLATEAU（3D 都市モデル 浜松市 交通（道路）モデル LOD1、2023 年度）を加工して作成。国土地理院ベクトルタイル（道路構成線・鉄道）。"""
 import sys, os, math, json, glob, urllib.request
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mapbox_vector_tile
 from shapely.geometry import Polygon, MultiPolygon, MultiPoint, LineString, Point, box
 from shapely.ops import unary_union
@@ -85,6 +87,71 @@ def triangulate(geom):
         gx += step
   return {'v': verts, 'i': index}
 
+def road_look(geom):
+    """多角形の中が道路に見える割合（VIRTUAL SHIZUOKA のオルソ 20cm を 0.5m ごとに見る。暗い無彩色か白い塗料）"""
+    try:
+        from vsimg import VS
+    except Exception:
+        return None
+    global _vs
+    if '_vs' not in globals(): _vs = VS()
+    import numpy as np
+    from shapely import contains_xy
+    mnx, mnz, mxx, mxz = geom.bounds
+    X, Zg = np.meshgrid(np.arange(mnx, mxx, 0.5), np.arange(mnz, mxz, 0.5))
+    ins = contains_xy(geom, X.ravel(), Zg.ravel())
+    if ins.sum() < 6: return None
+    px = _vs.sample(X.ravel()[ins], Zg.ravel()[ins]) / 255.0; px = px[~np.isnan(px[:, 0])]
+    if len(px) < 6: return None
+    L = px.mean(1); sat = px.max(1) - px.min(1)
+    dark = ((L > 0.1) & (L < 0.45) & (sat < 0.1)).mean(); white = ((L > 0.58) & (sat < 0.12)).mean()
+    return float(dark + white) if dark >= 0.4 else 0.0   # 明るい屋根・コンクリートだけの所は道路にしない
+
+
+RAILS = None
+
+
+def gsi_islands():
+    """地理院ベクトルタイル（/tmp/world/gsibv、ズーム 16）の道路構成線（RdCompt。vt_code 2401・2411 = 分離帯などの縁）を閉じた形にする"""
+    from shapely.ops import polygonize, linemerge
+    fs = glob.glob('/tmp/world/gsibv/16_*.pbf')
+    if not fs: return None, None
+    import gzip
+    lines = []; global RAILS; rails = []
+    for f in fs:
+        zz, ti, tj = map(int, os.path.basename(f)[:-4].split('_'))
+        b = open(f, 'rb').read(); b = gzip.decompress(b) if b[:2] == b'\x1f\x8b' else b
+        dec = mapbox_vector_tile.decode(b)
+        for R_ in (dec.get('RailCL'), dec.get('RailTrCL')):
+            if not R_: continue
+            for ft in R_['features']:
+                g = ft['geometry']; cs = g['coordinates'] if g['type'] == 'MultiLineString' else [g['coordinates']]
+                for c in cs:
+                    if len(c) >= 2: rails.append(LineString([tile_to_xz(ti, tj, px, py, R_.get('extent', 4096)) for px, py in c]))
+        L = dec.get('RdCompt')
+        if not L: continue
+        ext = L.get('extent', 4096)
+        for ft in L['features']:
+            if ft['properties'].get('vt_code') not in (2401, 2411): continue
+            g = ft['geometry']; cs = g['coordinates'] if g['type'] == 'MultiLineString' else [g['coordinates']]
+            for c in cs:
+                if len(c) >= 2: lines.append(LineString([tile_to_xz(ti, tj, px, py, ext) for px, py in c]))
+    if not lines: return None, None
+    # タイルの境目で切れた線をつなぐため、0.3m 太らせて塞いだ形の穴（＝囲まれた所）を島にする
+    fat = unary_union([l.buffer(0.15) for l in lines])
+    polys = []
+    for g in (fat.geoms if hasattr(fat, 'geoms') else [fat]):
+        for h in g.interiors:
+            pg = Polygon(h)
+            if pg.area >= 1.0: polys.append(pg.buffer(0.15))
+    rdc = unary_union(lines)
+    RAILS = unary_union(rails).buffer(3.0) if rails else None   # 線路（駅・高架の下を車道にしないため）
+    # 端の開いた細長い分離帯: 2 本の線に挟まれた帯（間隔 3.2m まで）。1.6m 太らせて 1.5m 細らせると、線の間だけが残る
+    band = rdc.buffer(1.6, join_style=2).buffer(-1.5, join_style=2).buffer(-0.08).buffer(0.08)   # 幅 0.3m 程度の細い分離帯（柵・縁石だけの物）も残す
+    polys += [g for g in (band.geoms if hasattr(band, 'geoms') else [band]) if g.geom_type == 'Polygon' and g.area >= 1.5]
+    return (unary_union(polys) if polys else None), rdc
+
+
 # 2 段目: 車道と歩道に分ける（tools/world/dump_net.mjs が書き出した車道の中心線と半幅を使う）
 #   車道 = 中心線を半幅で太らせた形 ∪ 交差点の円（腕の最大の半幅 + 2m）、ただし道路の範囲の中だけ
 #   歩道 = 道路の範囲 − 車道（細すぎるもの・小さすぎるものは車道に含める）
@@ -153,6 +220,31 @@ if NET and os.path.exists(NET):
         wparts = [gg for gg in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if gg.geom_type == 'Polygon' and gg.area >= 4]
         walk = unary_union(wparts).simplify(0.1)
         print('航空写真で車道に戻した所 %.0f m2' % tc.area)
+    # 3 段目: 道路の中の島（中央分離帯・交通島）は、地理院の道路構成線（分離帯・島の縁）で囲まれた所だけにする。
+    #   上下線の間の導流帯（白い「く」の字などを塗っただけの平らな所）を島にしない。囲まれた島で車道になっている所は島にする
+    isl, rdc = gsi_islands()
+    walk_meas = walk if isl is None else unary_union([walk, isl.intersection(U)])   # 車線の幅を測るときは、導流帯も車道に含めない（走る所ではない）
+    if isl is not None or rdc is not None:
+        if isl is None: isl = Polygon()
+        outer = U.boundary.buffer(1.0)
+        keep = []
+        for g in (walk.geoms if hasattr(walk, 'geoms') else [walk]):
+            if g.intersects(outer): keep.append(g)   # 歩道（道路の外の縁に接する）
+            else:
+                k = g.intersection(isl.buffer(0.3))
+                if not k.is_empty: keep.append(k)
+                # 車道に戻すのは、写真が道路（暗い無彩色のアスファルトか白い塗料）に見える所だけ（駅・高架の下などは島のまま）
+                rest = g.difference(isl.buffer(0.3))
+                for rp in (rest.geoms if hasattr(rest, 'geoms') else [rest]):
+                    if rp.geom_type != 'Polygon' or rp.area < 2: continue
+                    fr = road_look(rp)
+                    onrail = RAILS is not None and rp.intersection(RAILS).area > 0.2 * rp.area
+                    if fr is None or fr < 0.6 or onrail: keep.append(rp)
+        before = walk.area
+        walk = unary_union(keep + [isl.intersection(U)]).buffer(-0.3).buffer(0.3)
+        wparts = [gg for gg in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if gg.geom_type == 'Polygon' and gg.area >= 2]
+        walk = unary_union(wparts).simplify(0.1)
+        print('地理院の道路構成線で島を直した: 歩道・島 %.0f → %.0f m2（島 %d 個）' % (before, walk.area, len(isl.geoms) if hasattr(isl, 'geoms') else 1))
     car = U.difference(walk).simplify(0.1)
     # 縁石の線分
     curbs = []
@@ -202,7 +294,7 @@ def measure(geoms, Ls, maxw=59):
 # 車道だけの幅（航空写真で見直したあとの車道）。roadnet はこれで車線数と車線の位置を決める（歩道の幅を仮定しなくてよい）
 carParts = None
 if NET and os.path.exists(NET):
-    cg = car.buffer(0)
+    cg = U.difference(walk_meas).simplify(0.1).buffer(0)
     carParts = [g for g in (cg.geoms if hasattr(cg, 'geoms') else [cg]) if g.geom_type == 'Polygon']
 res = {}
 for w in roads['ways']:

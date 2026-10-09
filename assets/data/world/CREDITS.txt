@@ -24,7 +24,7 @@ assets/data/world/ の出典（加工して作成）
   - 軽トラック（アクティ型）: 「Honda Acty Ha3」 作者 mr.rip（CC BY 4.0） https://sketchfab.com/3d-models/58e7efac08a54a2b9a163bf194cb2a5c
   実在の車名・エンブレムは商標のため、ゲーム内では車名を使わない（車種は「小型ハッチバック」などの一般名で扱う）。
 - 道路の範囲・車道と歩道・縁石（center/road_area.json）と実測の道幅（center/road_width.json）: 国土交通省 PLATEAU
-  （浜松市 交通（道路）モデル LOD1、2023 年度）を tools/world/build_tran.py で加工して作成（OSM の道路網と組み合わせ）。
+  （浜松市 交通（道路）モデル LOD1、2023 年度）を tools/world/build_tran.py で加工して作成（OSM の道路網と組み合わせ。中央分離帯・交通島は国土地理院ベクトルタイルの道路構成線で判定）。
 - 道路の付属物（props/streetlight_curve_*.glb, utility_pole_jp_*.glb）: Objaverse に収録された Sketchfab の CC BY 4.0 作品を、
   tools/world/props_glb.mjs で縮尺・原点・面の間引き・圧縮を加工して作成。作品ごとの出典:
   - 道路照明（カーブしたテーパーポール・LED 灯具）: 「City streetlight 2」 作者 daffyxxcoolxx（CC BY 4.0） https://sketchfab.com/3d-models/30b63ebb00054efcb2bbb2ed3884cb39
@@ -40,6 +40,6 @@ assets/data/world/ の出典（加工して作成）
 - ビルの外壁の写真（facades.jpg）: ambientCG（CC0） Facade001, Facade006, Facade018A, Facade019A, Facade020A, Facade002 を縮小して並べた。
 
 路面表示（center/road_marks.bin）:
-  静岡県「VIRTUAL SHIZUOKA 静岡県 中・西部 点群データ」の航空レーザ測量のオルソ画像（CC BY 4.0）を加工して作成
+  静岡県「VIRTUAL SHIZUOKA 静岡県 中・西部 点群データ」の航空レーザ測量のオルソ画像と、車載写真レーザ測量（MMS）の点群（CC BY 4.0）を加工して作成
   （画像から区画線・停止線・横断歩道・導流帯・矢印・文字の形を読み取ったもの。画像そのものは含まない）
   https://www.geospatial.jp/ckan/dataset/virtual-shizuoka-mw

@@ -27,12 +27,12 @@ export function buildPhotoMarks(data, o) {
   // 長い辺は 3m ごとに点を足す（路面の高さの変化に沿わせる）
   const dens = ring => { const out = []; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], n = Math.max(1, Math.ceil(a.distanceTo(b) / 3)); for (let k = 0; k < n; k++) out.push(new V2(a.x + (b.x - a.x) * k / n, a.y + (b.y - a.y) * k / n)); } return out; };
   // 色: 0 白、1 黄、2 赤の色付き舗装、3 緑の色付き舗装（写真の色に近い、くすんだ色）
-  const PAL = [o.white, o.yellow, [0.52, 0.2, 0.17], [0.24, 0.42, 0.27]];
+  const PAL = [o.white, o.yellow, [0.52, 0.2, 0.17], [0.24, 0.42, 0.27], [0.16, 0.42, 0.66]];   // 4: 自転車の矢羽根（青）
   let nItems = 0; const segs = [];   // 縦の線（[x0, z0, x1, z1]）
   for (const [ti, tj, st, len] of hdr.tiles) {
     const ox = ti * T, oz = tj * T; let p = st; const end = st + len;
     while (p < end) {
-      const kind = body[p++], ci = body[p++], col = PAL[ci] || o.white, dy = ci >= 2 ? -0.004 : 0;   // 色付き舗装は白・黄の表示の 4mm 下
+      const kind = body[p++], ci = body[p++], col = PAL[ci] || o.white, dy = ci === 2 || ci === 3 ? -0.004 : 0;   // 色付き舗装は白・黄の表示の 4mm 下
       if (kind === 0) {
         const w = body[p++] / 100, n = body[p++], P = [];
         for (let k = 0; k < n; k++) { P.push([ox + body[p] / 100, oz + body[p + 1] / 100]); p += 2; }

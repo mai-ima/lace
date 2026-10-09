@@ -6,13 +6,14 @@
       本体は 100m 四方のまとまりごとに、まとまりの左上からの cm で:
         線: 0, 色, 幅（cm）, 点の数, x, z, x, z, ...（塗った線の中心線）
         形: 1, 色, 輪の数, 点の数, x, z, ...（外側の輪）, 点の数, x, z, ...（穴）...（矢印・文字・ひし形・横断歩道の縞・停止線・導流帯など）
-      色: 0 = 白、1 = 黄、2 = 赤の色付き舗装、3 = 緑の色付き舗装（面。白・黄の表示より下に描く）。
+      色: 0 = 白、1 = 黄、2 = 赤の色付き舗装、3 = 緑の色付き舗装（面。白・黄の表示より下に描く）、4 = 青（自転車の矢羽根）。
 方法:
   1. 100m 四方ごとに、写真を 10cm の格子で読み、車道の中だけを見る。
   2. 明るさから「1.5m より細い明るい所」を取り出す（トップハット変換。影の中でも周りより明るければ取れる）。黄色は色の差で取る。
   3. つながった塊ごとに、主軸の長さ・幅・充填率で分ける: 細長い塊 → 線（中心線を折れ線に）、長方形に近い塊 → 長方形、それ以外 → 形（輪郭を簡略化）。
      車（幅 1m 以上で中が詰まった明るい塊）や、マンホール・補修の跡などの小さい塊は除く。
-  4. 車や影で途切れた線は、同じ向きで 4m 以内の切れ目をつなぐ（実線）。
+  4. 車や影で途切れた線は、同じ向きで 4m 以内の切れ目をつなぐ（実線）。車に隠れて抜けた破線は、前後の破線の間隔から補う。
+  5. 車載写真レーザ測量（MMS）の点群がある所（tools/world/mms_raster.py）は、点の反射強度で塗料を取り、点の色で黄・青を分ける（写真より正確）。
 写真は含めない（形だけ）。出典: 静岡県 VIRTUAL SHIZUOKA（CC BY 4.0）を加工して作成。"""
 import sys, os, json, math
 import numpy as np
@@ -68,6 +69,79 @@ def extract(vs, mask_fn, x0, z0, size):
     m = (white | yel) & road & ~leaf
     m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8))
     return m, yel & road, rgb, road, th
+
+
+class MMS:
+    """車載写真レーザ測量（MMS）の格子（tools/world/mms_raster.py）。点のある所では写真より正確（車・影・木漏れ日が無い）"""
+    def __init__(self, f='/tmp/world/mms/raster.npz'):
+        self.ok = os.path.exists(f)
+        if not self.ok: return
+        R = np.load(f); self.X0, self.Z0 = float(R['x0']), float(R['z0'])
+        self.I, self.n, self.rgb = R['I'], R['n'], R['rgb']
+        assert abs(float(R['res']) - RES) < 1e-6
+
+    def extract(self, x0, z0, n, road, orgb=None):
+        """左上 (x0, z0)、n × n 画素（写真と同じ格子）。返り値: 使える範囲, 塗料, 黄, 青, 明るさの差（写真の th と同じ目安）。範囲外なら None"""
+        if not self.ok: return None
+        c0, r0 = int(round((x0 - self.X0) / RES)), int(round((z0 - self.Z0) / RES))
+        H, W = self.I.shape
+        if c0 >= W or r0 >= H or c0 + n <= 0 or r0 + n <= 0: return None
+        def cut(a, fill=0):
+            o = np.full((n, n) + a.shape[2:], fill, a.dtype)
+            ra, rb, ca, cb = max(0, r0), min(H, r0 + n), max(0, c0), min(W, c0 + n)
+            o[ra - r0:rb - r0, ca - c0:cb - c0] = a[ra:rb, ca:cb]; return o
+        I = cut(self.I).astype(np.float32); v = (cut(self.n) > 0).astype(np.float32); rgb = cut(self.rgb).astype(np.float32)
+        if v.mean() < 0.002: return None
+        k3 = np.ones((3, 3), np.float32); vs = cv2.filter2D(v, -1, k3)
+        fill = lambda a: np.where(v > 0, a, cv2.filter2D(a * v, -1, k3) / np.maximum(vs, 1e-6))   # 点の無い 1 画素の穴を周りで埋める
+        # 点が十分にある所だけ（車に隠れた筋・走査の端は写真に任せる）。境目で明るさの段差を拾わないよう 0.5m 内側
+        cover = cv2.erode((cv2.blur(v, (9, 9)) > 0.55).astype(np.uint8), np.ones((11, 11), np.uint8)).astype(bool) & road
+        if cover.sum() < 400: return None
+        # 反射強度は路面の材質・計測の回で水準が変わるので、対数にして「周りの何倍明るいか」で見る（塗料はアスファルトの 2.2 倍以上）
+        g = np.log(np.maximum(fill(I), 50)).astype(np.float32); g[vs == 0] = 0
+        g = cv2.medianBlur(g, 3)   # 走査の縞の粒を消す
+        bg = cv2.morphologyEx(g, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))); tl = g - bg
+        lmax = cv2.dilate(g, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
+        r, gg, b = (fill(rgb[..., k]) for k in range(3)); S = r + gg + b + 1
+        q = (r - b) / S; qb = cv2.medianBlur(np.clip(q * 400 + 128, 0, 255).astype(np.uint8), 31).astype(np.float32) / 400 - 0.32   # 周り 3m の色（点の色はアスファルトも暖色寄り）
+        orange = (q - qb > 0.07) & (r > 60)   # 点の色が周りより黄・橙（カメラの写真による着色）
+        # 白の塗料はアスファルトの 2.2 倍以上。黄・橙の塗料はレーザの反射が弱い（1.4 倍以上）ので色と合わせて見る
+        white = (((tl > 0.8) & (tl > 0.45 * (lmax - bg))) | (orange & (tl > 0.35))) & cover
+        th = tl * 100   # 写真の明るさの差と同じ目安（classify の「塗料らしさ」の判定に使う）
+        # 橙に写る塗料には、黄の線・数字と、赤の減速マーク・色付き舗装がある。写真の色（黄は緑が青より明るい、赤は同じくらい）で分ける
+        if orgb is not None:
+            ro, go, bo = orgb[..., 0], orgb[..., 1], orgb[..., 2]
+            yl = cv2.blur(((go - bo) / (ro + go + bo + 1)).astype(np.float32), (3, 3)) > 0.06
+        else: yl = np.ones_like(white)
+        red = white & orange & ~yl
+        yel = white & orange & yl; white &= ~red
+        blue = ((b - r) / S - (-qb) > 0.08) & ((b - gg) / S > -0.02) & (S > 100) & cover   # 自転車の矢羽根（青）
+        m = cv2.morphologyEx(white.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((2, 2), np.uint8))
+        return cover, m, yel, blue, th, red
+
+
+def blue_marks(blue, x0, z0, code=4):
+    """小さな色の塗装（青: 自転車の通行位置を示す矢羽根・ピクトグラム、赤: 減速マーク）の形。返り値: [(色, [輪])]"""
+    out = []
+    m = cv2.morphologyEx(blue.astype(np.uint8), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    nlab, lab, st, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    for i in range(1, nlab):
+        a = st[i, cv2.CC_STAT_AREA] * RES * RES
+        if not (0.12 <= a <= 3.0): continue
+        x, y, w, h = st[i, :4]; sub = (lab[y:y + h, x:x + w] == i).astype(np.uint8)
+        cnts, _ = cv2.findContours(sub, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE); c = max(cnts, key=cv2.contourArea)
+        (cx, cy), (rw, rh), ang = cv2.minAreaRect(c)
+        if max(rw, rh) * RES > 2.6 or min(rw, rh) * RES < 0.25: continue
+        if st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.4: continue   # まだらの塊（青い屋根・シートの映り込み）
+        ap = cv2.approxPolyDP(c, 0.8, True)[:, 0, :]
+        if len(ap) >= 3: out.append((code, [[(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in ap]], a))
+    if code == 4 and out:
+        # 矢羽根は一定の間隔で並ぶ。同じくらいの大きさの塊が 4〜16m 先に無いもの（青い車・看板の映り込み）は除く
+        C = np.array([np.mean(o[1][0], 0) for o in out]); A = np.array([o[2] for o in out])
+        D = np.hypot(C[:, None, 0] - C[None, :, 0], C[:, None, 1] - C[None, :, 1])
+        ok = ((D >= 4) & (D <= 16) & (np.maximum(A[:, None], A[None, :]) < 2.5 * np.minimum(A[:, None], A[None, :]))).any(1)
+        out = [o for o, k in zip(out, ok) if k]
+    return [(o[0], o[1]) for o in out]
 
 
 # 道路標示の型（u: 矢印の進む向き、0 が後ろの端・5 が先、w: 横。単位 m）。道路標示の様式に合わせた形（roadnet.js の矢印と同じ）
@@ -134,7 +208,7 @@ def match_template(sub, holes):
     return name, out
 
 
-def classify(m, yel, x0, z0, th=None, protect=None):
+def classify(m, yel, x0, z0, th=None, protect=None, trusted=None):
     """塊を線・長方形・形に分ける。返り値: lines [(色, 幅m, [(x,z)...])], polys [(色, [(x,z)...])], 除いた塊の数"""
     nlab, lab, st, cen = cv2.connectedComponentsWithStats(m, connectivity=8)
     lines, polys, rej = [], [], 0
@@ -160,11 +234,13 @@ def classify(m, yel, x0, z0, th=None, protect=None):
                 if len(ap) >= 3 and cv2.contourArea(cc) >= 3: polys.append((color, [[(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in ap]]))
             continue
         toW = lambda P: [(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in P]
+        pc = trusted is not None and trusted[y:y + h, x:x + w][sub > 0].mean() > 0.5   # 点群の塊（車は高さで除いてあるので、車の判定はしない）
         # 車らしい塊（幅 1.2m 以上、長さ 6.5m 以下、中が詰まっている）は除く
-        if W >= 1.2 and L <= 6.5 and fill > (0.5 if holes else 0.45): rej += 1; continue   # 窓の穴がある車も
-        if W >= 2.2 and fill > 0.5: rej += 1; continue   # 大きな明るい面（白い屋根の影・補修の跡など）
-        if W >= 1.4 and 3.2 <= L <= 5.6 and fill > 0.35: rej += 1; continue   # 車の大きさの塊（窓の穴があっても。ひし形は幅 1.5m で中が空いているので充填率が低い）
-        if W >= 0.75 and L <= 2.6 and fill > 0.6 and not holes: rej += 1; continue   # 車の屋根・ボンネット
+        if W >= 2.2 and fill > 0.5: rej += 1; continue   # 大きな明るい面（白い屋根の影・補修の跡・点群では明るい材質の舗装）
+        if pc: pass
+        elif W >= 1.2 and L <= 6.5 and fill > (0.5 if holes else 0.45): rej += 1; continue   # 窓の穴がある車も
+        elif W >= 1.4 and 3.2 <= L <= 5.6 and fill > 0.35: rej += 1; continue   # 車の大きさの塊（窓の穴があっても。ひし形は幅 1.5m で中が空いているので充填率が低い）
+        elif W >= 0.75 and L <= 2.6 and fill > 0.6 and not holes: rej += 1; continue   # 車の屋根・ボンネット
         if color == 1 and not ((W <= 0.35 and L >= 1.2) or (fill > 0.55 and L >= 0.8)): rej += 1; continue   # 黄色は線か文字だけ（黄葉を除く）
         if area * RES * RES < 0.5 and fill < 0.6: rej += 1; continue   # 小さくて形の崩れた塊（木漏れ日・汚れ・縁石の粒）
         con = float(th[y:y + h, x:x + w][sub > 0].mean()) if th is not None else 99   # 塊の明るさの差（塗料は 60 以上、縁石の石・模様の舗装は低い）
@@ -212,13 +288,24 @@ def color_areas(rgb, road, x0, z0):
     out = []; allm = np.zeros(road.shape, np.uint8)
     for code, cm in ((2, ((r - g) / S > 0.055) & ((r - b) / S > 0.07) & (S > 120)), (3, ((g - r) / S > 0.06) & ((g - b) / S > 0.03) & (S > 120) & (r < 150))):
         m = (cm & road).astype(np.uint8)
-        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8)); m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8))   # 白い文字の穴は塞ぐ（文字は上に白で描く）
+        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        # 白い文字の穴（4m² 未満）は塞ぐ（文字は上に白で描く）。隣どうしの塊（減速マークの赤い長方形など）はつなげない
+        cc_, hh_ = cv2.findContours(m, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        if hh_ is not None:
+            for k, c_ in enumerate(cc_):
+                if hh_[0][k][3] >= 0 and cv2.contourArea(c_) < 400: cv2.drawContours(m, [c_], -1, 1, -1)
         allm |= m
         nlab, lab, st, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
         for i in range(1, nlab):
-            if st[i, cv2.CC_STAT_AREA] * RES * RES < 1.2: continue   # 1.2m² 未満（車の色・看板の影など）
+            a_ = st[i, cv2.CC_STAT_AREA] * RES * RES
+            if a_ < (0.15 if code == 2 else 1.2): continue   # 小さい塊（車の色・看板の影など）。赤は減速マークの長方形（0.5m² 前後）も
             x, y, w, h = st[i, :4]; sub = (lab[y:y + h, x:x + w] == i).astype(np.uint8)
             (cx, cy), (rw, rh), ang = cv2.minAreaRect(np.column_stack(np.nonzero(sub))[:, ::-1].astype(np.float32))
+            if a_ < 1.2:
+                # 減速マーク: 長方形に近く、幅 0.25m 以上・長さ 2.5m 以下
+                if st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.6 or min(rw, rh) * RES < 0.25 or max(rw, rh) * RES > 2.5: continue
+                box = cv2.boxPoints(((cx, cy), (rw, rh), ang))
+                out.append((code, [[(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in box]])); continue
             if min(rw, rh) * RES < 0.6: continue   # 細い色の線（赤い車の縁など）は面にしない
             if st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.35: continue   # まだらの塊（屋根の影・落ち葉）
             cnts, hier = cv2.findContours(sub, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
@@ -233,9 +320,101 @@ def color_areas(rgb, road, x0, z0):
     return out, allm
 
 
+def bridge_solid(L, Pp):
+    """車・影で途切れた実線をつなぐ。両側が 6m 以上の線（実線のはず）で、同じ向き（3 度以内）・横のずれ 0.15m 以内・切れ目 0.3〜6m のときだけ
+    （破線は 1 本が 5m 前後なので対象にならない）。返り値: つなぎの長方形（形のリストに足す）"""
+    pieces = []   # (始点, 終点, 幅, 色)
+    for c, w, P in L:
+        if len(P) >= 2: pieces.append((np.array(P[0]), np.array(P[-1]), w, c))
+    for c, R in Pp:
+        if c >= 2 or len(R) != 1 or len(R[0]) != 4: continue
+        r = np.array(R[0]); e1, e2 = np.linalg.norm(r[1] - r[0]), np.linalg.norm(r[2] - r[1])
+        if max(e1, e2) < 4 * min(e1, e2): continue
+        a, b = ((r[0] + r[1]) / 2, (r[2] + r[3]) / 2) if e1 < e2 else ((r[1] + r[2]) / 2, (r[3] + r[0]) / 2)
+        pieces.append((a, b, min(e1, e2), c))
+    long_ = [q for q in pieces if np.linalg.norm(q[1] - q[0]) >= 6.0]
+    G = {}
+    for k, (a, b, w, c) in enumerate(long_):
+        for p in (a, b): G.setdefault((int(p[0] // 8), int(p[1] // 8)), []).append((k, p))
+    out, done = [], set()
+    for k, (a, b, w, c) in enumerate(long_):
+        d = (b - a) / np.linalg.norm(b - a)
+        for end, sign in ((b, 1), (a, -1)):
+            best = None
+            for i in (-1, 0, 1):
+                for j in (-1, 0, 1):
+                    for k2, p in G.get((int(end[0] // 8) + i, int(end[1] // 8) + j), []):
+                        if k2 == k or long_[k2][3] != c: continue
+                        v = p - end; gap = float(v @ d) * sign
+                        if not (0.3 <= gap <= 6.0): continue
+                        lat = abs(float(v[0] * d[1] - v[1] * d[0]))
+                        a2, b2 = long_[k2][0], long_[k2][1]; d2 = (b2 - a2) / np.linalg.norm(b2 - a2)
+                        if lat > 0.15 or abs(float(d @ d2)) < math.cos(math.radians(3)): continue
+                        if not best or gap < best[0]: best = (gap, k2, p)
+            if best and (min(k, best[1]), max(k, best[1])) not in done:
+                done.add((min(k, best[1]), max(k, best[1])))
+                p0, p1 = end, best[2]; t = (p1 - p0); t = t / (np.linalg.norm(t) or 1); n = np.array([-t[1], t[0]]) * (w / 2)
+                out.append((c, [[tuple(p0 + n), tuple(p1 + n), tuple(p1 - n), tuple(p0 - n)]]))
+    return out
+
+
+def fill_dashes(L, Pp):
+    """車に隠れて抜けた破線を補う。同じ向き（3 度以内）・横のずれ 0.2m 以内で前後に並ぶ破線（長さ 1.5〜8m）の列で、
+    間が「抜けた 1〜2 本ぶん」（ふつうの間の 2 倍 + 1 本、3 倍 + 2 本、それぞれ ±25%）の所に、前後と同じ長さ・幅の線を足す。返り値: 足す長方形"""
+    pieces = []   # (始点, 終点, 幅, 色)
+    for c, w, P in L:
+        if len(P) >= 2: pieces.append((np.array(P[0]), np.array(P[-1]), w, c))
+    for c, R in Pp:
+        if c >= 2 or len(R) != 1 or len(R[0]) != 4: continue
+        r = np.array(R[0]); e1, e2 = np.linalg.norm(r[1] - r[0]), np.linalg.norm(r[2] - r[1])
+        if max(e1, e2) < 4 * min(e1, e2): continue
+        a, b = ((r[0] + r[1]) / 2, (r[2] + r[3]) / 2) if e1 < e2 else ((r[1] + r[2]) / 2, (r[3] + r[0]) / 2)
+        pieces.append((a, b, min(e1, e2), c))
+    D = [q for q in pieces if 1.5 <= np.linalg.norm(q[1] - q[0]) <= 8.0 and q[2] <= 0.25]
+    G = {}
+    for k, (a, b, w, c) in enumerate(D):
+        m = (a + b) / 2; G.setdefault((int(m[0] // 20), int(m[1] // 20)), []).append(k)
+    nxt = {}
+    for k, (a, b, w, c) in enumerate(D):
+        d = (b - a) / np.linalg.norm(b - a); m = (a + b) / 2; best = None
+        for i in (-1, 0, 1):
+            for j in (-1, 0, 1):
+                for k2 in G.get((int(m[0] // 20) + i, int(m[1] // 20) + j), []):
+                    if k2 == k or D[k2][3] != c: continue
+                    a2, b2 = D[k2][0], D[k2][1]; d2 = (b2 - a2) / np.linalg.norm(b2 - a2)
+                    if abs(float(d @ d2)) < math.cos(math.radians(3)): continue
+                    m2 = (a2 + b2) / 2; v = m2 - m; t = float(v @ d)
+                    if t <= 0 or abs(float(v[0] * d[1] - v[1] * d[0])) > 0.2: continue
+                    if not best or t < best[0]: best = (t, k2)
+        if best and best[0] < 30: nxt[k] = best
+    out = []
+    for k, (t, k2) in nxt.items():
+        a, b, w, c = D[k]; L1 = np.linalg.norm(b - a); L2 = np.linalg.norm(D[k2][1] - D[k2][0])
+        if abs(L1 - L2) > 0.3 * max(L1, L2): continue
+        Ld = (L1 + L2) / 2; gap = t - Ld
+        # ふつうの間: 前の前・次の次との間（どちらかがあれば）
+        ref = []
+        for kk, tt in ((k2, nxt.get(k2)), (None, None)):
+            if tt: ref.append(tt[0] - Ld)
+        prev = [kp for kp, (tp, kn) in nxt.items() if kn == k]
+        if prev: ref.append(nxt[prev[0]][0] - Ld)
+        ref = [g for g in ref if 0.5 * Ld <= g <= 3 * Ld]
+        if not ref: continue
+        g0 = float(np.median(ref))
+        for nmiss in (1, 2):
+            want = (nmiss + 1) * g0 + nmiss * Ld
+            if abs(gap - want) <= 0.25 * want:
+                d = (D[k2][0] + D[k2][1]) / 2 - (a + b) / 2; d = d / np.linalg.norm(d); n_ = np.array([-d[1], d[0]]) * (w / 2)
+                for q in range(1, nmiss + 1):
+                    cm = (a + b) / 2 + d * (t * q / (nmiss + 1)); p0, p1 = cm - d * Ld / 2, cm + d * Ld / 2
+                    out.append((c, [[tuple(p0 + n_), tuple(p1 + n_), tuple(p1 - n_), tuple(p0 - n_)]]))
+                break
+    return out
+
+
 def main():
     out = sys.argv[1]
-    vs = VS(); mask_fn = car_mask_fn(out)
+    vs = VS(); mask_fn = car_mask_fn(out); mms = MMS(); nm = 0
     T = json.load(open(os.path.join(out, 'roads.json')))['terrain']
     X0, Z0, X1, Z1 = T['x0'], T['z0'], T['x0'] + (T['nx'] - 1) * T['cell'], T['z0'] + (T['nz'] - 1) * T['cell']
     if len(sys.argv) >= 6: X0, Z0, X1, Z1 = map(float, sys.argv[2:6])
@@ -245,14 +424,33 @@ def main():
         tx = X0
         while tx < X1:
             m, yel, rgb, road, th = extract(vs, mask_fn, tx - PAD, tz - PAD, TILE + 2 * PAD)
-            ca, cmask = color_areas(rgb, road, tx - PAD, tz - PAD)
-            lines, polys, rej = classify(m, yel, tx - PAD, tz - PAD, th, cmask)
-            polys = ca + polys   # 色付き舗装は先に（白い文字の下に描く）
+            cov = None
+            r_, g_, b_ = rgb[..., 0], rgb[..., 1], rgb[..., 2]; S_ = r_ + g_ + b_ + 1
+            q_ = (g_ + b_ - 2 * r_) / S_; qb_ = cv2.medianBlur(np.clip(q_ * 300 + 128, 0, 255).astype(np.uint8), 31).astype(np.float32) / 300 - 128 / 300
+            # 写真の矢羽根は青緑に写る。影の中は全体が青みがかるので、周り 3m の色との差で見る
+            bo = ((b_ - r_) / S_ > 0.07) & ((g_ - r_) / S_ > 0.06) & ((g_ - b_) / S_ < 0.05) & (S_ > 200) & (q_ - qb_ > 0.12) & road
+            M = mms.extract(tx - PAD, tz - PAD, m.shape[0], road, rgb); rd = []
+            if M:
+                # 点群のある所は点群の結果に置き換える（写真の車・影・木漏れ日による取りこぼしと誤りが無い）
+                cov, m2, y2, b2, th2, r2 = M; nm += int(cov.sum())
+                rd = blue_marks(r2, tx - PAD, tz - PAD, 2)
+                # 黄・橙の塗料はレーザの反射が弱いので、写真で取れた黄も足す（写真の黄は色で確かめてある）
+                yo = yel & (m > 0)
+                m = np.where(cov, m2 | yo, m).astype(np.uint8); yel = np.where(cov, y2 | yo, yel); th = np.where(cov & ~yo, th2, th)
+                bo = np.where(cov, b2, bo)
+            # 色付き舗装は、黄・橙の塗料（速度の数字など。写真では赤っぽく写る）の所を除いて見る
+            ca, cmask = color_areas(rgb, road & ~cv2.dilate(yel.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool), tx - PAD, tz - PAD)
+            bl = blue_marks(bo, tx - PAD, tz - PAD)
+            lines, polys, rej = classify(m, yel, tx - PAD, tz - PAD, th, cmask, cov)
+            polys = ca + polys + bl + rd   # 色付き舗装は先に（白い文字の下に描く）
             inside = lambda P: tx <= np.mean([p[0] for p in P]) < tx + TILE and tz <= np.mean([p[1] for p in P]) < tz + TILE   # 重なりの分は中心のあるまとまりだけ
             L += [l for l in lines if inside(l[2])]; Pp += [p for p in polys if inside(p[1][0])]; nrej += rej
             tx += TILE
         tz += TILE
         print('z', round(tz), '線', len(L), '形', len(Pp), flush=True)
+    Pp += bridge_solid(L, Pp)
+    fd = fill_dashes(L, Pp); Pp += fd; print('補った破線', len(fd))
+    if os.environ.get('MARKS_DBG'): json.dump([np.mean(R[0], 0).tolist() for c, R in fd], open(os.environ['MARKS_DBG'], 'w'))
     # まとまり（100m）ごとに Int16 の列へ
     byT = {}
     key = lambda P: (int(math.floor(np.mean([p[0] for p in P]) / TILE)), int(math.floor(np.mean([p[1] for p in P]) / TILE)))
@@ -268,12 +466,14 @@ def main():
                 body += [1, it[1], len(it[2])]
                 for ring in it[2]: body += [len(ring)] + cm(ring); nv += len(ring)
         tiles.append([ti, tj, st, len(body) - st])
-    hdr = json.dumps({'tile': TILE, 'tiles': tiles, 'credit': '静岡県 VIRTUAL SHIZUOKA のオルソ画像（CC BY 4.0）から読み取り'}, separators=(',', ':')).encode()
+    hdr = json.dumps({'tile': TILE, 'tiles': tiles, 'credit': '静岡県 VIRTUAL SHIZUOKA のオルソ画像と車載写真レーザ測量の点群（CC BY 4.0）から読み取り'}, separators=(',', ':')).encode()
     hdr += b' ' * (len(hdr) % 2)   # 本体（Int16）が 2 バイト境界から始まるように、ヘッダーの長さを偶数に
     arr = np.array(body, np.int16)
-    with open(os.path.join(out, 'road_marks.bin'), 'wb') as f:
+    fn = os.environ.get('MARKS_OUT') or os.path.join(out, 'road_marks.bin')   # 試しの出力先（一部の範囲だけ読むとき）
+    with open(fn, 'wb') as f:
         f.write(np.uint32(len(hdr)).tobytes()); f.write(hdr); f.write(arr.tobytes())
-    print('線', len(L), '形', len(Pp), '頂点', nv, '除いた塊', nrej, os.path.getsize(os.path.join(out, 'road_marks.bin')) // 1024, 'KB')
+    print('点群を使った面積 %.0f m²' % (nm * RES * RES))
+    print('線', len(L), '形', len(Pp), '頂点', nv, '除いた塊', nrej, os.path.getsize(fn) // 1024, 'KB')
 
 
 if __name__ == '__main__':
