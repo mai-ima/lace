@@ -379,11 +379,12 @@ export function buildWorld(scene, W, gfx) {
          地面（地形の高さ − 0.15m）の 6cm 上。1200m 四方のまとまりごとに描く --- */
   if (W.parking && W.parking.lots) {
     const q = W.parking.q, gY = (x, z) => terr.at(x, z) - 0.09, CHK = new Map();
-    const chunk = (x, z) => { const k = Math.floor(x / 1200) + ',' + Math.floor(z / 1200); let c = CHK.get(k); if (!c) CHK.set(k, c = { P: [], I: [], L: [], LI: [] }); return c; };
+    const chunk = (x, z) => { const k = Math.floor(x / 1200) + ',' + Math.floor(z / 1200); let c = CHK.get(k); if (!c) CHK.set(k, c = { P: [], C: [], I: [], L: [], LI: [] }); return c; };
     W.parking.lots.forEach(lot => {
       const v = lot.tri.v, I = lot.tri.i; if (!I.length) return;
       const c = chunk(v[0] * q, v[1] * q), b = c.P.length / 3;
-      for (let i = 0; i < v.length; i += 2) { const x = v[i] * q, z = v[i + 1] * q; c.P.push(x, gY(x, z), z); }
+      const col = lot.grav ? [1.22, 1.13, 0.98] : [1, 1, 1];   // 砂利・土の駐車場は砂利の色（舗装の質感に掛ける）
+      for (let i = 0; i < v.length; i += 2) { const x = v[i] * q, z = v[i + 1] * q; c.P.push(x, gY(x, z), z); c.C.push(...col); }
       for (let t = 0; t < I.length; t += 3) {   // 法線が上を向く順に
         const A = I[t] * 2, B = I[t + 1] * 2, Cc = I[t + 2] * 2;
         const up = (v[B + 1] - v[A + 1]) * (v[Cc] - v[A]) - (v[B] - v[A]) * (v[Cc + 1] - v[A + 1]) > 0;
@@ -397,12 +398,12 @@ export function buildWorld(scene, W, gfx) {
         for (let k = 0; k < n; k++) { const a = lb + k * 2; c.LI.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
       }
     });
-    const pm = new THREE.MeshStandardMaterial({ map: asph, color: 0x9c9ea2, roughness: 0.92, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const pm = new THREE.MeshStandardMaterial({ map: asph, color: 0x9c9ea2, vertexColors: true, roughness: 0.92, metalness: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     pm.onBeforeCompile = roadMat.onBeforeCompile; pm.customProgramCacheKey = () => 'parking';   // 車道と同じ舗装のむら
     const lm = new THREE.MeshStandardMaterial({ color: 0xe8e8e4, roughness: 0.65, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, side: THREE.DoubleSide });
     let nLots = 0;
     CHK.forEach(c => {
-      if (c.I.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(c.P, 3)); g.setIndex(c.I); g.computeVertexNormals(); g.computeBoundingSphere(); const m = new THREE.Mesh(worldUV(g, 6), pm); m.receiveShadow = true; out.group.add(m); nLots++; }
+      if (c.I.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(c.P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(c.C, 3)); g.setIndex(c.I); g.computeVertexNormals(); g.computeBoundingSphere(); const m = new THREE.Mesh(worldUV(g, 6), pm); m.receiveShadow = true; out.group.add(m); nLots++; }
       if (c.LI.length) {
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(c.L, 3)); g.setIndex(c.LI);
         const nrm = new Float32Array(c.L.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3)); g.computeBoundingSphere();
@@ -985,7 +986,7 @@ export function buildWorld(scene, W, gfx) {
       // バス停・駐車場の設備（street.js）。256 角の空き: 下の 512（32 枚）→ 方面案内の空いた枠（後ろから 1 枠に 2 枚）
       let nc = 0;
       const cellAt = () => { if (nc < 32) { const k = nc++; return [(k % 16) * 256, 3072 + Math.floor(k / 16) * 256]; } const k = nc++ - 32, s = 63 - (k >> 1); if (s < ng) return null; return [(s % 8) * 512 + (k & 1) * 256, 512 + Math.floor(s / 8) * 320 + 32]; };
-      out.street = buildStreet({ W, net, terr, onRoadPt: out.onRoadPt, walkG: out.walkG, WALK_H, group: out.group, atlas: { g, rectUV, cell: cellAt }, extra });
+      out.street = buildStreet({ W, net, ultra: gfx.ultra, terr, onRoadPt: out.onRoadPt, walkG: out.walkG, WALK_H, group: out.group, atlas: { g, rectUV, cell: cellAt }, extra });
       const prevUpdate = out.update; out.update = (cx, cz, cam) => { prevUpdate(cx, cz, cam); out.street.update(cx, cz); };
     }
     out.signAtlas = SA;   // 確認用
@@ -1021,7 +1022,7 @@ export function buildWorld(scene, W, gfx) {
         poleM.push(sg.poleR ? new THREE.Matrix4().compose(V.set(sg.x, sg.y, sg.z), Q, new THREE.Vector3(sg.poleR, sg.h + sg.sh * 0.3, sg.poleR)) : null);
       });
       // カメラから SIGN_R 以内の標識だけを並べる（それより遠くは 1 画素に満たない）。20m 動くごとに並べ直す
-      const SIGN_R = 450; let slx = Infinity, slz = Infinity;
+      const SIGN_R = gfx.ultra ? 1200 : 450; let slx = Infinity, slz = Infinity;
       const placeSigns = (cx, cz) => {
         if (Math.hypot(cx - slx, cz - slz) < 20) return; slx = cx; slz = cz;
         let n = 0, np = 0;
@@ -1054,8 +1055,8 @@ export function buildSky(scene, renderer, opt) {
   u.sunPosition.value.copy(sunDir);
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.6); sun.position.copy(sunDir).multiplyScalar(400);
   sun.castShadow = opt.shadows > 0;
-  sun.shadow.mapSize.set(opt.shadows > 1 ? 4096 : 2048, opt.shadows > 1 ? 4096 : 2048);
-  const S = opt.shadows > 1 ? 140 : 100; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
+  const SM = opt.shadows > 2 ? Math.min(8192, renderer.capabilities.maxTextureSize) : opt.shadows > 1 ? 4096 : 2048; sun.shadow.mapSize.set(SM, SM);
+  const S = opt.shadows > 2 ? 220 : opt.shadows > 1 ? 140 : 100; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
   sun.shadow.camera.layers.enable(1);   // 影だけを落とす粗い形（レイヤー 1）
   scene.add(sun); scene.add(sun.target);

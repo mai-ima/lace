@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { loadWorld } from './data.js';
 import { buildWorld, buildSky } from './world.js';
 import { makeCar, makeColliders } from './vehicle.js';
+import { makeParked } from './parked.js';
 import { makeGrid } from './grid.js';
 import { loadImpostor, plantTrees } from './trees.js';
 import { buildProps } from './props.js';
@@ -27,8 +28,11 @@ export function detectGfx(renderer, force) {
   try { const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info'); name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); } catch (e) { /* ignore */ }
   const low = /SwiftShader|llvmpipe|Software/i.test(name), intel = /Intel/i.test(name), apple = /Apple/i.test(name);
   const tier = force || (low ? 'low' : intel ? 'mid' : apple ? 'high' : 'high');
-  const T = { low: { pr: 0.75, shadows: 0, far: 1400 }, mid: { pr: 0.85, shadows: 1, far: 1300, post: 'smaa' }, high: { pr: 1, shadows: 2, far: 2600, post: 'msaa', ao: true, csm: true } }[tier];
-  return Object.assign({ tier, gpu: name, orthoZ: 17 }, T);
+  // 超高（ultra）: 三角形・描画回数の予算を考えず品質を最大にする（画面の解像度は端末のまま、MSAA 8 倍、影の地図 8192 で広く、描画距離 4km、
+  // 一般車・駐車中の車・小物・標識を遠くまで細かく）。それ以外は高と同じ
+  const T = { low: { pr: 0.75, shadows: 0, far: 1400 }, mid: { pr: 0.85, shadows: 1, far: 1300, post: 'smaa' }, high: { pr: 1, shadows: 2, far: 2600, post: 'msaa', ao: true, csm: true },
+    ultra: { pr: 1, shadows: 3, far: 4000, post: 'msaa', ao: true, csm: true } }[tier] || {};
+  return Object.assign({ tier, gpu: name, orthoZ: 17, hi: tier === 'high' || tier === 'ultra', ultra: tier === 'ultra' }, T);
 }
 
 /** タイヤとホイールを 4 輪に分ける（前後左右の位置で三角形を振り分け、各輪の中心を回転の軸にする） */
@@ -97,7 +101,7 @@ export async function start(container, opt) {
   function setupPost() {
     if (!gfx.post) return;
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: gfx.post === 'msaa' ? 4 : 0 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: gfx.post === 'msaa' ? (gfx.ultra ? 8 : 4) : 0 });
     composer = new EffectComposer(renderer, rt);
     composer.addPass(new RenderPass(scene, cam));
     // 環境光の遮蔽（GTAO、高画質）: 建物の根元・壁の隅・縁石・車の下など、光が回り込みにくい所を暗くする（半径 1m、16 方向、ノイズ除去あり）
@@ -207,7 +211,7 @@ export async function start(container, opt) {
         m.head = { x: hx - 0.3, y: hy - 0.02 }; };
       models = { pole: await load('utility_pole_jp', m => tint(m, 0.74, 0.73, 0.70)), light: await load('streetlight_curve', m => { armX(m); tint(m, 0.62, 0.64, 0.66); }) };
     } catch (e) { console.warn('付属物のモデルを読めませんでした', e); }
-    world.props = buildProps(scene, world.net, (x, z) => world.walkG.at(x, z) ? W.terrain.atRoad(x, z) + 0.15 : W.terrain.at(x, z), free, { models, inBld: (x, z) => collide.grid.at(x, z), lightFar: gfx.tier === 'high' ? 300 : 220, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
+    world.props = buildProps(scene, world.net, (x, z) => world.walkG.at(x, z) ? W.terrain.atRoad(x, z) + 0.15 : W.terrain.at(x, z), free, { models, inBld: (x, z) => collide.grid.at(x, z), lightFar: gfx.ultra ? 520 : gfx.hi ? 300 : 220, ultra: gfx.ultra, onWalk: W.roadArea && W.roadArea.walk ? (x, z) => world.walkG.at(x, z) : null });
     // 並べ直しは毎フレームの更新で（自車の位置が決まってから）
     // 夕方・夜の灯り: 街灯（LED、白に近い）と防犯灯の光の点、真下の地面の光だまり
     { const P = world.props;
@@ -240,7 +244,7 @@ export async function start(container, opt) {
     m.renderOrder = 2; scene.add(m); return m;
   })();
   async function loadPlayer(G) {
-    const info = carInfo.find(i => i.key === G.key) || {}, hero = gfx.tier === 'high' && info.lods && info.lods.hero;
+    const info = carInfo.find(i => i.key === G.key) || {}, hero = gfx.hi && info.lods && info.lods.hero;
     let m;
     try {
       const sc = await loadGLB(CARS + G.key + (hero ? '_hero' : '_lod0') + '.glb');
@@ -275,8 +279,15 @@ export async function start(container, opt) {
       return { key: c.key, weight: W_TYPES[c.key], len: c.size.l, near: fleetParts(n), far: fleetParts(f), colors: c.key === 'kei_van' ? KEI_COLORS : null };
     }));
     types.forEach(T => { T.lay = lampLayout(T.near.size); });
-    traffic = makeTraffic(scene, world.net, { types, glows: makeCarGlows(scene, 64), count: gfx.tier === 'low' ? 24 : 48, near: gfx.tier === 'high' ? 8 : 3, maxFar: gfx.tier === 'high' ? 40 : 10, shadows: gfx.tier === 'high', farDist: gfx.tier === 'high' ? 320 : 200 });
+    traffic = makeTraffic(scene, world.net, { types, glows: makeCarGlows(scene, 64), count: gfx.tier === 'low' ? 24 : gfx.ultra ? 90 : 48, near: gfx.ultra ? 24 : gfx.hi ? 8 : 3, maxFar: gfx.ultra ? 90 : gfx.hi ? 40 : 10, shadows: gfx.hi, farDist: gfx.ultra ? 480 : gfx.hi ? 320 : 200 });
   } catch (e) { console.warn('一般車を読めませんでした', e); }
+  // 駐車場に止まっている車: いちばん軽い形（_lod3）。画質ごとに、描く範囲と台数の上限（超高は上限なし）
+  try {
+    const PT = await Promise.all(carInfo.filter(c => W_TYPES[c.key] && c.lods && c.lods.lod3).map(async c => ({ key: c.key, weight: W_TYPES[c.key], size: c.size, colors: c.key === 'kei_van' ? KEI_COLORS : null, parts: fleetParts(await loadGLB(CARS + c.key + (gfx.ultra ? '_lod2.glb' : '_lod3.glb'))).parts })));   // 超高は一段細かい形
+    const PQ = { low: [60, 6], mid: [90, 10], high: [160, 48], ultra: [400, 400] }[gfx.tier] || [90, 10];
+    const parked = makeParked(scene, world.street && world.street.parked, PT, { R: PQ[0], MAX: PQ[1], shadows: gfx.hi, collide: collide.grid });
+    if (parked) { const prev = world.update; world.update = (x, z, c) => { prev(x, z, c); parked.update(x, z); }; world.parked = parked; }
+  } catch (e) { console.warn('駐車中の車を読めませんでした', e); }
   function trafficStep(dt) {
     if (!traffic) return;
     const st = car.st;
@@ -382,6 +393,15 @@ export async function start(container, opt) {
     b.addEventListener('pointerdown', e => { e.stopPropagation(); b.textContent = '時間帯: ' + TIME_NAME[nextTime()] + '（T）'; }); pauseEl.appendChild(b); }
   { const b = document.createElement('button'); b.textContent = 'ガレージ（車と塗装を選ぶ・C）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(138px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
     b.addEventListener('pointerdown', e => { e.stopPropagation(); openGarage(); }); pauseEl.appendChild(b); }
+  // 画質: 自動 → 低 → 中 → 高 → 超高。選ぶと保存して読み直す
+  { const NAMES = { '': '自動', low: '低', mid: '中', high: '高', ultra: '超高' }, ORDER = ['', 'low', 'mid', 'high', 'ultra'];
+    let cur = ''; try { cur = localStorage.getItem('w3.tier') || ''; } catch (e) { /* 保存できない環境 */ }
+    const b = document.createElement('button'); b.textContent = '画質: ' + NAMES[cur] + '（いま ' + NAMES[gfx.tier] + '）'; b.style.cssText = 'position:absolute;left:50%;bottom:calc(192px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:10px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.12);color:#fff;font-size:15px';
+    b.addEventListener('pointerdown', e => {
+      e.stopPropagation(); cur = ORDER[(ORDER.indexOf(cur) + 1) % ORDER.length];
+      try { if (cur) localStorage.setItem('w3.tier', cur); else localStorage.removeItem('w3.tier'); } catch (er) { /* 保存できない環境 */ }
+      const u = new URL(location.href); if (cur) u.searchParams.set('tier', cur); else u.searchParams.delete('tier'); location.href = u.toString();
+    }); pauseEl.appendChild(b); }
   container.appendChild(pauseEl);
   function setPause(v) { paused = v; if (engineAudio) engineAudio.mute(v); pauseEl.style.display = v ? 'flex' : 'none'; Object.keys(keys).forEach(k => { keys[k] = false; }); last = performance.now(); }
   const onKey = (e, d) => {

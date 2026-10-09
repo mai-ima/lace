@@ -112,8 +112,8 @@ export function buildProps(scene, net, at, free, opt) {
   // 外部のモデル（tools/world/props_glb.mjs で変換）があれば、距離で細かい形と粗い形を切り替えて描く
   if (opt.models) {
     out.lods = [];
-    if (opt.models.pole) out.lods.push(lodInstancer(scene, opt.models.pole, poleSpots, { near: 45, far: 260 }));
-    if (opt.models.light) out.lods.push(lodInstancer(scene, opt.models.light, lightSpots, { near: 55, far: opt.lightFar || 300 }));
+    if (opt.models.pole) out.lods.push(lodInstancer(scene, opt.models.pole, poleSpots, opt.ultra ? { near: 120, far: 600 } : { near: 45, far: 260 }));
+    if (opt.models.light) out.lods.push(lodInstancer(scene, opt.models.light, lightSpots, { near: opt.ultra ? 140 : 55, far: opt.lightFar || 300 }));
   }
   const WH = opt.models && opt.models.pole ? opt.models.pole.h : 10;   // 電線をつなぐ高さの基準（電柱の地上高）
   // 電柱（地上 10m、上へ細くなる）
@@ -136,7 +136,7 @@ export function buildProps(scene, net, at, free, opt) {
   // 1 本ずつ細い帯にして、太さは実寸（直径 2cm）。遠くで 1 画素より細くなる所は 1 画素の幅で薄く描く（線の覆う割合を不透明度で表す）。
   // 区間は 100m の格子に分け、カメラの周り（WIRE_R）の格子だけを描く（描画は 1 回）
   const wires = [[-0.8, WH * 0.95], [0, WH * 0.95], [0.8, WH * 0.95], [-0.45, WH * 0.82], [0.45, WH * 0.82], [0.3, WH * 0.62]];
-  const WC = 100, WIRE_R = 280, cells = new Map(), segA = [], segB = [];
+  const WC = 100, WIRE_R = opt.ultra ? 600 : 280, cells = new Map(), segA = [], segB = [];
   spans.forEach(([a, b]) => {
     const len = Math.hypot(b.x - a.x, b.z - a.z), sag = len * 0.02, K = Math.max(4, Math.min(10, Math.round(len / 4)));
     wires.forEach(([o, h]) => {

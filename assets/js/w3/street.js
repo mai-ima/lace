@@ -141,15 +141,22 @@ export function buildStreet(ctx) {
   });
 
   /* --- 駐車場の設備 --- */
-  const PK = W.parking, gates = [];
+  const PK = W.parking, gates = [], parked = [];
   let parkUV = null;
   if (PK && PK.lots) {
     const q = PK.q, gY = (x, z) => terr.at(x, z) - 0.09;
     PK.lots.forEach(lot => {
       const st = lot.stalls || [], kind = lot.kind || 0;
-      const h0 = st.length ? hsh(st[0], st[1]) : 0, wheel = kind > 0 || h0 < 0.6, yel = h0 < 0.3;
+      const h0 = st.length ? hsh(st[0], st[1]) : 0, wheel = kind > 0 || lot.shop || h0 < 0.6, yel = h0 < 0.3;   // 店の駐車場は車止めあり
+      // 止まっている車の割合（昼）: 店 55%、有料 45%、そのほか（月極・住宅・事業所）65%
+      const occ = lot.shop ? 0.55 : kind > 0 ? 0.45 : 0.65;
       for (let i = 0; i < st.length; i += 3) {
         const x = st[i] * q, z = st[i + 1] * q, a = st[i + 2] / 100, ax = Math.cos(a), az = Math.sin(a), ux = -az, uz = ax;
+        const hh = hsh(x * 1.7, z * 2.3);
+        if (hh < occ) {   // 日本の駐車場はバックで止める車が多い（7 割）: 前が通路を向く
+          const back = hsh(z, x) < 0.7, fx = back ? -ax : ax, fz = back ? -az : az, cx = x + ax * 0.25, cz = z + az * 0.25;
+          parked.push({ x: cx, z: cz, y: gY(cx, cz), yaw: Math.atan2(fx, fz), h: hh / occ, lot: lot.shop ? 1 : 0 });
+        }
         if (wheel) [-0.55, 0.55].forEach(o => { const wx = x + ax * 1.8 + ux * o, wz = z + az * 1.8 + uz * o; box('conc', wx, gY(wx, wz), wz, ux, uz, 0.6, 0.1, 0.15, yel ? '#d9a91a' : '#9a978f'); });   // 車止め（奥から 0.7m）
         if (kind === 1) { const fx = x + ax * 0.15, fz = z + az * 0.15; box('flap', fx, gY(fx, fz), fz, ux, uz, 0.42, 0.06, 0.95, '#3a3d42'); box('flap', fx - ax * 0.12, gY(fx, fz) + 0.06, fz - az * 0.12, ux, uz, 0.36, 0.035, 0.55, '#d8b11c'); }   // ロック板
       }
@@ -196,7 +203,8 @@ export function buildStreet(ctx) {
   const metal = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.35, name: 'street-metal' });
   const glass = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.28, depthWrite: false });
   // box() の行列は箱の中心を y + sy/2 に置くので、形は中心のままでよい。低い物（車止め・ロック板・置き台）は影を落とさない（環境光の遮蔽で足りる）
-  const sets = [nearSet(ctx.group, bg, conc, parts.conc, false, NEAR_R.conc), nearSet(ctx.group, bg, metal, parts.flap, false, NEAR_R.flap), nearSet(ctx.group, bg, metal, parts.metal, true, NEAR_R.metal), nearSet(ctx.group, bg, glass, parts.glass, false, NEAR_R.glass)].filter(Boolean);
+  const K = ctx.ultra ? 3 : 1;   // 超高は 3 倍遠くまで
+  const sets = [nearSet(ctx.group, bg, conc, parts.conc, !!ctx.ultra, NEAR_R.conc * K), nearSet(ctx.group, bg, metal, parts.flap, !!ctx.ultra, NEAR_R.flap * K), nearSet(ctx.group, bg, metal, parts.metal, true, NEAR_R.metal * K), nearSet(ctx.group, bg, glass, parts.glass, false, NEAR_R.glass * K)].filter(Boolean);
   // 開閉バー: 黄と黒の縞（6 区切り）。車が近づくと上がる
   let armIM = null;
   if (arms.length) {
@@ -224,7 +232,7 @@ export function buildStreet(ctx) {
   let lastT = performance.now();
   if (armIM) placeArms(0, 0, 1);
   return {
-    stops, gates, counts: { conc: parts.conc.length, flap: parts.flap.length, metal: parts.metal.length, glass: parts.glass.length, arms: arms.length },
+    stops, gates, parked, counts: { conc: parts.conc.length, flap: parts.flap.length, metal: parts.metal.length, glass: parts.glass.length, arms: arms.length },
     update(cx, cz) {
       sets.forEach(s => s.update(cx, cz));
       if (armIM) { const t = performance.now(), dt = Math.min(0.1, (t - lastT) / 1000); lastT = t; placeArms(cx, cz, dt); }

@@ -28,12 +28,20 @@ X0, Z0, X1, Z1 = T['x0'], T['z0'], T['x0'] + (T['nx'] - 1) * T['cell'], T['z0'] 
 xz = lambda lat, lon: ((lon - LON0) * KX, (LAT0 - lat) * KZ)
 
 # --- OSM の駐車場の面 ---
-nodes, polys, seen, ptags = {}, [], set(), []
+nodes, polys, seen, ptags, shops = {}, [], set(), [], []
+SHOP_AM = ('restaurant', 'fast_food', 'cafe', 'fuel', 'bank', 'pharmacy', 'clinic', 'hospital', 'dentist', 'post_office', 'car_wash', 'place_of_worship')
+isShop = lambda t: 'shop' in t or t.get('amenity') in SHOP_AM
 for f in sorted(glob.glob('/tmp/world/osm/*.xml')):
     r = ET.parse(f).getroot()
-    for n in r.iter('node'): nodes[n.get('id')] = (float(n.get('lat')), float(n.get('lon')))
+    for n in r.iter('node'):
+        nodes[n.get('id')] = (float(n.get('lat')), float(n.get('lon')))
+        t = {k.get('k'): k.get('v') for k in n.iter('tag')}
+        if t and isShop(t): shops.append(xz(*nodes[n.get('id')]))
     for w in r.iter('way'):
         t = {k.get('k'): k.get('v') for k in w.iter('tag')}
+        if isShop(t):   # 店の建物・敷地（外形の点の平均）
+            pts = [xz(*nodes[nd.get('ref')]) for nd in w.iter('nd') if nd.get('ref') in nodes]
+            if pts: shops.append((sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts)))
         if t.get('amenity') != 'parking' or w.get('id') in seen: continue
         if t.get('parking') in ('multi-storey', 'underground', 'rooftop', 'sheds', 'street_side'): continue
         ids = [nd.get('ref') for nd in w.iter('nd')]
@@ -68,6 +76,7 @@ for fn in sorted(glob.glob('/tmp/world/luse/16_*_*.mvt')):
             except Exception:
                 pass
 osmPolys, osmTree = list(polys), shapely.STRtree(polys)
+shopTree = shapely.STRtree(shapely.points(np.array(shops))) if shops else None
 # OSM の面と重なる PLATEAU の面は、OSM の面と合わせて 1 つに（同じ駐車場の範囲の違い）
 allp = unary_union([p.buffer(0.05) for p in polys + lpolys]).buffer(-0.05)
 polys = [g for g in (allp.geoms if hasattr(allp, 'geoms') else [allp]) if g.geom_type == 'Polygon' and g.area > 40]
@@ -133,6 +142,32 @@ def gray_arr(xs, zs):
         return r
     return (px(ix, iy) * (1 - ax) + px(ix + 1, iy) * ax) * (1 - ay) + (px(ix, iy + 1) * (1 - ax) + px(ix + 1, iy + 1) * ax) * ay
 
+rgbTiles = {}
+def photo_stats(pg):
+    """航空写真の色の割合: 舗装らしい（色の薄い灰色）・緑（草木・畑）・土（茶色）。駐車場の中の点を 1m ほどの間隔で調べる"""
+    x0, z0, x1, z1 = pg.bounds; st = max(1.0, math.sqrt(pg.area / 600))
+    xs, zs = np.meshgrid(np.arange(x0 + st / 2, x1, st), np.arange(z0 + st / 2, z1, st)); xs, zs = xs.ravel(), zs.ravel()
+    m = shapely.contains_xy(pg, xs, zs); xs, zs = xs[m], zs[m]
+    if len(xs) < 10: return None
+    lon, lat = LON0 + xs / KX, LAT0 - zs / KZ
+    fx = (lon + 180) / 360 * n * 256
+    fy = (1 - np.log(np.tan(np.radians(lat)) + 1 / np.cos(np.radians(lat))) / math.pi) / 2 * n * 256
+    X, Y = fx.astype(np.int64), fy.astype(np.int64); px = []
+    for i in range(len(X)):
+        k = (int(X[i] // 256), int(Y[i] // 256))
+        if k not in rgbTiles:
+            fn = '/tmp/world/ortho18/%d_%d.jpg' % k
+            rgbTiles[k] = np.asarray(Image.open(fn).convert('RGB'), np.int16) if os.path.exists(fn) else None
+        t = rgbTiles[k]
+        if t is not None: px.append(t[Y[i] % 256, X[i] % 256])
+    if len(px) < 10: return None
+    P = np.array(px); r, g, b = P[:, 0], P[:, 1], P[:, 2]; mx, mn = P.max(1), P.min(1)
+    # 写真は全体に青緑の色かぶりがあるので、緑はとくに強いものだけ（2G − R − B が大きい）。土は赤みが強い茶色・肌色
+    green = (2 * g - r - b > 28) & (g > r + 10)
+    soil = (r > g + 6) & (r > b + 30) & ~green
+    pave = (mx - mn < 26) & ~green & ~soil
+    return float(pave.mean()), float(green.mean()), float(soil.mean())
+
 def phase(loc, inner, vAng, c, vx0, uy0, vx1, uy1, period):
     """区画の列（v 方向の始まり）と区画の線（u 方向）の位置。写真の模様が見えなければ None"""
     S = 0.25
@@ -164,8 +199,9 @@ def phase(loc, inner, vAng, c, vx0, uy0, vx1, uy1, period):
 q05 = lambda v: int(round(v / 0.05))
 lots, nLines = [], 0
 STALL_W, STALL_D, AISLE = 2.5, 5.0, 6.0
-def lot_kind(pg, nStall, hasEnt):
+def lot_kind(pg, nStall, hasEnt, shop):
     tags = [ptags[i] for i in osmTree.query(pg, predicate='intersects')]
+    if shop: return 0   # 店の駐車場は無料（ゲート・ロック板なし）
     paid = None
     for t in tags:
         if t.get('fee') == 'yes': paid = True
@@ -196,7 +232,7 @@ def entrance(p):
     if not p.contains(shapely.Point(mid.x + nx * 2, mid.y + nz * 2)): nx, nz = -nx, -nz
     if not p.contains(shapely.Point(mid.x + nx * 2, mid.y + nz * 2)): return None
     return mid.x, mid.y, math.atan2(nz, nx), min(len(best) * 0.5, 12.0)
-nStalls = nGate = nFlap = 0
+nStalls = nGate = nFlap = nDrop = nShop = nGrav = nNoLine = 0; dropped = []
 for pg in polys:
     pg = pg.intersection(box(X0, Z0, X1, Z1))
     if pg.is_empty: continue
@@ -207,6 +243,15 @@ for pg in polys:
     for p in parts:
         p = p.simplify(0.4)   # 土地利用の外形は細かい折れが多い（三角形を減らす。40cm 以内の形は変えない）
         if p.is_empty or p.geom_type != 'Polygon': continue
+        # OSM の駐車場と重なるか（人が地図に描いた新しい情報）。重ならない所は 2022 年の土地利用だけが根拠なので、写真で確かめる
+        oi = osmTree.query(p, predicate='intersects'); tags = [ptags[i] for i in oi]
+        osmA = sum(p.intersection(osmPolys[i]).area for i in oi)
+        ps = photo_stats(p)
+        if osmA < p.area * 0.3:
+            if ps is None or ps[1] > 0.35 or ps[2] > 0.3 or ps[1] + ps[2] > 0.45: nDrop += 1; dropped.append((p.centroid.x, p.centroid.y, ps)); continue
+        surf = next((t.get('surface') for t in tags if t.get('surface')), None)
+        grav = surf in ('unpaved', 'compacted', 'gravel', 'fine_gravel', 'dirt', 'ground', 'pebblestone') or (surf is None and ps is not None and ps[2] > 0.3)
+        shop = any(t.get('access') == 'customers' for t in tags) or (shopTree is not None and len(shopTree.query(p, predicate='dwithin', distance=25)) > 0 and not any(t.get('fee') == 'yes' for t in tags))
         # 区画の向き
         mrr = p.minimum_rotated_rectangle
         cs = list(mrr.exterior.coords)
@@ -274,9 +319,14 @@ for pg in polys:
                     for t in shapely.constrained_delaunay_triangles(cc).geoms:
                         xy = list(t.exterior.coords)[:3]
                         index.extend([vi(*xy[0]), vi(*xy[1]), vi(*xy[2])])
-        en = entrance(p); kind = lot_kind(p, len(stalls) // 3, en is not None)
+        if grav: out_lines = []; stalls = []   # 砂利・土の駐車場には白線が無い（車止めも無い）
+        elif ph is None and osmA < p.area * 0.3: out_lines = []; stalls = []; nNoLine += 1   # 土地利用だけが根拠で、写真に区画の線が見えない所は、線を推測で描かない
+        en = entrance(p); kind = lot_kind(p, len(stalls) // 3, en is not None, shop)
+        nShop += shop; nGrav += grav
         nStalls += len(stalls) // 3; nGate += kind == 2; nFlap += kind == 1
-        lots.append({'tri': {'v': verts, 'i': index}, 'lines': out_lines, 'stalls': stalls, 'ent': [q05(en[0]), q05(en[1]), int(round(en[2] * 100)), int(round(en[3] * 10))] if en else None, 'kind': kind})
+        lots.append({'tri': {'v': verts, 'i': index}, 'lines': out_lines, 'stalls': stalls, 'ent': [q05(en[0]), q05(en[1]), int(round(en[2] * 100)), int(round(en[3] * 10))] if en else None, 'kind': kind, 'shop': 1 if shop else 0, 'grav': 1 if grav else 0})
         nLines += len(out_lines) // 4
 json.dump({'q': 0.05, 'lots': lots, 'credit': '© OpenStreetMap contributors（amenity=parking）。区画の向きは国土地理院の航空写真から読み取り'}, open(os.path.join(out, 'parking.json'), 'w'), separators=(',', ':'))
+print('除いた（写真で駐車場に見えない）', nDrop, ' 店の駐車場', nShop, ' 砂利・土', nGrav, ' 線の見えない土地利用だけの所', nNoLine)
+json.dump(dropped, open('/tmp/world/parking_dropped.json', 'w'))
 print('駐車場', len(lots), ' 区画の線', nLines, ' 区画', nStalls, ' ゲート式', nGate, ' ロック板式', nFlap, ' 出入口', sum(1 for l in lots if l['ent']), ' ', os.path.getsize(os.path.join(out, 'parking.json')) // 1024, 'KB')
