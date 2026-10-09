@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "echo '【必ず守る】返信・報告はすべて必ず日本語で書く（英語を混ぜない）。最初に CLAUDE.md と docs/WORKLOG-3D.md を読む。中断せずに続ける。'" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "echo '【必ず守る】返信・報告はすべて必ず日本語で書く（英語を混ぜない）。'" } ] }
+    ]
+  }
+}
