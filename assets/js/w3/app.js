@@ -620,7 +620,7 @@ export async function start(container, opt) {
       const oc = new THREE.OrthographicCamera(-half, half, half, -half, 1, 2000), y = W.terrain.at(x, z);
       oc.position.set(x, y + 600, z); oc.up.set(0, 0, -1); oc.lookAt(x, y, z);   // 画像の上が北（−z）
       const fog = scene.fog, sz = renderer.getSize(new THREE.Vector2()), pr = renderer.getPixelRatio(); scene.fog = null;
-      if (world.props && world.props.update) world.props.update(x, z); if (world.update) world.update(x, z + 1e5);
+      if (world.props && world.props.update) world.props.update(x, z); if (world.update) world.update(x, z + 1e5); if (world.photoMarks) world.photoMarks.update(x, z);   // 遠くのまとまりはまとめて描き、路面表示は真下の分を描く
       renderer.setPixelRatio(1); renderer.setSize(px || 800, px || 800, false); renderer.render(scene, oc);
       const url = renderer.domElement.toDataURL('image/jpeg', 0.92);
       scene.fog = fog; renderer.setPixelRatio(pr); renderer.setSize(sz.x, sz.y, false); return url;

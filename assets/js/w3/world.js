@@ -10,6 +10,7 @@ import { guideContents, drawGuide, drawNamePlate } from './guide.js';
 import { makeGrid } from './grid.js';
 import { NIGHT, syncNight } from './lights.js';
 import { buildStreet } from './street.js';
+import { buildPhotoMarks } from './marks.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -890,7 +891,8 @@ export function buildWorld(scene, W, gfx) {
     const CH = new Map(), chunkOf = (x, z) => { const k = Math.floor(x / 400) + ',' + Math.floor(z / 400); let c = CH.get(k); if (!c) CH.set(k, c = { P: [], C: [], I: [] }); return c; };
     let cur = null;
     const put = (pts, col) => { const c = cur, b = c.P.length / 3; pts.forEach(p => { c.P.push(p[0], hAt(p[0], p[1]), p[1]); c.C.push(col[0], col[1], col[2]); }); return b; };
-    mk.forEach(m => {
+    // 写真から読み取った路面表示（road_marks.bin）があれば、決まりで作る線・矢印・文字は使わない（標識の位置だけ使う）
+    (W.photoMarks ? [] : mk).forEach(m => {
       const col = m.c === 'y' ? yellow : white;
       if (m.tris) { for (let k = 0; k < m.tris.length; k += 3) { const t = m.tris; const cx = (t[k][0] + t[k + 1][0] + t[k + 2][0]) / 3, cz = (t[k][1] + t[k + 1][1] + t[k + 2][1]) / 3; if (!out.onRoadPt(cx, cz) || (LINE[m.t] && m.e && inOther(m.e, cx, cz))) continue; cur = chunkOf(cx, cz); const b = put([t[k], t[k + 1], t[k + 2]], col); cur.I.push(b, b + 2, b + 1); } return; }
       const q = m.q, len = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), n = Math.max(1, Math.ceil(len / (m.t === 'cw' ? 1 : 3)));
@@ -912,13 +914,19 @@ export function buildWorld(scene, W, gfx) {
       mg.computeBoundingSphere();
       const marks = new THREE.Mesh(mg, markMat); marks.receiveShadow = true; out.group.add(marks); nQuads += c.I.length / 6;
     });
+    if (W.photoMarks) {
+      // 描く距離: 低 250m・中 350m・高 700m・超高 すべて（遠くの線は 1 画素に満たない）
+      const R = gfx.ultra ? 1e9 : gfx.hi ? 700 : gfx.tier === 'low' ? 250 : 350;
+      out.photoMarks = buildPhotoMarks(W.photoMarks, { group: out.group, hAt, mat: markMat, white, yellow, R, keep: (x, z) => out.onRoadPt(x, z) });   // ゲームの車道の外（歩道の上）に出る物は置かない
+      const prevPM = out.update; out.update = (cx, cz, cam) => { prevPM(cx, cz, cam); out.photoMarks.update(cx, cz); };
+    }
     // 文字（止まれ・速度の数字）: 文字の画像を道路の向きに長く引き伸ばして貼る（実際の路面の文字と同じ縦横比）
     const LABELS = ['止まれ', '30', '40', '50'], cv = document.createElement('canvas'); cv.width = 512; cv.height = 256 * LABELS.length;
     const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
     LABELS.forEach((t, i) => { g.font = '900 ' + (t.length > 2 ? 190 : 230) + 'px "Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif'; g.save(); g.translate(256, i * 256 + 128); g.scale(t.length > 2 ? 0.96 : 1.2, 1); g.fillText(t, 0, 8); g.restore(); });
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const TP = [], TU = [], TI = [];
-    (mk.texts || []).forEach(t => {
+    (W.photoMarks ? [] : mk.texts || []).forEach(t => {
       const slot = LABELS.indexOf(t.txt); if (slot < 0 || !t.dx) return;
       const lx = -t.dz, lz = t.dx, bx = t.x + lx * t.off, bz = t.z + lz * t.off;
       if (!out.onRoadPt(bx, bz)) return;

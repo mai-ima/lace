@@ -1,6 +1,8 @@
 /*
  * data.js — 世界データの読み込み（道路・地形・建物）と、高さの関数。
  */
+import { loadPhotoMarks } from './marks.js';
+
 export async function loadWorld(base) {
   const opt = u => fetch(base + u).then(r => r.ok ? r.json() : null).catch(() => null);   // 無くても動く（道路の範囲・実測の道幅）
   const [roadArea, roadWidth, bldgRoof, water, crossPhoto, parking, bldgOver, stops] = await Promise.all([opt('road_area.json'), opt('road_width.json'), opt('bldg_roof.json'), opt('water.json'), opt('cross_photo.json'), opt('parking.json'), opt('bldg_over.json'), opt('stops.json')]);
@@ -11,6 +13,8 @@ export async function loadWorld(base) {
     fetch(base + 'bldg.bin').then(r => r.arrayBuffer())
   ]);
   if (crossPhoto) roads.crossPhoto = crossPhoto;   // 航空写真で見つけた横断歩道（OSM に無いもの。tools/world/photo_cross.py）
+  // 写真から読み取った路面表示（tools/world/road_marks.py）。?marks=rule のときは使わない（決まりで作る線と比べる用）
+  const photoMarks = new URLSearchParams(location.search).get('marks') === 'rule' ? null : await loadPhotoMarks(base + 'road_marks.bin');
   const T = roads.terrain, U = new Uint16Array(terr), H = new Float32Array(U.length);
   for (let i = 0; i < U.length; i++) H[i] = (U[i] - 5000) / 100;
   const terrain = { x0: T.x0, z0: T.z0, nx: T.nx, nz: T.nz, cell: T.cell, H };
@@ -30,5 +34,5 @@ export async function loadWorld(base) {
   const bid = new Uint16Array(bbin.slice(off, off + hdr.nv * 2));
   const pos = new Float32Array(hdr.nv * 3);
   for (let i = 0; i < pos.length; i++) pos[i] = q[i] * hdr.q;
-  return { base, roads, roadArea, roadWidth, bldgRoof, water, parking, bldgOver, stops, terrain, bldg: { pos, idx, bid, info: bjs.b, credit: bjs.credit } };
+  return { base, roads, roadArea, roadWidth, bldgRoof, water, parking, bldgOver, stops, photoMarks, terrain, bldg: { pos, idx, bid, info: bjs.b, credit: bjs.credit } };
 }

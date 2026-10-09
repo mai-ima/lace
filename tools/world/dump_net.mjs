@@ -11,7 +11,9 @@ const W = fs.existsSync(path.join(dir, 'road_width.json')) ? JSON.parse(fs.readF
 // 車道の範囲を作るときは、実測の車道の幅（4・5 番目の値）は使わない（車道の範囲 → 幅 → 範囲 … と広がり続けないように）
 if (W) Object.keys(W).forEach(k => { W[k] = W[k].slice(0, 3); });
 const net = build(D, () => 0, W);
-const edges = net.edges.filter(e => !e.hidden && e.pts.length >= 2).map(e => ({ pts: e.pts.map(p => [+p[0].toFixed(2), +p[1].toFixed(2)]), hw: e.pr.hw, rank: e.pr.rank, walk: e.pr.walk }));
+// 路面表示の読み取り（road_marks.py）用に、道の番号・切り詰めた線・車線の数と幅・一方通行も書く
+const edges = net.edges.filter(e => !e.hidden && e.pts.length >= 2).map(e => ({ id: e.id, way: e.way, pts: e.pts.map(p => [+p[0].toFixed(2), +p[1].toFixed(2)]), line: e.line.map(p => [+p[0].toFixed(2), +p[1].toFixed(2)]),
+  hw: e.pr.hw, rank: e.pr.rank, walk: e.pr.walk, fw: e.pr.fw, bw: e.pr.bw, lw: +e.pr.lw.toFixed(3), one: e.pr.one ? 1 : 0, internal: e.internal ? 1 : 0, off: e.offArea ? 1 : 0 }));
 // 交差点: 中心と、腕ごとの向き（中心から外へ向かう単位ベクトル）と半幅。build_tran.py で隅切りのある交差点の形（腕の帯の凸包）にする
 const nodes = [...net.nodes.values()].filter(n => n.arms.length >= 3).map(n => ({ x: n.x, z: n.z, sig: n.sig ? 1 : 0, r: Math.max(...n.arms.map(a => a.e.pr.hw)),
   arms: n.arms.filter(a => !a.e.hidden && a.e.pts.length >= 2).map(a => {
