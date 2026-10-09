@@ -38,3 +38,8 @@ assets/data/world/ の出典（加工して作成）
 - 横断歩道（OSM に無いもの、cross_photo.json）: 信号のある交差点の腕で、国土地理院の航空写真（シームレス空中写真 z18）から位置を読み取って作成（写真そのものは含めない）。
 - 平面駐車場（center/parking.json）: © OpenStreetMap contributors（amenity=parking）と、国土交通省 PLATEAU 土地利用モデル（浜松市、その他③（平面駐車場））を tools/world/build_parking.py で加工して作成。区画の向き・位置は国土地理院の航空写真から読み取り（写真は含めない）。
 - ビルの外壁の写真（facades.jpg）: ambientCG（CC0） Facade001, Facade006, Facade018A, Facade019A, Facade020A, Facade002 を縮小して並べた。
+
+路面表示（center/road_marks.bin）:
+  静岡県「VIRTUAL SHIZUOKA 静岡県 中・西部 点群データ」の航空レーザ測量のオルソ画像（CC BY 4.0）を加工して作成
+  （画像から区画線・停止線・横断歩道・導流帯・矢印・文字の形を読み取ったもの。画像そのものは含まない）
+  https://www.geospatial.jp/ckan/dataset/virtual-shizuoka-mw
