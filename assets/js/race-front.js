@@ -462,7 +462,7 @@
       tailIdx = tailPref >= 0 && tailPref < exits.length ? tailPref : navIdx >= 0 ? navIdx : defIdx;
       if (tailIdx >= 0) tail = exits[tailIdx].h;
       var branches = exits.filter(function (ex) { return ex.h !== tail; }).map(function (ex) { return { ang: ex.ang, dir: ex.dir, name: exitLabel(ex), nav: ex.h === navH }; });
-      var sp = M.edgeSpec(h, { turn: turn, junction: jn, fork: forks, tail: tail, branches: branches });
+      var sp = M.edgeSpec(h, { turn: turn, junction: jn, fork: forks, tail: tail, branches: branches, deadEnd: !exits.length });
       sp.limit = limitOf(e);
       line = null;
       curSpec = sp;
@@ -654,7 +654,7 @@
     w.next = function (carry) {
       if (carry.retail) {   // 同じ道のまま、曲がる先（先読み）だけ作り直す
         tailPref = carry.choice;
-        return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: carry.damage, total: carry.total, carry: carry.snap, blink: carry.blink, lockedExit: carry.locked ? carry.choice : -1 });
+        return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: carry.damage, total: carry.total, carry: carry.snap, blink: carry.blink, blinkIdx: carry.blinkIdx, lockedExit: carry.locked ? carry.choice : -1 });
       }
       if (carry.back) {   // バックで前の道へ戻る
         var pv = hist.pop();
@@ -680,7 +680,10 @@
       var ci = Math.min(carry.choice || 0, exits.length - 1), ex = exits[ci] || exits[0];
       var baked = ex.h === (tailIdx >= 0 && exits[tailIdx] ? exits[tailIdx].h : -2);   // 曲がる弧は前の道の中でもう描いてある
       go(ex.h, baked ? ex.ang * 0.5 : ex.ang);
-      return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: fixed ? 0 : carry.damage, total: 0, copGap: carry.copGap, carry: carry.snap ? Object.assign({}, carry.snap, { shift: carry.edgeLen }) : null });
+      // ウインカーは交差点を過ぎたら消える（実際の車の自動の戻りと同じ）。分かれ道の無い所（道の継ぎ目）では点けたまま次へ持ち越す
+      var keepBlink = carry.blink && exits.length < 2 ? carry.blink : 0;
+      return cfgFor({ speed: carry.speed, x: carry.x, nitro: carry.nitro, damage: fixed ? 0 : carry.damage, total: 0, copGap: carry.copGap, carry: carry.snap ? Object.assign({}, carry.snap, { shift: carry.edgeLen }) : null,
+                      blink: keepBlink, blinkIdx: keepBlink ? carry.blinkIdx : 0 });
     };
     w.summary = function () {
       var out = [];

@@ -1124,6 +1124,22 @@
         g.fillStyle = '#263238'; g.fillRect(x + s * 0.2, y - s * 0.94, s * 0.18, s * 0.1);
         g.fillStyle = sp.flash > 0 ? '#ffffff' : '#b71c1c'; circle(g, x + s * 0.29, y - s * 0.86, s * 0.025, g.fillStyle);
         break;
+      case 'deadend': {   // 行き止まりの車止め（黄と黒の斜めの縞の横木と柱 2 本）。道幅いっぱい
+        var bw = s * 0.92, bh = u * 0.45, by2 = y - u * 0.9;
+        if (bw < 6) break;
+        g.fillStyle = '#5f6368'; g.fillRect(x - bw - u * 0.1, by2, u * 0.2, u * 0.9); g.fillRect(x + bw - u * 0.1, by2, u * 0.2, u * 0.9);
+        g.fillStyle = '#f5c400'; g.fillRect(x - bw, by2 - bh, bw * 2, bh);
+        g.save(); g.beginPath(); g.rect(x - bw, by2 - bh, bw * 2, bh); g.clip(); g.fillStyle = '#1d1d1d';
+        for (var q2 = -bw - bh; q2 < bw; q2 += bh * 2) { g.beginPath(); g.moveTo(x + q2, by2); g.lineTo(x + q2 + bh, by2 - bh); g.lineTo(x + q2 + bh * 2, by2 - bh); g.lineTo(x + q2 + bh, by2); g.fill(); }
+        g.restore();
+        break;
+      }
+      case 'deadsign':   // 「行き止まり」の案内（白地に赤の T の形）
+        g.fillStyle = '#666'; g.fillRect(x - u * 0.1, y - u * 3.4, u * 0.2, u * 3.4);
+        g.fillStyle = '#ffffff'; g.fillRect(x - u * 0.8, y - u * 4.9, u * 1.6, u * 1.6);
+        g.fillStyle = '#1a47a0'; g.fillRect(x - u * 0.12, y - u * 4.6, u * 0.24, u * 1.1);
+        g.fillStyle = '#d32f2f'; g.fillRect(x - u * 0.55, y - u * 4.7, u * 1.1, u * 0.24);
+        break;
       case 'limitsign':
         g.fillStyle = '#666'; g.fillRect(x - u * 0.12, y - u * 4, u * 0.24, u * 4);
         circle(g, x, y - u * 4.6, u * 1.3, '#d32f2f'); circle(g, x, y - u * 4.6, u * 1.02, '#ffffff');
@@ -1689,14 +1705,39 @@
     /* ウインカー: -1 左 / 0 なし / 1 右。交差点ではこれで曲がる方向を決める */
     P.blink = cfg.start && cfg.start.blink ? cfg.start.blink : 0;   // 先読みの作り直しでもウインカーは点けたまま
     var lockedExit = cfg.start && cfg.start.lockedExit >= 0 ? cfg.start.lockedExit : -1, retailCool = cfg.start && cfg.start.lockedExit !== undefined ? 0.5 : 0;
+    P.blinkIdx = cfg.start && cfg.start.blinkIdx ? cfg.start.blinkIdx : 0;   // 同じ側に出口が複数あるとき、何番目を選ぶか（同じ側のウインカーを続けて押すと次へ）
+    var blinkAt = -9;
+    /* ウインカーの側の出口（浅い角度から順）。左 = 左折と左寄りの直進、右 = 右折・U ターンと右寄りの直進（左側通行の U ターンは右から）。
+       道なりの直進（ウインカーなしで行く出口）は含めない */
+    function blinkCands(side) {
+      var d = cfg.exitDirs || [], A = cfg.exitAngs || [], out = [], i;
+      var base = cfg.exitNav >= 0 && cfg.exitNav < d.length && d[cfg.exitNav] === 'straight' ? cfg.exitNav : (cfg.exitDefault || 0);
+      for (i = 0; i < d.length; i++) {
+        var a = A[i] || 0;
+        if (side < 0 ? (d[i] === 'left' || (d[i] === 'straight' && i !== base && a > 0.05)) : (d[i] === 'right' || d[i] === 'uturn' || (d[i] === 'straight' && i !== base && a < -0.05))) out.push(i);
+      }
+      // 並び: 左折・右折（浅い順）→ U ターン → 寄った側の直進（ウインカー 1 回で今までどおり普通の左折・右折になる）
+      var rk = function (i) { return d[i] === 'straight' ? 2 : d[i] === 'uturn' ? 1 : 0; };
+      out.sort(function (p, q) { return rk(p) - rk(q) || Math.abs(A[p] || 0) - Math.abs(A[q] || 0); });
+      return out;
+    }
     function pickExit() {   // 実際の運転と同じ: ウインカー > ナビ > 同じ道の続き・直進・左折（走っている位置では決めない）
-      var d = cfg.exitDirs, A = cfg.exitAngs || [], i, best = -1;
+      var d = cfg.exitDirs, best = -1;
       if (P.blink !== 0) {
-        var want = P.blink < 0 ? 'left' : 'right';
-        for (i = 0; i < d.length; i++) if (d[i] === want && (best < 0 || Math.abs(A[i] || 0) < Math.abs(A[best] || 0))) best = i;
+        var cs = blinkCands(P.blink);
+        if (cs.length) best = cs[Math.min(P.blinkIdx, cs.length - 1)];
       }
       if (best < 0) best = cfg.exitNav >= 0 && cfg.exitNav < d.length ? cfg.exitNav : (cfg.exitDefault || 0);
       return best;
+    }
+    /* ウインカーのキー: 消えている・反対側なら点ける。同じ側を 1.2 秒以内に続けて押すと、同じ側の次の出口へ（無ければ消す） */
+    function blinkKey(side) {
+      var cs = mode === 'world' && cfg.exitDirs ? blinkCands(side) : [];
+      if (P.blink === side) {
+        if (raceT - blinkAt < 1.2 && P.blinkIdx + 1 < cs.length && lockedExit < 0) { P.blinkIdx++; blinkAt = raceT; }
+        else { P.blink = 0; P.blinkIdx = 0; }
+      } else { P.blink = side; P.blinkIdx = 0; blinkAt = raceT; }
+      if (lockedExit >= 0 && mode === 'world') say(L('進路は確定済みです（停止線の手前 30m で確定）', 'Route already locked'), 1.4);
     }
     /* リワインド（巻き戻し）: 直近約 12 秒の自車の状態を 0.2 秒ごとに記録し、約 3 秒前へ戻る（フリー走行） */
     var rwHist = [], rwT = 0, rwCool = 0;
@@ -1734,7 +1775,7 @@
       if (want !== wantPrev) { wantPrev = want; wantT = 0; } else wantT += dt;   // ウインカーを切り替え続けている間は作り直さない（約 0.35 秒変わらなければ）
       if (want !== cfg.tailChoice && zl > SEG * 4 && retailCool <= 0 && (wantT >= 0.35 || lockedExit >= 0)) {
         retailCool = 0.5; edgeDone = true;
-        var ok = cfg.onEdgeEnd({ retail: true, choice: want, locked: lockedExit >= 0, blink: P.blink, total: P.total, speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, snap: sess.snapshot() });
+        var ok = cfg.onEdgeEnd({ retail: true, choice: want, locked: lockedExit >= 0, blink: P.blink, blinkIdx: P.blinkIdx, total: P.total, speed: P.speed, x: P.x, nitro: P.nitro, damage: P.damage, snap: sess.snapshot() });
         if (ok === false) { edgeDone = false; cfg.tailChoice = want; }
       }
     }
@@ -1971,7 +2012,7 @@
         else if (nx === 2) ch = P.x < 0 ? 0 : 1;
         else if (nx >= 3) ch = P.x < -0.3 ? 0 : P.x > 0.3 ? 2 : 1;
         if (sirenA) { sirenA.stop(); sirenA = null; }
-        if (cfg.onEdgeEnd && cfg.onEdgeEnd({ speed: P.speed, x: clamp(P.x, -0.9, 0.9), nitro: P.nitro, damage: P.damage, choice: ch, edgeLen: edgeLen, snap: sess.snapshot(),
+        if (cfg.onEdgeEnd && cfg.onEdgeEnd({ speed: P.speed, x: clamp(P.x, -0.9, 0.9), nitro: P.nitro, damage: P.damage, choice: ch, edgeLen: edgeLen, snap: sess.snapshot(), blink: P.blink, blinkIdx: P.blinkIdx,
                                            copGap: cops.length ? clamp(pz() - cops[0].total, SEG * 5, SEG * 200) : 0 }) === false) {
           edgeDone = false; P.speed = 0; P.total = Math.max(0, edgeLen - SEG * 6);   // 進めない（行き止まり）: 手前で止める
         }
@@ -3170,7 +3211,8 @@
             text(g, L('この先 ', 'Ahead ') + toJ + 'm  ' + L('進路 ', 'route ') + aw, nv ? W - nw2 + 36 : W - nw2 + 4, ny + (nv ? 6 : -2), 11, ok ? '#9fe8c8' : '#ff8a80');
             var exn = cfg.exitNames && cfg.exitNames[ch2] ? cfg.exitNames[ch2] : '';
             var auto = P.blink === 0 && cfg.exitNav >= 0 && ch2 === cfg.exitNav;
-            text(g, exn.slice(0, 14) + (auto ? L('（ナビ）', ' (nav)') : P.blink ? L('（ウインカー）', ' (signal)') : ''), W - nw2 + 4, ny + 22, 10, '#ffe14d');
+            var why = lockedExit >= 0 ? L('（確定）', ' (locked)') : auto ? L('（ナビ）', ' (nav)') : P.blink ? L('（ウインカー）', ' (signal)') : '';
+            text(g, exn.slice(0, 14) + why, W - nw2 + 4, ny + 22, 10, lockedExit >= 0 ? '#9fe8c8' : '#ffe14d');
           }
         }
         if (sk.pts > 0) {   // スキルチェーン（途切れるまでの残り時間つき）
@@ -3267,8 +3309,8 @@
                 ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down',
                 ' ': 'nitro', Shift: 'nitro', n: 'nitro', N: 'nitro', x: 'nitro', X: 'nitro' }[k];
       if (m) keys[m] = down;
-      if (down && (k === 'q' || k === 'Q' || k === 'z' || k === 'Z' || k === ',')) { P.blink = P.blink === -1 ? 0 : -1; sfx('click'); return true; }
-      if (down && (k === 'e' || k === 'E' || k === 'c' || k === 'C' || k === '.')) { P.blink = P.blink === 1 ? 0 : 1; sfx('click'); return true; }
+      if (down && (k === 'q' || k === 'Q' || k === 'z' || k === 'Z' || k === ',')) { blinkKey(-1); sfx('click'); return true; }
+      if (down && (k === 'e' || k === 'E' || k === 'c' || k === 'C' || k === '.')) { blinkKey(1); sfx('click'); return true; }
       if (down && (k === 'b' || k === 'B' || k === 'Backspace')) { rewind(); return true; }
       if ((k === 'r' || k === 'R') && down && mode === 'world' && !edgeDone && P.speed < MAX * 0.15 && cfg.onEdgeEnd) {
         edgeDone = true;

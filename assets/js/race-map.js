@@ -220,7 +220,7 @@
   M.exits = function (hIn) {
     var node = M.nodes[M.to(hIn)], back = M.rev(hIn), hin = M.headIn(hIn);
     var c = node.out.filter(function (h) { return h !== back; });
-    if (!c.length) c = node.out.slice();
+    if (!c.length) return [];   // 行き止まり（戻る道しか無い）: 出口なし。引き返しは race-front の行き止まりの処理で（車止めと表示つき）
     var ex = c.map(function (h) { return { h: h, ang: wrap(M.headOut(h) - hin) }; });
     ex.sort(function (a, b) { return b.ang - a.ang; });   // 左（向きが増える）から
     if (ex.length > 3) {   // 4 本以上: 直進に近い 1 本と、左折・右折として自然な（約 90 度に近い）各 1 本を残す
@@ -709,6 +709,10 @@
           }
         });
         if (limit && segs[30]) segs[30].sprites.push({ kind: 'limitsign', offset: -(1 + 1.2 / hwv), n: limit });
+        if (opt.deadEnd && segs.length > 12) {   // 行き止まり: 道の終わりに車止め、30m 手前に「行き止まり」の補助の板
+          segs[segs.length - 5].sprites.push({ kind: 'deadend', offset: 0, city: true, hw: hwv });
+          if (segs.length > 40) segs[segs.length - 28].sprites.push({ kind: 'deadsign', offset: -(1 + 1.2 / hwv), city: true });
+        }
       }
     };
     return spec;
