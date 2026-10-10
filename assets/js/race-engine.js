@@ -2550,6 +2550,7 @@
       // 道路（手前から奥へ）
       frameNo++; wirePrev = {};
       for (n = 0; n < DRAW; n++) {
+        if (n >= segs.length) break;   // 同じ区間を 2 度投影しない（出発点 base.index = 0 のとき、1 周先の投影で手前の建物の位置が上書きされていた）
         var s = segs[(base.index + n) % segs.length];
         var looped = s.index < base.index;
         if (looped && spec.custom && !spec.loop) break;   // 実在の道は先が別の道（ぐるっと戻らない）
