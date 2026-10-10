@@ -1563,7 +1563,9 @@
       // 追跡
       cops.forEach(function (c) {
         var gap = pz() - c.total;   // 正ならパトカーが後ろ
-        var want = gap > SEG * 20 ? MAX * 1.1 : gap > SEG * 2 ? Math.max(P.speed * 1.06, MAX * 0.2) : P.speed * 0.97;
+        // パトカーの最高速は、道路の制限速度 + 40km/h（高速道路は + 50km/h）まで。自車がそれより速ければ離される
+        var copMax = limitKmh ? Math.min(MAX * 1.1, (limitKmh + (spec.hwy ? 50 : 40)) / 280 * MAX) : MAX * 0.95;
+        var want = Math.min(copMax, gap > SEG * 20 ? MAX * 1.1 : gap > SEG * 2 ? Math.max(P.speed * 1.06, MAX * 0.2) : P.speed * 0.97);
         c.speed += (c.speed < want ? MAX / 3 : -MAX / 2) * dt;
         c.total = Math.min(c.total + c.speed * dt, pz() - SEG * 0.6);   // 自車を追い越さない
         var tx = gap < SEG * 12 ? P.x : c.offset;
@@ -1574,7 +1576,8 @@
           if (c.total > pz() - SEG * 0.2) c.total = pz() - SEG * 0.8;
         }
         if (gap < SEG * 6 && P.speed < MAX * 0.05) wantedT += dt; else wantedT = Math.max(0, wantedT - dt * 0.5);
-        if (gap > SEG * 300) escapeT += dt; else escapeT = 0;
+        // 逃げ切り: 300 区間（約 390m）以上離れて 6 秒、または見通しの外（150 区間・約 200m 以上）で 12 秒
+        if (gap > SEG * 300) escapeT += dt; else if (gap > SEG * 150) escapeT += dt * 0.5; else escapeT = 0;
         if (sirenA) sirenA.level(clamp(1 - gap / (SEG * 350), 0.05, 1));
       });
       if (cops.length && (bustHits >= 3 || wantedT > 2.5)) {
