@@ -39,24 +39,37 @@ def save(img_bytes, folder, src, when):
 
 
 added = 0
-# 1. 会話の中に表示した画像（表示した順）
+# 1. 会話の中に表示した画像（表示した順）。浜松市の現況平面図（/wag/ の中・名前に wag）を開いた結果は除く
+wagids = set()
+for line in open(LOG):
+    if '"tool_use"' not in line or 'wag' not in line: continue
+    d = json.loads(line); c = d.get('message', {}).get('content')
+    for x in (c if isinstance(c, list) else []):
+        if isinstance(x, dict) and x.get('type') == 'tool_use':
+            fp = str((x.get('input') or {}).get('file_path', ''))
+            if '/wag/' in fp or 'wag' in os.path.basename(fp).lower(): wagids.add(x.get('id'))
 for line in open(LOG):
     if '"image"' not in line or '"base64"' not in line: continue
     d = json.loads(line)
     def walk(x):
         if isinstance(x, dict):
+            if x.get('type') == 'tool_result' and x.get('tool_use_id') in wagids: return
             if x.get('type') == 'image' and isinstance(x.get('source'), dict) and x['source'].get('type') == 'base64':
                 yield x['source']['data']
             for v in x.values(): yield from walk(v)
         elif isinstance(x, list):
             for v in x: yield from walk(v)
+    c = d.get('message', {}).get('content')
+    # ユーザーの発言に直接付いた画像（道具の結果ではない物）は添付画像
+    direct = d.get('type') == 'user' and not d.get('isSidechain') and isinstance(c, list) and not any(isinstance(x, dict) and x.get('type') == 'tool_result' for x in c)
     for b in walk(d.get('message', {})):
-        added += save(base64.b64decode(b), 'conversation', 'session:' + d.get('uuid', ''), d.get('timestamp', ''))
+        added += save(base64.b64decode(b), 'attached' if direct else 'conversation', 'session:' + d.get('uuid', ''), d.get('timestamp', ''))
 # 2. 添付画像（届いた順）
 for f in sorted(glob.glob(os.path.join(UP, '*')), key=os.path.getmtime):
     if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')): added += save(open(f, 'rb').read(), 'attached', os.path.basename(f), os.path.getmtime(f))
 # 3. 作業の画像と審査の画像（作った時刻の順）
-files = [f for f in glob.glob(os.path.join(SCR, '**', '*'), recursive=True) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and '/npm/' not in f]
+files = [f for f in glob.glob(os.path.join(SCR, '**', '*'), recursive=True) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and '/npm/' not in f
+         and '/wag/' not in f and 'wag' not in os.path.basename(f).lower()]   # 浜松市の現況平面図（公開のリポジトリに入れない）が写った画像は除く
 for f in sorted(files, key=os.path.getmtime):
     rel = os.path.relpath(f, SCR); top = rel.split(os.sep)[0]
     folder = 'audit/' + top if top.startswith('audit') else 'work'
