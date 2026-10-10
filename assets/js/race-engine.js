@@ -1258,6 +1258,16 @@
     var u = s * 0.12;
     if (o.hit && o.kind !== 'oil' && o.kind !== 'pad') return;
     switch (o.kind) {
+      case 'walker': {   // 横断する歩行者（実寸: 身長約 1.65m）。足を交互に出す
+        if (o.wait > 0) break;
+        var m = s * CAR_W * 2 / 1.7;   // 1m の画素（車の幅 1.7m に合わせる。疑似 3D の道と車は実寸より広く描くので、人も車と同じ縮尺に）
+        if (m < 0.6) break;
+        var cols = ['#37474f', '#5d4037', '#1e88e5', '#c62828', '#6a1b9a', '#2e7d32'], ph = Math.sin((t || 0) * 7 + o.seed) * m * 0.18;
+        g.fillStyle = '#263238'; g.fillRect(x - m * 0.12 + ph, y - m * 0.8, m * 0.1, m * 0.8); g.fillRect(x + m * 0.02 - ph, y - m * 0.8, m * 0.1, m * 0.8);
+        g.fillStyle = cols[o.seed % cols.length]; g.fillRect(x - m * 0.2, y - m * 1.42, m * 0.4, m * 0.66);
+        circle(g, x, y - m * 1.54, m * 0.12, '#f1c9a5'); g.fillStyle = '#2b2b2b'; g.fillRect(x - m * 0.12, y - m * 1.68, m * 0.24, m * 0.08);
+        break;
+      }
       case 'cone':
         poly(g, x - u * 0.6, y, x + u * 0.6, y, x + u * 0.12, y - u * 1.6, x - u * 0.12, y - u * 1.6, '#ff6d00');
         g.fillStyle = '#fff'; g.fillRect(x - u * 0.35, y - u * 0.9, u * 0.7, u * 0.25);
@@ -1297,7 +1307,7 @@
              acttower: 0.5, castle: 1.2, twintower: 1.2, tvtower: 0.6, ferris: 0.8, unagi: 0.5, piano: 0.5, soundwall: 1, greensign: 0.1,
              tollgate: 0, maple: 0.35, house: 0.7, factory: 1.3, gyoza: 0.5, mikan: 0.3, cedar: 0.25, station: 1.3, bigtorii: 0, orbis: 0, limitsign: 0.05, signal: 0.05 }[kind] || 0;
   }
-  function objWidth(kind) { return { cone: 0.06, debris: 0.1, oil: 0.24, pad: 0.22, coin: 0.12 }[kind] || 0; }
+  function objWidth(kind) { return { cone: 0.06, debris: 0.1, oil: 0.24, pad: 0.22, coin: 0.12, walker: 0.06 }[kind] || 0; }
 
   /* ---------- 顔（会話の場面で使う 24×24 の絵） ---------- */
 
@@ -1514,7 +1524,7 @@
       if (mode !== 'world' || demo) return;
       emit('violation', kind);
       var seen = cops.length > 0 || traffic.some(function (t) { return t.cop && Math.abs(t.total - pz()) < SEG * (kind === 'speed' ? 30 : 90); });
-      if (kind === 'signal' && !seen && Math.random() < 0.3) seen = true;   // 信号の監視カメラ
+      if ((kind === 'signal' || kind === 'yellow') && !seen && Math.random() < 0.3) seen = true;   // 信号の監視カメラ
       if (kind === 'copHit') seen = true;
       if (cfg.onViolation) cfg.onViolation(kind, seen, over);
       if (seen && !cops.length) startPursuit(SEG * 30);
@@ -1532,9 +1542,43 @@
     var ART = !!(spec.art || (spec.limit && spec.limit >= 50));   // 幹線（50km/h 以上）は黄 4 秒
     function phaseAt(t) { return R.SPEC.phaseAt(t, ART).phase; }   // 公式の秒数（race-spec.js）
     var midDone = (spec.midStops || []).map(function (ms) { return !!(cfg.start && P.total + PLAYER_Z > ms.seg * SEG); });
+    /* 右左折の先の横断歩道を渡る歩行者（青の間）。歩行者が車道にいる間にそこを通ると横断歩行者妨害（道路交通法 38 条） */
+    var walkDone = false;
+    function walkers(dt) {
+      if (demo || !spec.crossSeg || !cfg.exitDirs || cfg.exitDirs.length < 2) return;
+      var ex = cfg.exitDirs[chooseExit()], turning = ex === 'left' || ex === 'right';
+      var zx = (spec.crossSeg + Math.round(9 / MPS)) * SEG;   // 交差点の中心から約 9m 先（曲がった先の横断歩道）
+      if (!walkDone && turning && sig.phase === 'green' && zx - pz() < SEG * 60 && zx - pz() > SEG * 20) {
+        walkDone = true;
+        var hwm = spec.geom && spec.geom.hw ? spec.geom.hw : 5.2, n = 1 + Math.floor(Math.random() * 3);
+        for (var i = 0; i < n; i++) {
+          var from = Math.random() < 0.5 ? -1 : 1;
+          dyn.push({ kind: 'walker', z: zx + (Math.random() - 0.5) * SEG * 1.5, offset: from * (1.25 + i * 0.12), v: -from * (1.2 + Math.random() * 0.4) / hwm, life: 40, seed: Math.floor(Math.random() * 1000), wait: i * 0.9, judged: false });
+        }
+      }
+      dyn.forEach(function (o) {
+        if (o.kind !== 'walker') return;
+        if (o.wait > 0) { o.wait -= dt; return; }
+        o.offset += o.v * dt;
+        if (Math.abs(o.offset) > 1.6) o.life = 0;
+        if (!o.judged && pz() > o.z && pz() - o.z < SEG * 2) {
+          o.judged = true;
+          if (Math.abs(o.offset) < 1.0 && P.speed > MAX * 0.03) { pop(L('歩行者がいます！', 'PEDESTRIAN!'), '#ff8a80'); violation('ped'); }
+        }
+      });
+    }
     function worldRules(dt) {
       // 信号: 青 8 秒 → 黄 2.5 秒 → 赤 6 秒
+      var prevPh = sig.phase;
       sig.t += dt; var pa0 = R.SPEC.phaseAt(sig.t, ART); sig.phase = pa0.phase; sig.crossNow = pa0.cross;
+      // 黄の判定（道路交通法施行令 2 条: 黄は停止位置を越えて進行してはならない。ただし安全に停止できない場合を除く）:
+      // 黄に変わった時、停止線まで「空走 1 秒 + 減速 4m/s2」で止まれる距離に余裕があれば、そのまま越えると信号無視
+      if (spec.stopSeg && spec.junction && spec.junction.signal && prevPh === 'green' && sig.phase === 'yellow') {
+        var vms = kmh(P.speed) / 3.6, dStop = (spec.stopSeg * SEG - pz()) / SEG * MPS;
+        sig.yCanStop = dStop > 0 && dStop > vms * 1.0 + vms * vms / (2 * 4.0) + 3;
+      }
+      if (sig.phase === 'green') sig.yCanStop = false;
+      if (spec.junction && spec.junction.signal) walkers(dt);
       // 途中の信号（横断歩道）: 赤で停止線を越えると信号無視
       (spec.midStops || []).forEach(function (ms, mi) {
         if (!midDone[mi] && pz() > ms.seg * SEG) {
@@ -1547,6 +1591,7 @@
         if (!stopDone && pz() > stopZ) {
           stopDone = true;
           if (sig.phase === 'red' && spec.junction.signal) { pop(L('信号無視！', 'RAN A RED LIGHT!'), '#ff5252'); violation('signal'); }
+          else if (sig.phase === 'yellow' && sig.yCanStop && spec.junction.signal && P.speed > MAX * 0.04) { pop(L('黄信号で進入！', 'RAN A YELLOW!'), '#ffc400'); violation('yellow'); }
         }
         // 赤の間は交差する道路を車が横切る
         if (spec.junction.signal && sig.phase === 'red' && sig.crossNow && (!spec.mapEdge || spec.crossBoth)) {   // 全赤のあと、交差道路が青の間だけ交差する車が出る
@@ -2146,6 +2191,10 @@
       }
       if (o.kind === 'oil') {
         if (P.spin <= 0 && P.speed > MAX / 5) { P.spin = 1.0; sfx('crash'); say(L('スリップ！', 'OIL SLICK!'), 1.2); combo = 0; }
+      } else if (o.kind === 'walker') {   // 歩行者と接触: 大きな事故（車も急に止まる）
+        if (o.wait > 0) return;
+        o.hit = true; P.speed *= 0.25; hurt(0.08); P.bump = 0.3; flash = 0.25; sfx('crash');
+        say(L('歩行者と接触！', 'HIT A PEDESTRIAN!'), 2); violation('accident');
       } else if (o.kind === 'pad') {
         if (P.padT <= 0.9) { P.padT = 1.3; P.speed = Math.max(P.speed, topSpeed * 1.05); sfx('boost'); pop(L('加速！', 'BOOST!'), '#00e5ff'); }
       } else {

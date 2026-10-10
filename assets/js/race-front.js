@@ -504,9 +504,10 @@
       if (w.order) w.order.bad = (w.order.bad || 0) + 1;
       var hwyNow = M.edgeOf(h).c === 0, F = R.SPEC.fines;   // 反則金は道路交通法施行令 別表第六（race-spec.js）
       if (kind === 'orbis') { fine(R.SPEC.speedFine(over || 0, hwyNow), L('オービス（' + Math.round(over) + 'km/h 超過）', 'Speed camera (' + Math.round(over) + ' over)')); return; }
-      var why = { signal: L('信号無視', 'Red light'), speed: L('速度違反（' + Math.round(over || 0) + 'km/h 超過）', 'Speeding (' + Math.round(over || 0) + ' over)'), accident: L('事故', 'Accident'), copHit: L('パトカーに衝突', 'Hit a police car') }[kind];
+      var why = { signal: L('信号無視', 'Red light'), yellow: L('信号無視（黄で止まれたのに進入）', 'Ran a yellow light'), ped: L('横断歩行者妨害', 'Failed to yield to pedestrians'), speed: L('速度違反（' + Math.round(over || 0) + 'km/h 超過）', 'Speeding (' + Math.round(over || 0) + ' over)'), accident: L('事故', 'Accident'), copHit: L('パトカーに衝突', 'Hit a police car') }[kind];
       if (!seen) { w.flash = { text: why + L('（見られていない…）', ' (unseen...)'), t: 3 }; return; }
-      if (kind === 'signal') fine(F.signal, why);
+      if (kind === 'signal' || kind === 'yellow') fine(F.signal, why);
+      else if (kind === 'ped') fine(F.pedestrian, why);
       else if (kind === 'speed') fine(R.SPEC.speedFine(over || 0, hwyNow), why);
     }
     function busted() { fine(R.SPEC.fines.busted, L('確保された', 'Busted')); }
