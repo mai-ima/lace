@@ -61,7 +61,8 @@ def extract(vs, mask_fn, x0, z0, size):
     lmax = cv2.dilate(gray, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
     white = (th > np.maximum(np.maximum(20, bg * 0.16), 0.5 * (lmax - bg))) & (sat < 60)
     S3 = r + g + b + 1; white &= ~(((r - g) / S3 > 0.045) & ((r - b) / S3 > 0.06))   # 色あせた赤の舗装を白と取り違えない（赤の上の白い文字は残る）
-    yel = (r - b > 45) & (r > 105) & (r - g < 95) & (th > 6) & ((g - b) / (r + g + b + 1) > 0.07)   # 赤の色付き舗装（緑と青がほぼ同じ）は除く   # 黄・橙（はみ出し禁止の線・バスの文字など。写真では橙に写る）
+    S0 = r + g + b + 1; q0 = (r - b) / S0; qb0 = cv2.medianBlur(np.clip(q0 * 400 + 128, 0, 255).astype(np.uint8), 31).astype(np.float32) / 400 - 0.32
+    yel = ((r - b > 45) & (r > 105) & (r - g < 95) & (th > 6) & ((g - b) / S0 > 0.07)) | ((q0 - qb0 > 0.08) & (th > 3) & ((g - b) / S0 > 0.03))   # 周り 3m より橙（影の中の黄色の線も）   # 赤の色付き舗装（緑と青がほぼ同じ）は除く   # 黄・橙（はみ出し禁止の線・バスの文字など。写真では橙に写る）
     # 木の葉（緑・黄葉）とその周り 0.6m は見ない（木漏れ日の明るい点が線に見える）
     # 写真は全体に緑がかっている（アスファルトで 2G−R−B ≈ 18）ので、明るさで割った値で見る
     leaf = (((2 * g - r - b) / (r + g + b + 1) > 0.15) & (sat > 30)) | ((r - b > 60) & (g - b > 45) & (sat > 70) & (th < 25))
@@ -236,6 +237,7 @@ def classify(m, yel, x0, z0, th=None, protect=None, trusted=None):
         toW = lambda P: [(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in P]
         pc = trusted is not None and trusted[y:y + h, x:x + w][sub > 0].mean() > 0.5   # 点群の塊（車は高さで除いてあるので、車の判定はしない）
         # 車らしい塊（幅 1.2m 以上、長さ 6.5m 以下、中が詰まっている）は除く
+        if 6.0 <= L <= 13.5 and 2.0 <= W <= 3.1 and fill < 0.5 and not pc: rej += 1; continue   # バス・トラックの屋根の輪郭（中の空いた細長い枠）
         if W >= 2.2 and fill > 0.5: rej += 1; continue   # 大きな明るい面（白い屋根の影・補修の跡・点群では明るい材質の舗装）
         if pc: pass
         elif W >= 1.2 and L <= 6.5 and fill > (0.5 if holes else 0.45): rej += 1; continue   # 窓の穴がある車も
@@ -267,7 +269,7 @@ def classify(m, yel, x0, z0, th=None, protect=None, trusted=None):
                 if fill < 0.5: rej += 1; continue   # 粒が並んだだけの細長い塊（縁石・側溝の縁）
                 lines.append((color, snapW(ww), toW(P)))
                 continue
-        if fill > 0.7 and W >= 0.2 and not holes:
+        if fill > 0.7 and W >= 0.2 and not holes and L >= 2.5 * W and color == 0:   # 白の細長い物だけ（太い塊・黄の塊は数字・文字のことがある）
             # 長方形（停止線・横断歩道の縞・破線の 1 本など）: 幅を規格にそろえる
             ws = snapW(W) / RES
             box = cv2.boxPoints(((cx, cy), (rw, ws) if rw >= rh else (ws, rh), ang))
@@ -304,10 +306,20 @@ def color_areas(rgb, road, x0, z0):
             if a_ < 1.2:
                 # 減速マーク: 長方形に近く、幅 0.25m 以上・長さ 2.5m 以下
                 if st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.6 or min(rw, rh) * RES < 0.25 or max(rw, rh) * RES > 2.5: continue
+                if 0.3 <= min(rw, rh) * RES <= 0.75: rw, rh = (rw, 0.45 / RES) if rw >= rh else (0.45 / RES, rh)   # 幅を規格の 0.45m にそろえる（写真のぼけで太さがばらつく）
                 box = cv2.boxPoints(((cx, cy), (rw, rh), ang))
                 out.append((code, [[(x0 + (x + px + 0.5) * RES, z0 + (y + py + 0.5) * RES) for px, py in box]])); continue
             if min(rw, rh) * RES < 0.6: continue   # 細い色の線（赤い車の縁など）は面にしない
             if st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.35: continue   # まだらの塊（屋根の影・落ち葉）
+            if code == 3:
+                gy = (r + g + b)[y:y + h, x:x + w][sub > 0]
+                if gy.std() > 45: continue   # 明るさのばらつきが大きい緑（植え込み・木の葉。塗装の緑は一様）
+                sat3 = (np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b))[y:y + h, x:x + w][sub > 0]
+                if np.median(gy) < 300 or np.median(sat3) < 38: continue   # 塗装の緑は明るく鮮やか（植物は明るさ 270・彩度 32 以下。12 か所の写真で確かめた）
+                # 塗装の緑は形が整っている（植え込み・木・草の帯は輪郭がでこぼこ）: 凸包に対して 0.85 以上、外接長方形に対して 0.65 以上
+                cc3, _ = cv2.findContours(sub, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE); c3 = max(cc3, key=cv2.contourArea)
+                hull = cv2.contourArea(cv2.convexHull(c3)) or 1
+                if cv2.contourArea(c3) / hull < 0.85 or st[i, cv2.CC_STAT_AREA] / max(1.0, rw * rh) < 0.65: continue
             cnts, hier = cv2.findContours(sub, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
             rings = []
             for k, cc in enumerate(cnts):
@@ -332,7 +344,7 @@ def bridge_solid(L, Pp):
         if max(e1, e2) < 4 * min(e1, e2): continue
         a, b = ((r[0] + r[1]) / 2, (r[2] + r[3]) / 2) if e1 < e2 else ((r[1] + r[2]) / 2, (r[3] + r[0]) / 2)
         pieces.append((a, b, min(e1, e2), c))
-    long_ = [q for q in pieces if np.linalg.norm(q[1] - q[0]) >= 6.0]
+    long_ = [q for q in pieces if np.linalg.norm(q[1] - q[0]) >= (3.0 if q[3] == 1 else 6.0)]
     G = {}
     for k, (a, b, w, c) in enumerate(long_):
         for p in (a, b): G.setdefault((int(p[0] // 8), int(p[1] // 8)), []).append((k, p))
@@ -341,12 +353,12 @@ def bridge_solid(L, Pp):
         d = (b - a) / np.linalg.norm(b - a)
         for end, sign in ((b, 1), (a, -1)):
             best = None
-            for i in (-1, 0, 1):
-                for j in (-1, 0, 1):
+            for i in range(-3, 4):
+                for j in range(-3, 4):
                     for k2, p in G.get((int(end[0] // 8) + i, int(end[1] // 8) + j), []):
                         if k2 == k or long_[k2][3] != c: continue
                         v = p - end; gap = float(v @ d) * sign
-                        if not (0.3 <= gap <= 6.0): continue
+                        if not (0.3 <= gap <= (20.0 if c == 1 else 6.0)): continue   # 黄の実線は影の中で長く途切れるので 20m まで
                         lat = abs(float(v[0] * d[1] - v[1] * d[0]))
                         a2, b2 = long_[k2][0], long_[k2][1]; d2 = (b2 - a2) / np.linalg.norm(b2 - a2)
                         if lat > 0.15 or abs(float(d @ d2)) < math.cos(math.radians(3)): continue

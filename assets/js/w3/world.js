@@ -752,7 +752,12 @@ export function buildWorld(scene, W, gfx) {
   out.signals = sigs;
   // 柱の位置: 交差点の向こう側で、進入車線の中心の延長線上の点から運転者の左へ探し、車道の外（縁から 0.4m 以上）に出た最初の所。
   // アームは灯器が車線の中心の上に来る長さ（2〜8m）。見つからないときは、少し手前・奥にずらして探す。それでも無理なら置かない
-  const offRoad = (x, z) => !(roadG.at(x, z) || roadG.at(x + 0.4, z) || roadG.at(x - 0.4, z) || roadG.at(x, z + 0.4) || roadG.at(x, z - 0.4));
+  // 建物の足元（地面から 3m までの壁の三角形）。柱を建物の壁にめり込ませない
+  const bldFoot = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 0.5);
+  { const B = W.bldg, P = B.pos, I = B.idx, lo = new Float32Array(B.info.length).fill(1e9);
+    for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v]; if (P[v * 3 + 1] < lo[k]) lo[k] = P[v * 3 + 1]; }
+    for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3, y0 = lo[B.bid[I[t]]] + 3; if (P[a + 1] > y0 || P[b + 1] > y0 || P[c + 1] > y0) continue; bldFoot.tri(P[a], P[a + 2], P[b], P[b + 2], P[c], P[c + 2]); } }
+  const offRoad = (x, z) => !(roadG.at(x, z) || roadG.at(x + 0.4, z) || roadG.at(x - 0.4, z) || roadG.at(x, z + 0.4) || roadG.at(x, z - 0.4)) && !(bldFoot.at(x, z) || bldFoot.at(x + 0.5, z) || bldFoot.at(x - 0.5, z) || bldFoot.at(x, z + 0.5) || bldFoot.at(x, z - 0.5));
   sigs.forEach(sg => {
     const lx = sg.dz, lz = -sg.dx; sg.skip = true;
     for (const along of [0, 2, -2, 4, 6, -4, 8, 10, -6, 12, 14, 16]) {
@@ -765,6 +770,8 @@ export function buildWorld(scene, W, gfx) {
       if (!sg.skip) break;
     }
   });
+  // 同じ所（2.5m 以内）に同じ向き（20 度以内）の信号が重なるときは 1 基に（同じ交差点の腕が OSM で 2 本に分かれている所など）
+  sigs.forEach((a, i) => { if (a.skip) return; for (let j = i + 1; j < sigs.length; j++) { const b = sigs[j]; if (b.skip) continue; let df = Math.abs(a.face - b.face) % (Math.PI * 2); df = Math.min(df, Math.PI * 2 - df); if (Math.hypot(a.x - b.x, a.z - b.z) < 2.5 && df < 0.35) b.skip = true; } });
   for (let i = sigs.length - 1; i >= 0; i--) if (sigs[i].skip) sigs.splice(i, 1);
   NS = sigs.length;
   const SH = (window.TB && TB.Race && TB.Race.SPEC && TB.Race.SPEC.signalHead) || { height: 0.37, width: 1.05, minBottom: 5.6 };
@@ -809,7 +816,15 @@ export function buildWorld(scene, W, gfx) {
     const peds = inst(ped.geometry, ped.material, NS);
     lamps.geometry.dispose(); lamps.geometry = new THREE.CircleGeometry(0.135, 20);
     lamps.material = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-    const pedLamps = inst(new THREE.PlaneGeometry(0.27, 0.27), lamps.material, NS * 2); pedLamps.castShadow = false;
+    // 歩行者用のレンズ: 暗い地に人の形（上は止まる人、下は歩く人）。点灯は人の形だけが明るく、消灯は薄い灰の人の形
+    const pict = walk => { const c = document.createElement('canvas'); c.width = c.height = 64; const g2 = c.getContext('2d'); g2.fillStyle = '#0d0d0d'; g2.fillRect(0, 0, 64, 64); g2.fillStyle = '#fff'; g2.strokeStyle = '#fff'; g2.lineCap = 'round';
+      g2.beginPath(); g2.arc(32, 12, 6, 0, Math.PI * 2); g2.fill();
+      if (!walk) { g2.fillRect(25, 20, 14, 22); g2.lineWidth = 6; g2.beginPath(); g2.moveTo(28, 40); g2.lineTo(27, 58); g2.moveTo(36, 40); g2.lineTo(37, 58); g2.moveTo(25, 22); g2.lineTo(21, 40); g2.moveTo(39, 22); g2.lineTo(43, 40); g2.stroke(); }
+      else { g2.lineWidth = 8; g2.beginPath(); g2.moveTo(31, 21); g2.lineTo(28, 40); g2.stroke(); g2.lineWidth = 5; g2.beginPath(); g2.moveTo(28, 39); g2.lineTo(20, 50); g2.lineTo(18, 59); g2.moveTo(28, 39); g2.lineTo(36, 48); g2.lineTo(44, 57); g2.moveTo(31, 24); g2.lineTo(22, 34); g2.moveTo(31, 24); g2.lineTo(41, 31); g2.stroke(); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const pedMats = [false, true].map(w => new THREE.MeshBasicMaterial({ map: pict(w), toneMapped: false }));
+    const pedR = inst(new THREE.PlaneGeometry(0.27, 0.27), pedMats[0], NS), pedG = inst(new THREE.PlaneGeometry(0.27, 0.27), pedMats[1], NS);
+    pedR.castShadow = pedG.castShadow = false;
     const PR = new THREE.Matrix4().makeRotationY(Math.PI / 2), PY = 2.6 - 2.86;   // 歩行者用の灯器の下端を地面から 2.6m に
     const MH = [], MB = [], MP = [], MBOX = [];
     sigs.forEach((s, k) => {
@@ -820,10 +835,10 @@ export function buildWorld(scene, W, gfx) {
       MBOX.push(new THREE.Matrix4().copy(base).multiply(loc.makeTranslation(hx, headY, 0)));
       for (let i = 0; i < 3; i++) lamps.setMatrixAt(k * 3 + i, M4.copy(base).multiply(loc.makeTranslation(hx - 0.34 + i * 0.34, headY, 0.06 + 0.012)));
       const pb = new THREE.Matrix4().copy(base).multiply(PR).multiply(loc.makeTranslation(0, PY, 0)); MP.push(pb);
-      pedLamps.setMatrixAt(k * 2, M4.copy(pb).multiply(loc.makeTranslation(-0.93, 3.51, 0.125)));       // 上: 赤（止まれ）
-      pedLamps.setMatrixAt(k * 2 + 1, M4.copy(pb).multiply(loc.makeTranslation(-0.93, 3.14, 0.125)));   // 下: 青（歩く人）
+      pedR.setMatrixAt(k, M4.copy(pb).multiply(loc.makeTranslation(-0.93, 3.51, 0.125)));   // 上: 赤（止まる人）
+      pedG.setMatrixAt(k, M4.copy(pb).multiply(loc.makeTranslation(-0.93, 3.14, 0.125)));   // 下: 青（歩く人）
     });
-    [lamps, pedLamps].forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
+    [lamps, pedR, pedG].forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
     const Z0 = new THREE.Matrix4().makeScale(0, 0, 0);
     let lx = Infinity, lz = Infinity;
     const pack = (cx, cz) => {
@@ -840,14 +855,14 @@ export function buildWorld(scene, W, gfx) {
     pack(0, 0);
     const prevSig = out.update; out.update = (cx, cz, cam) => { prevSig(cx, cz, cam); pack(cx, cz); };
     // 加算で重ねるので、主の色の成分だけを 1 より大きく（ほかの成分を足すと色が白に飛ぶ）。1 を超えた分は光のにじみ（ブルーム）になる
-    const OFF = new THREE.Color(0, 0, 0), PLIT = { red: new THREE.Color(2.2, 0.06, 0.03), green: new THREE.Color(0.04, 2.0, 1.5) };
-    const ALIT = { green: new THREE.Color(0.04, 2.2, 1.6), yellow: new THREE.Color(2.4, 1.15, 0.02), red: new THREE.Color(2.6, 0.06, 0.03) };
+    const OFF = new THREE.Color(0, 0, 0), PLIT = { red: new THREE.Color(2.4, 0.08, 0.04), green: new THREE.Color(0.1, 2.2, 1.3) }, POFF = new THREE.Color(0.3, 0.3, 0.3);
+    const ALIT = { green: new THREE.Color(0.08, 2.2, 1.2), yellow: new THREE.Color(2.4, 1.15, 0.02), red: new THREE.Color(2.6, 0.06, 0.03) };
     out.setSignal = (k, phase) => {
       for (let i = 0; i < 3; i++) lamps.setColorAt(k * 3 + i, ORDER[i] === phase ? ALIT[phase] : OFF);
       const walk = phase === 'red';
-      pedLamps.setColorAt(k * 2, walk ? OFF : PLIT.red); pedLamps.setColorAt(k * 2 + 1, walk ? PLIT.green : OFF);
+      pedR.setColorAt(k, walk ? POFF : PLIT.red); pedG.setColorAt(k, walk ? PLIT.green : POFF);
     };
-    out.signalsDone = () => { if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true; if (pedLamps.instanceColor) pedLamps.instanceColor.needsUpdate = true; };
+    out.signalsDone = () => { [lamps, pedR, pedG].forEach(m => { if (m.instanceColor) m.instanceColor.needsUpdate = true; }); };
     sigs.forEach((s, k) => out.setSignal(k, 'red')); out.signalsDone();
   };
   /* --- 川: 水面（さざ波・空の映り込み）と、コンクリートの護岸（岸の高さから川底まで） --- */

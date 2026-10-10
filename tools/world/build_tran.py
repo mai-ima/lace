@@ -87,7 +87,7 @@ def triangulate(geom):
         gx += step
   return {'v': verts, 'i': index}
 
-def road_look(geom):
+def road_look(geom, strict=False):
     """多角形の中が道路に見える割合（VIRTUAL SHIZUOKA のオルソ 20cm を 0.5m ごとに見る。暗い無彩色か白い塗料）"""
     try:
         from vsimg import VS
@@ -105,7 +105,8 @@ def road_look(geom):
     if len(px) < 6: return None
     L = px.mean(1); sat = px.max(1) - px.min(1)
     dark = ((L > 0.1) & (L < 0.45) & (sat < 0.1)).mean(); white = ((L > 0.58) & (sat < 0.12)).mean()
-    return float(dark + white) if dark >= 0.4 else 0.0   # 明るい屋根・コンクリートだけの所は道路にしない
+    if strict and white < 0.03: return 0.0   # 車道沿いの見直し: 白い線（区画線・文字）の無い所は、アスファルトの歩道かもしれないので戻さない
+    return float(dark + white) if dark >= (0.55 if strict else 0.4) else 0.0   # 明るい屋根・コンクリートだけの所は道路にしない
 
 
 def osm_sidewalks():
@@ -278,11 +279,44 @@ if NET and os.path.exists(NET):
                     fr = road_look(rp)
                     onrail = RAILS is not None and rp.intersection(RAILS).area > 0.2 * rp.area
                     if fr is None or fr < 0.6 or onrail: keep.append(rp)
+        # 道路の外の縁につながった歩道でも、縁から 5m より内側（中央分離帯・島）は道路構成線の島に重なる所だけにする
+        kw = unary_union(keep); deep = kw.difference(U.boundary.buffer(5.0))
+        for dp in (deep.geoms if hasattr(deep, 'geoms') else [deep]):
+            if dp.geom_type != 'Polygon' or dp.area < 4: continue
+            rest = dp.difference(isl.buffer(0.3))
+            for rp in (rest.geoms if hasattr(rest, 'geoms') else [rest]):
+                if rp.geom_type != 'Polygon' or rp.area < 4: continue
+                fr = road_look(rp); onrail = RAILS is not None and rp.intersection(RAILS).area > 0.2 * rp.area
+                if fr is not None and fr >= 0.6 and not onrail: kw = kw.difference(rp.buffer(0.05))
+        keep = [kw]
         before = walk.area
         walk = unary_union(keep + [isl.intersection(U)]).buffer(-0.3).buffer(0.3)
         wparts = [gg for gg in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if gg.geom_type == 'Polygon' and gg.area >= 2]
         walk = unary_union(wparts).simplify(0.1)
         print('地理院の道路構成線で島を直した: 歩道・島 %.0f → %.0f m2（島 %d 個）' % (before, walk.area, len(isl.geoms) if hasattr(isl, 'geoms') else 1))
+    # 4 段目: 車道に接する歩道のうち、写真でアスファルト（暗い無彩色 5.5 割以上・白い線と合わせて 7 割以上）に見える 4m 升を車道に戻す（2 回。
+    #   OSM の道幅が実際より狭く、外側の車線・バス専用の車線が歩道になっている所）。線路・建物の中は除く
+    for _ in range(2):
+        # 車道に接する歩道の帯（車道から 4m まで）を、小さな形ごとに 4m 升で見る（全体の形で毎回計算すると遅い）
+        carNow = U.difference(walk); band = carNow.buffer(4.0).intersection(walk)
+        conv = []; g = 4.0
+        for bp in (band.geoms if hasattr(band, 'geoms') else [band]):
+            if bp.geom_type != 'Polygon' or bp.area < 3: continue
+            eb = bp.bounds; gx = math.floor(eb[0] / g) * g
+            while gx < eb[2]:
+                gz = math.floor(eb[1] / g) * g
+                while gz < eb[3]:
+                    piece = bp.intersection(box(gx, gz, gx + g, gz + g))
+                    if not piece.is_empty and piece.area > 3:
+                        fr = road_look(piece, strict=True)
+                        if fr is not None and fr >= 0.7 and not (RAILS is not None and piece.intersects(RAILS)): conv.append(piece)
+                    gz += g
+                gx += g
+        if not conv: break
+        cu = unary_union(conv); walk = walk.difference(cu.buffer(0.05)).buffer(-0.4).buffer(0.4)
+        wparts = [gg for gg in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if gg.geom_type == 'Polygon' and gg.area >= 4]
+        walk = unary_union(wparts).simplify(0.1)
+        print('写真で車道に戻した車道沿いの所 %.0f m2' % cu.area)
     car = U.difference(walk).simplify(0.1)
     # 縁石の線分
     curbs = []
