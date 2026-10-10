@@ -1025,7 +1025,7 @@
         g.strokeRect(x - u * 3, y - u * 7 + Math.sin(t * 2 + sp.seed) * u * 0.3, u * 6, u * 3);
         if (u > 1) {
           g.font = 'bold ' + Math.round(u * 1.6) + 'px ui-monospace, monospace'; g.textAlign = 'center';
-          g.fillStyle = g.strokeStyle; g.fillText(sp.seed % 3 ? 'RACE' : '▶ GO', x, y - u * 5 + Math.sin(t * 2 + sp.seed) * u * 0.3);
+          g.fillStyle = g.strokeStyle; g.fillText(sp.seed % 3 ? L('レース', 'RACE') : L('出発', '▶ GO'), x, y - u * 5 + Math.sin(t * 2 + sp.seed) * u * 0.3);
         }
         g.lineWidth = 1;
         break;
@@ -1204,7 +1204,7 @@
         g.fillStyle = '#f2f2f2'; g.fillRect(x - u * 1.8, y - u * 4, u * 3.6, u * 1.8);
         if (u > 1.4) {
           g.fillStyle = '#e14d4d'; g.font = 'bold ' + Math.round(u * 1.1) + 'px monospace'; g.textAlign = 'center';
-          g.fillText('GO', x, y - u * 2.7);
+          g.fillText(L('出発', 'GO'), x, y - u * 2.7);
         }
         break;
       case 'chevron':
@@ -3299,7 +3299,7 @@
   R.makePad = function (sess, world) {
     var pad = document.createElement('div');
     pad.className = 'race-pad' + (world ? ' world' : '');
-    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR'], ['巻き戻し', 'b', 'rewind']] : []).concat([['N₂O', ' ', 'nitro'], ['BRK', 'ArrowDown', 'down'], ['GAS', 'ArrowUp', 'up']]).forEach(function (p) {
+    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR'], ['巻き戻し', 'b', 'rewind']] : []).concat([[L('ニトロ', 'N₂O'), ' ', 'nitro'], [L('ブレーキ', 'BRK'), 'ArrowDown', 'down'], [L('アクセル', 'GAS'), 'ArrowUp', 'up']]).forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = p[0]; b.className = 'rbtn ' + p[2];
       function on(e) { e.preventDefault(); (typeof sess === 'function' ? sess() : sess).key(p[1], true); }
