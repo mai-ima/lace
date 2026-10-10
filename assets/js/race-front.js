@@ -479,7 +479,7 @@
         traffic: trafficFor(e), heavy: heavyFor(e), bus: e.c >= 1 && e.c <= 3, car: playerCar(s, carId), levelMul: 1, drive: R.driveSettings(),
         exits: exits.length, exitDirs: exits.map(function (x) { return x.dir; }), exitDefault: dflt, exitNav: navI, exitAngs: exits.map(function (x) { return x.ang; }), tailChoice: tailIdx, exitNames: exits.map(exitLabel),
         canBack: hist.length > 0, start: start,
-        hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo,
+        hud: hud, onTick: tick, drawMap: drawMap, navInfo: navInfo, modeName: w.job && R.JOBS[w.job] ? R.JOBS[w.job].name : null,
         onViolation: violation, onBusted: busted, onEscape: escaped, onSkill: skill
       };
     }
@@ -731,7 +731,7 @@
     function portrait() { return window.innerHeight > window.innerWidth * 1.1; }
     function sizeCanvas() {
       var p = portrait();
-      cv.width = p ? 540 : 960; cv.height = p ? 900 : 540;
+      cv.width = p ? 420 : 960; cv.height = p ? 700 : 540;   // 縦画面は幅 420（スマホの画面幅 390 前後で文字が縮みすぎないように）
     }
     sizeCanvas();
 
@@ -844,7 +844,7 @@
       var p = el('div', 'rx-panel');
       var h = el('div', 'rx-h'); h.appendChild(el('span', 'rx-h-t', title));
       if (sub) h.appendChild(el('span', 'rx-h-s', sub));
-      if (R.admin && R.admin.on) h.appendChild(el('span', 'rx-adm', L('管理者', 'ADMIN')));
+      if (R.admin && R.admin.on) h.appendChild(el('span', 'rx-adm', 'ADMIN'));
       var money = el('span', 'rx-money', yen(R.load().money));
       h.appendChild(money);
       p.appendChild(h);
@@ -988,7 +988,7 @@
           }
           p.appendChild(head);
           if (st.endings) st.endings.forEach(function (e) {
-            if (((s.endings || {})[st.id] || {})[e.id]) items.push(item(L('エンディングを見直す: ', 'Replay ending: ') + t(e.name), t(e.hint || ''), function () { scene([{ bgm: 'ending' }, { title: L('エンディング', 'ENDING'), sub: t(e.name) }].concat(e.scene || []), function () { refresh(); }, st.filter, { sid: st.id, replay: true }); }, { icon: 'camera' }));
+            if (((s.endings || {})[st.id] || {})[e.id]) items.push(item(L('エンディングを見直す: ', 'Replay ending: ') + t(e.name), t(e.hint || ''), function () { scene([{ bgm: 'ending' }, { title: 'ENDING', sub: t(e.name) }].concat(e.scene || []), function () { refresh(); }, st.filter, { sid: st.id, replay: true }); }, { icon: 'camera' }));
           });
           st.chapters.forEach(function (ch) {
             var evs = st.events.filter(function (e) { return e.ch === ch.id && evVisible(e, s, st.id); });
@@ -1323,10 +1323,10 @@
       over.innerHTML = '';
       var box = el('div', 'rx-credits');
       var lines = st && st.id !== 's1'
-        ? [L('おわり', 'THE END'), '', t(st.name), L('ストーリー完結！', 'Story complete!'), '', L('サブストーリーのタブで、その後の話が読めます', 'More in the Side stories tab'), '', L('遊んでくれてありがとう', 'Thank you for playing.')]
-        : [L('おわり', 'THE END'), '', L('天竜レーシング', 'TENRYU RACING'), L('本編「天竜の白い亡霊」完結！', 'Main story complete!'), '',
+        ? ['THE END', '', t(st.name), L('ストーリー完結！', 'Story complete!'), '', L('サブストーリーのタブで、その後の話が読めます', 'More in the Side stories tab'), '', 'Thank you for playing.']
+        : ['THE END', '', 'TENRYU RACING', L('本編「天竜の白い亡霊」完結！', 'Main story complete!'), '',
            L('番外編「峠の走り屋たち」が開放されました', 'Extra chapter "Legends of the Pass" unlocked'), L('プロトタイプ ZERO がガレージに届きました', 'Prototype ZERO is in your garage'),
-           L('ストーリー2・3、サブストーリーもどうぞ', 'Try Stories 2 & 3 and the side stories'), '', L('遊んでくれてありがとう', 'Thank you for playing.')];
+           L('ストーリー2・3、サブストーリーもどうぞ', 'Try Stories 2 & 3 and the side stories'), '', 'Thank you for playing.'];
       if (pick && st.endings) {
         var seenE = (R.load().endings || {})[st.id] || {}, nSeen = st.endings.filter(function (e) { return seenE[e.id]; }).length;
         lines = lines.slice(0, 4).concat(['', L('エンディング: ', 'Ending: ') + t(pick.name), L('達成 ', 'Reached ') + nSeen + ' / ' + st.endings.length + L('　（別の選択で、別の結末が見られます）', '  (other choices lead to other endings)')], lines.slice(4));
@@ -2149,7 +2149,7 @@
       var lost = sum.success === false || (r && (r.reason === 'eliminated' || r.reason === 'timeout' || r.reason === 'wrecked'));
       if (won || lost) { var st = el('div', 'rx-stamp ' + (won ? 'win' : 'lose'), won ? 'WIN' : 'LOSE'); over.appendChild(st); setTimeout(function () { st.remove(); }, 2600); if (won) sfx('win'); }
       if (R.Music) { if (won || lost) R.Music.jingle(won ? 'win' : 'lose'); else R.Music.stop(); }
-      if (sum.success !== null && sum.success !== undefined) p.appendChild(el('div', 'rx-big ' + (sum.success ? 'ok' : 'ng'), sum.success ? L('ミッション成功', 'MISSION CLEAR') : L('ミッション失敗', 'MISSION FAILED')));
+      if (sum.success !== null && sum.success !== undefined) p.appendChild(el('div', 'rx-big ' + (sum.success ? 'ok' : 'ng'), sum.success ? L('MISSION CLEAR', 'MISSION CLEAR') : L('MISSION FAILED', 'MISSION FAILED')));
       if (sum.table) {
         var tb = el('div', 'rx-table');
         sum.table.forEach(function (e, i) {

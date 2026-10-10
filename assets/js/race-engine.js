@@ -1025,7 +1025,7 @@
         g.strokeRect(x - u * 3, y - u * 7 + Math.sin(t * 2 + sp.seed) * u * 0.3, u * 6, u * 3);
         if (u > 1) {
           g.font = 'bold ' + Math.round(u * 1.6) + 'px ui-monospace, monospace'; g.textAlign = 'center';
-          g.fillStyle = g.strokeStyle; g.fillText(sp.seed % 3 ? L('レース', 'RACE') : L('出発', '▶ GO'), x, y - u * 5 + Math.sin(t * 2 + sp.seed) * u * 0.3);
+          g.fillStyle = g.strokeStyle; g.fillText(sp.seed % 3 ? 'RACE' : '▶ GO', x, y - u * 5 + Math.sin(t * 2 + sp.seed) * u * 0.3);
         }
         g.lineWidth = 1;
         break;
@@ -1204,7 +1204,7 @@
         g.fillStyle = '#f2f2f2'; g.fillRect(x - u * 1.8, y - u * 4, u * 3.6, u * 1.8);
         if (u > 1.4) {
           g.fillStyle = '#e14d4d'; g.font = 'bold ' + Math.round(u * 1.1) + 'px monospace'; g.textAlign = 'center';
-          g.fillText(L('出発', 'GO'), x, y - u * 2.7);
+          g.fillText('GO', x, y - u * 2.7);
         }
         break;
       case 'chevron':
@@ -1217,6 +1217,7 @@
         break;
       case 'gantry': case 'cpgate':
         var half = s * 1.2;
+        if (half * 2 > W * 1.8) break;   // 真下をくぐる直前は描かない（スタート直後に画面の上半分をふさいでいた）
         g.fillStyle = '#333';
         g.fillRect(x - half, y - s * 0.9, s * 0.05, s * 0.9);
         g.fillRect(x + half - s * 0.05, y - s * 0.9, s * 0.05, s * 0.9);
@@ -3009,7 +3010,12 @@
         text(g, String(Math.round(score)), 16, 50, narrow ? 16 : 20, '#ffd93d');
       } else {
         text(g, L('モード', 'MODE'), 16, 22, 10, '#9fb0c2');
-        text(g, TB.t((R.MODES[mode] || R.MINIS[mode] || { name: { ja: 'フリー走行', en: 'Free roam' } }).name).slice(0, p2p || laps !== Infinity ? 4 : 8), 16, 46, 12, '#fff');
+        // モード名は切らずに、枠に収まるまで文字を小さくする（仕事中は仕事の名前）
+        var mName = cfg.modeName ? TB.t(cfg.modeName) : TB.t((R.MODES[mode] || R.MINIS[mode] || { name: { ja: 'フリー走行', en: 'Free roam' } }).name);
+        var mW = (p2p || laps !== Infinity ? (narrow ? 50 : 62) : (narrow ? 90 : 110)), mS = 12;
+        g.font = 'bold ' + mS + 'px ui-monospace, Menlo, Consolas, monospace';
+        while (mS > 8 && g.measureText(mName).width > mW) { mS--; g.font = 'bold ' + mS + 'px ui-monospace, Menlo, Consolas, monospace'; }
+        text(g, mName, 16, 46, mS, '#fff');
       }
       if (p2p) {
         text(g, L('残り', 'TO GO'), narrow ? 70 : 84, 22, 10, '#9fb0c2');
@@ -3306,7 +3312,7 @@
   R.makePad = function (sess, world) {
     var pad = document.createElement('div');
     pad.className = 'race-pad' + (world ? ' world' : '');
-    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR'], ['巻き戻し', 'b', 'rewind']] : []).concat([[L('ニトロ', 'N₂O'), ' ', 'nitro'], [L('ブレーキ', 'BRK'), 'ArrowDown', 'down'], [L('アクセル', 'GAS'), 'ArrowUp', 'up']]).forEach(function (p) {
+    [['◀', 'ArrowLeft', 'left'], ['▶', 'ArrowRight', 'right']].concat(world ? [['◁ 左ウインカー', 'q', 'blinkL'], ['右ウインカー ▷', 'e', 'blinkR'], ['巻き戻し', 'b', 'rewind']] : []).concat([['N₂O', ' ', 'nitro'], ['BRK', 'ArrowDown', 'down'], ['GAS', 'ArrowUp', 'up']]).forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = p[0]; b.className = 'rbtn ' + p[2];
       function on(e) { e.preventDefault(); (typeof sess === 'function' ? sess() : sess).key(p[1], true); }
