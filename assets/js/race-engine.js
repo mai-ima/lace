@@ -3009,17 +3009,19 @@
         text(g, L('点数', 'SCORE'), 16, 22, 10, '#9fb0c2');
         text(g, String(Math.round(score)), 16, 50, narrow ? 16 : 20, '#ffd93d');
       } else {
-        text(g, L('モード', 'MODE'), 16, 22, 10, '#9fb0c2');
+        if (!(narrow && p2p)) text(g, L('モード', 'MODE'), 16, 22, 10, '#9fb0c2');
         // モード名は切らずに、枠に収まるまで文字を小さくする（仕事中は仕事の名前）
         var mName = cfg.modeName ? TB.t(cfg.modeName) : TB.t((R.MODES[mode] || R.MINIS[mode] || { name: { ja: 'フリー走行', en: 'Free roam' } }).name);
-        var mW = (p2p || laps !== Infinity ? (narrow ? 50 : 62) : (narrow ? 90 : 110)), mS = 12;
+        var top = narrow && p2p;   // 狭い画面の区間コースは、モード名を上の段に出し、下の段は残りの距離だけにする
+        var mW = top ? 88 : (p2p || laps !== Infinity ? (narrow ? 50 : 62) : (narrow ? 90 : 110)), mS = top ? 10 : 12;
         g.font = 'bold ' + mS + 'px ui-monospace, Menlo, Consolas, monospace';
         while (mS > 8 && g.measureText(mName).width > mW) { mS--; g.font = 'bold ' + mS + 'px ui-monospace, Menlo, Consolas, monospace'; }
-        text(g, mName, 16, 46, mS, '#fff');
+        if (top) text(g, mName, 16, 22, mS, '#9fb0c2'); else text(g, mName, 16, 46, mS, '#fff');
       }
       if (p2p) {
-        text(g, L('残り', 'TO GO'), narrow ? 70 : 84, 22, 10, '#9fb0c2');
-        text(g, (Math.max(0, goalDist - P.total) / SEG * MPS / 1000).toFixed(2) + 'km', narrow ? 62 : 76, 48, 11, '#fff');
+        var togo = (Math.max(0, goalDist - P.total) / SEG * MPS / 1000).toFixed(2) + 'km';
+        if (narrow && !racing && mode !== 'coins' && mode !== 'traffic') text(g, L('残り ', 'TO GO ') + togo, 16, 46, 12, '#fff');
+        else { text(g, L('残り', 'TO GO'), narrow ? 70 : 84, 22, 10, '#9fb0c2'); text(g, togo, narrow ? 62 : 76, 48, 11, '#fff'); }
       } else if (laps !== Infinity) {
         text(g, L('周', 'LAP'), narrow ? 70 : 84, 22, 10, '#9fb0c2');
         text(g, Math.min(P.lap + 1, laps) + '/' + laps, narrow ? 70 : 84, 50, narrow ? 14 : 16, '#fff');
@@ -3082,6 +3084,8 @@
         text(g, foe.name + '  ' + (gapM >= 0 ? '▲ ' + gapM : '▼ ' + (-gapM)) + 'm', cx, 69, 10, gapM >= 0 ? '#ff8a80' : '#5ccfa0', 'center');
         if (targetCar) meter(g, cx - tw / 2 + 10, 76, tw - 20, 5, targetCar.hp, '#ff5252', '');
       }
+      // 物語のレースの目的（勝利条件）を、時間（とボスとの差）の下に出し続ける
+      if (cfg.objective) text(g, L('目的: ', 'Goal: ') + cfg.objective, cx, foe && !foe.out ? (targetCar ? 98 : 86) : 66, 10, '#ffd93d', 'center');
 
       // 右上: ミニマップ
       var ms = narrow ? 84 : 100, mx = W - ms - 8, my = 8;

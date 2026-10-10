@@ -108,6 +108,7 @@
   function storyCfg(ev, st) {
     var c = baseCfg({ track: ev.track, mode: ev.mode, laps: ev.laps, field: storyField(ev), traffic: ev.traffic, carId: ev.car, weather: ev.weather });
     c.radio = ev.radio || null;
+    if (ev.goal && ev.goal.type !== 'talk') c.objective = goalText(ev.goal, ev.track);
     if (st && st.filter) c.filter = st.filter;
     return c;
   }
