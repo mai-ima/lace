@@ -14,7 +14,8 @@
 
   function S(o) { return o; }
   function at(id) { for (var i = 0; i < R.STORY.length; i++) if (R.STORY[i].id === id) return i; return -1; }
-  function after(id, ev) { var i = at(id); if (i >= 0) R.STORY.splice(i + 1, 0, ev); }
+  R.STORY_LATE = R.STORY_LATE || [];   // あとから差し込んだ話（旧セーブの進行位置の変換に使う）
+  function after(id, ev) { var i = at(id); if (i >= 0) { R.STORY.splice(i + 1, 0, ev); R.STORY_LATE.push(ev.id); } }
 
   /* ===== 2a のあと：峠の茶屋・夜のガレージ ===== */
   after('2a', S({ id: '2t1', ch: '2', title: '峠の茶屋「ひなた」', talk: true, track: 'iroha', goal: { type: 'talk' }, reward: 600,

@@ -211,4 +211,26 @@ async function w3(page) {
 }
 
 w3.gl = true;
-module.exports = { golden, invariants, world, menus, w3 };
+/* 旧セーブ（進行の番号だけ）が、第二章の会話を差し込んだ後でも正しい話の位置に変換されるか */
+async function saves(page) {
+  const r = await page.evaluate(() => {
+    const R = window.TB.Race, P = R._test.prog, bad = [];
+    const st = P.storyOf('s1'), ids = st.events.map(e => e.id), late = R.STORY_LATE || [];
+    const oldOrder = ids.filter(id => late.indexOf(id) < 0);
+    // 1) 旧の並びで「2c まで済み」の番号
+    const n = oldOrder.indexOf('2c') + 1, s1 = { story: n, flags: {} };
+    if (!P.isCleared(s1, 's1', ids.indexOf('2c'))) bad.push('2c が済みになっていない');
+    if (P.isCleared(s1, 's1', ids.indexOf('2d'))) bad.push('2d が済みになっている');
+    if (ids[P.progOf(s1, 's1')] !== '2t1') bad.push('次の話が ' + ids[P.progOf(s1, 's1')] + '（差し込んだ会話 2t1 のはず）');
+    // 2) 新しい並び（第二章の会話のフラグあり）で 2t2 まで済みの番号
+    const s2 = { story: ids.indexOf('2t2') + 1, flags: { s1: { map: 1 } } };
+    if (ids[P.progOf(s2, 's1')] !== ids[ids.indexOf('2t2') + 1]) bad.push('新しい並びの変換がずれた: ' + ids[P.progOf(s2, 's1')]);
+    // 3) 済みにすると次へ進む
+    P.setProg(s1, 's1', ids.indexOf('2t1') + 1);
+    if (ids[P.progOf(s1, 's1')] !== '2t2') bad.push('2t1 を済ませた後が ' + ids[P.progOf(s1, 's1')]);
+    return { bad, n: ids.length, late: late.length };
+  });
+  return { ok: r.bad.length === 0, msg: r.bad.length ? r.bad.join(' / ') : '話 ' + r.n + ' 本・差し込み ' + r.late + ' 本で変換が正しい' };
+}
+
+module.exports = { golden, invariants, world, menus, w3, saves };

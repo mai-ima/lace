@@ -168,9 +168,33 @@
   R.resetStoryView = function () { derived = null; };
   R.storyView = function () { return stories(); };
   function storyOf(sid) { return stories().filter(function (x) { return x.id === sid; })[0] || stories()[0]; }
-  function progOf(s, sid) { return sid === 's1' ? (s.story || 0) : ((s.stories || {})[sid] || 0); }
+  /* 進行は「済んだ話の id」で持つ（s.cleared[sid] = { id: 1 }）。話を途中に差し込んでも位置がずれない。
+     旧セーブ（番号だけ）は最初に読んだときに id へ変換する。番号は、第二章の会話を差し込む前の並びのもの
+     （その会話のフラグが 1 つも無い場合）か、差し込んだ後の並びのもの（ある場合）として数える */
+  function numProg(s, sid) { return sid === 's1' ? (s.story || 0) : ((s.stories || {})[sid] || 0); }
+  function clearedOf(s, sid) {
+    s.cleared = s.cleared || {};
+    if (!s.cleared[sid]) {
+      var st = storyOf(sid), n = numProg(s, sid), late = R.STORY_LATE || [], c = {};
+      var fl = (s.flags || {})[sid] || {}, newOrder = sid !== 's1' || ['map', 'pride', 'minaTeam', 'minaWait', 'taka', 'listen'].some(function (k) { return fl[k]; });
+      var order = newOrder ? st.events : st.events.filter(function (e) { return late.indexOf(e.id) < 0; });
+      order.slice(0, n).forEach(function (e) { c[e.id] = 1; });
+      s.cleared[sid] = c;
+    }
+    return s.cleared[sid];
+  }
+  R._test.prog = { progOf: function (s, sid) { return progOf(s, sid); }, isCleared: function (s, sid, i) { return isCleared(s, sid, i); }, setProg: function (s, sid, n) { setProg(s, sid, n); }, storyOf: function (sid) { return storyOf(sid); } };
+  function isCleared(s, sid, idx) { var ev = storyOf(sid).events[idx]; return !!(ev && clearedOf(s, sid)[ev.id]); }
+  /** 最初のまだ済んでいない話の番号（全部済んでいれば話の数） */
+  function progOf(s, sid) {
+    var st = storyOf(sid), c = clearedOf(s, sid);
+    for (var i = 0; i < st.events.length; i++) if (!c[st.events[i].id]) return i;
+    return st.events.length;
+  }
   function setProg(s, sid, n) {
-    if (sid === 's1') s.story = Math.max(s.story || 0, n);
+    var st = storyOf(sid), ev = st.events[n - 1];
+    if (ev) clearedOf(s, sid)[ev.id] = 1;
+    if (sid === 's1') s.story = Math.max(s.story || 0, n);   // 古い版との互換のため番号も残す
     else { s.stories = s.stories || {}; s.stories[sid] = Math.max(s.stories[sid] || 0, n); }
   }
   /* ---------- ストーリーのフラグ（選択肢で決まり、分岐とエンディングに使う） ---------- */
@@ -199,7 +223,7 @@
     return r;
   }
 
-  function sideOpen(s, st, ev) { var i = st.events.map(function (e) { return e.id; }).indexOf(ev.after); return i < 0 || progOf(s, st.id) > i; }
+  function sideOpen(s, st, ev) { var i = st.events.map(function (e) { return e.id; }).indexOf(ev.after); return i < 0 || isCleared(s, st.id, i); }
   function sideDone(s, ev) { return !!(s.side || {})[ev.id]; }
   /** 話の id から、どのストーリーのどの話かを探す */
   function findEvent(id) {
@@ -326,7 +350,7 @@
         out.lines.unshift(out.success ? L('目標達成：', 'Objective complete: ') + goalText(ev.goal, ev.track) : L('目標未達成：', 'Objective failed: ') + goalText(ev.goal, ev.track));
         if (out.success) {
           if (ctx.side) { s.side = s.side || {}; money = s.side[ev.id] ? ev.reward * 0.3 : ev.reward; s.side[ev.id] = true; }
-          else { money = progOf(s, stO.id) > idx ? ev.reward * 0.3 : ev.reward; setProg(s, stO.id, idx + 1); }
+          else { money = isCleared(s, stO.id, idx) ? ev.reward * 0.3 : ev.reward; setProg(s, stO.id, idx + 1); }
           if (ev.boss) s.bosses[ev.boss] = true;
           if (ev.unlock && s.owned.indexOf(ev.unlock) < 0) { s.owned.push(ev.unlock); out.lines.push(L('新しい車「', 'New car: ') + t(R.car(ev.unlock).name) + L('」が手に入った！', '')); }
         }
@@ -931,7 +955,7 @@
         keys.forEach(function (k) {
           var st = k === 'side' ? null : storyOf(k);
           var label = k === 'side' ? L('サブストーリー', 'Side stories') : t(st.name);
-          var prog = k === 'side' ? '' : ' ' + Math.min(progOf(s, k), st.events.length) + '/' + st.events.length;
+          var prog = k === 'side' ? '' : ' ' + st.events.filter(function (e, i) { return isCleared(s, k, i); }).length + '/' + st.events.length;
           var b = el('button', 'rx-tab' + (k === tab ? ' on' : ''), label + prog);
           b.addEventListener('click', function () { app.storyTab = k; refresh(); });
           tabs.appendChild(b);
@@ -970,7 +994,7 @@
             if (!evs.length) return;
             items.push(el('div', 'rx-sec', t(ch.name)));
             evs.forEach(function (ev) {
-              var idx = st.events.indexOf(ev), locked = idx > pr && !unl, cleared = idx < pr;
+              var idx = st.events.indexOf(ev), cleared = isCleared(s, st.id, idx), locked = idx > pr && !cleared && !unl;
               if (idx === pr) firstOpen = items.filter(function (x) { return x.classList.contains('rx-f'); }).length;
               items.push(item((cleared ? '[済] ' : locked ? '[未] ' : '▶ ') + t(ev.title),
                               ev.talk ? L('会話・物語', 'Story scene') : trackName(ev.track) + '　' + t((R.MODES[ev.mode] || R.MODES.race).name) + '　' + goalText(ev.goal, ev.track),
@@ -986,7 +1010,7 @@
     };
 
     function evOf(sid, idx, side) { var st = storyOf(sid); return side ? st.side[idx] : st.events[idx]; }
-    function isReplay(sid, idx, side) { var s = R.load(), st = storyOf(sid), ev = evOf(sid, idx, side); return side ? sideDone(s, ev) : idx < progOf(s, sid); }
+    function isReplay(sid, idx, side) { var s = R.load(), st = storyOf(sid), ev = evOf(sid, idx, side); return side ? sideDone(s, ev) : isCleared(s, sid, idx); }
     function storyEvent(sid, idx, withScene, side) {
       var ev = evOf(sid, idx, side), st = storyOf(sid);
       function brief() { go(SCREENS.brief(sid, idx, side)); }
@@ -1011,7 +1035,7 @@
         drawPv();
         row.appendChild(pvBox);
         var info = el('div', 'rx-info');
-        var replay = side ? sideDone(s, ev) : idx < progOf(s, sid);
+        var replay = side ? sideDone(s, ev) : isCleared(s, sid, idx);
         [[L('コース', 'Track'), trackName(ev.track)], [L('種目', 'Mode'), t((R.MODES[ev.mode] || R.MODES.race).name)],
          [L('目標', 'Goal'), goalText(ev.goal, ev.track)], [L('報酬', 'Reward'), yen(ev.reward) + (replay ? L('（再挑戦は 3 割）', ' (30% on replay)') : '')],
          [L('車', 'Car'), ev.car ? t(R.car(ev.car).name) + L('（指定）', ' (fixed)') : t(R.car(s.car).name)]].forEach(function (kv) {
@@ -2213,7 +2237,7 @@
       if (a === 'story') {
         var hit = parts[1] ? findEvent(parts[1]) : null, stp = parts[1] && !hit ? storyOf(parts[1]) : null;
         go(SCREENS.story(hit ? (hit.side ? 'side' : hit.st.id) : stp ? stp.id : null));
-        if (hit && (hit.side ? sideOpen(s, hit.st, hit.ev) : hit.idx <= progOf(s, hit.st.id))) { if (hit.ev.talk) storyEvent(hit.st.id, hit.idx, true, hit.side); else go(SCREENS.brief(hit.st.id, hit.idx, hit.side)); }
+        if (hit && (hit.side ? sideOpen(s, hit.st, hit.ev) : (hit.idx <= progOf(s, hit.st.id) || isCleared(s, hit.st.id, hit.idx)))) { if (hit.ev.talk) storyEvent(hit.st.id, hit.idx, true, hit.side); else go(SCREENS.brief(hit.st.id, hit.idx, hit.side)); }
       } else if (a === 'world') go(SCREENS.world(null));
       else if (a === 'job' || a === 'jobs') { go(SCREENS.jobs()); if (R.JOBS[parts[1]]) go(SCREENS.world(parts[1])); }
       else if (a === 'gp' || a === 'career') { go(SCREENS.gp()); var cup = R.CUPS.filter(function (c) { return c.id === parts[1]; })[0]; if (cup && R.cupUnlocked(s, cup)) go(SCREENS.cup(cup.id)); }
