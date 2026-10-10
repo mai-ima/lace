@@ -44,5 +44,24 @@
    "via": "Objaverse (allenai/objaverse)",
    "modified": "縮尺・原点・面の間引き・圧縮"
   }
+ },
+ {
+  "key": "vending_jp",
+  "name": "飲み物の自動販売機（日本、正面が +z）",
+  "h": 1.83,
+  "lods": {
+   "lod0": {
+    "tris": 2144,
+    "kb": 460
+   }
+  },
+  "source": {
+   "title": "Japanese Vending Machine",
+   "author": "tanaka.ko91",
+   "license": "CC BY 4.0",
+   "url": "https://sketchfab.com/3d-models/f1852e99093249f1acd23ad118615b09",
+   "via": "Objaverse (allenai/objaverse)",
+   "modified": "縮尺・原点・面の間引き・圧縮"
+  }
  }
 ]

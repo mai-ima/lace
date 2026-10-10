@@ -25,6 +25,9 @@ assets/data/world/ の出典（加工して作成）
   実在の車名・エンブレムは商標のため、ゲーム内では車名を使わない（車種は「小型ハッチバック」などの一般名で扱う）。
 - 道路の範囲・車道と歩道・縁石（center/road_area.json）と実測の道幅（center/road_width.json）: 国土交通省 PLATEAU
   （浜松市 交通（道路）モデル LOD1、2023 年度）を tools/world/build_tran.py で加工して作成（OSM の道路網と組み合わせ。中央分離帯・交通島は国土地理院ベクトルタイルの道路構成線で判定）。
+- 飲み物の自動販売機（props/vending_jp_lod0.glb）: Objaverse に収録された Sketchfab の CC BY 4.0 作品
+  "Japanese Vending Machine"（tanaka.ko91、https://sketchfab.com/3d-models/f1852e99093249f1acd23ad118615b09）を tools/world/props_glb.mjs で加工（縮尺・原点・圧縮）。
+  置き場所は OSM の amenity=vending_machine（© OpenStreetMap contributors）。
 - 信号機の灯器・歩行者用の灯器（props/signal_head.glb, signal_ped.glb）: Objaverse に収録された Sketchfab の CC BY 4.0 作品
   "Japanese Traffic Light"（afx_cgmotion、https://sketchfab.com/3d-models/3e35c76a6ee24d759e39edc2f90677e1）を tools/world/signal_glb.mjs で加工
   （部品の取り出し・背中合わせの後ろの面の削除・縮尺・原点・発光の画像の削除・画像の縮小・圧縮）。

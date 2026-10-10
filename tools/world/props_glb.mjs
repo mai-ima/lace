@@ -16,7 +16,8 @@ const { MeshoptSimplifier, MeshoptEncoder, MeshoptDecoder } = mo;
 await MeshoptSimplifier.ready; await MeshoptEncoder.ready; await MeshoptDecoder.ready;
 const PROPS = [
   { key: 'streetlight_curve', src: 'light_city', name: '道路照明（カーブしたテーパーポール・LED 灯具）', h: 10, lods: [['lod0', 8000], ['lod1', 1500]] },
-  { key: 'utility_pole_jp', src: 'pole_japan', name: '電柱（日本・腕金・碍子・変圧器つき）', h: 12, lods: [['lod0', 9000], ['lod1', 1800]] }
+  { key: 'utility_pole_jp', src: 'pole_japan', name: '電柱（日本・腕金・碍子・変圧器つき）', h: 12, lods: [['lod0', 9000], ['lod1', 1800]] },
+  { key: 'vending_jp', src: 'vending_jp', name: '飲み物の自動販売機（日本、正面が +z）', h: 1.83, lods: [['lod0', 3000], ['lod1', 700]] }
 ];
 const OUT = new URL('../../assets/data/world/props/', import.meta.url).pathname;
 fs.mkdirSync(OUT, { recursive: true });

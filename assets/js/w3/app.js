@@ -227,6 +227,28 @@ export async function start(container, opt) {
       makeLightPools(scene, (P.secLamps || []).map(h => ({ x: h.x, y: W.terrain.at(h.x, h.z), z: h.z, r: 6.5 })), [0.22, 0.22, 0.23]); }
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }
+  // 飲み物の自動販売機: OSM の位置（amenity=vending_machine、tools/world/build_stops.py）。正面（モデルの +z）をいちばん近い車道へ向ける。
+  // 建物の中に入っている点は、車道の向きへ 0.5m ずつずらす。夜は正面（商品の並ぶ所）がほのかに光る
+  if (W.stops && W.stops.vend && W.stops.vend.length) try {
+    const sc = await loadGLB('assets/data/world/props/vending_jp_lod0.glb'), parts = fleetParts(sc).parts, N = W.stops.vend.length;
+    const dirs = [...Array(16)].map((_, i) => [Math.sin(i * Math.PI / 8), Math.cos(i * Math.PI / 8)]);
+    const Ms = W.stops.vend.map(([x, z]) => {
+      let best = null;
+      for (let r = 1; r <= 14 && !best; r += 1) for (const [dx, dz] of dirs) if (world.onRoadPt(x + dx * r, z + dz * r)) { best = [dx, dz]; break; }
+      const [dx, dz] = best || [0, 1];
+      for (let k = 0; k < 12 && collide.grid.at(x, z); k++) { x += dx * 0.5; z += dz * 0.5; }
+      const y = world.walkG.at(x, z) ? W.terrain.atRoad(x, z) + 0.15 : W.terrain.at(x, z);
+      const r = 0.55; collide.grid.tri(x - r, z - r, x + r, z - r, x + r, z + r); collide.grid.tri(x - r, z - r, x + r, z + r, x - r, z + r);
+      return new THREE.Matrix4().makeRotationY(Math.atan2(dx, dz)).setPosition(x, y, z);
+    });
+    parts.forEach(pt => {
+      const m = pt.material.clone();
+      const glow = m.map && 'emissive' in m; if (glow) { m.emissive = new THREE.Color(1, 1, 1); m.emissiveMap = m.map; m.emissiveIntensity = 0; }
+      const im = new THREE.InstancedMesh(pt.geometry, m, N); im.castShadow = im.receiveShadow = true;
+      if (glow) im.onBeforeRender = () => { m.emissiveIntensity = NIGHT.value * 0.8; };
+      Ms.forEach((M, i) => im.setMatrixAt(i, M)); im.computeBoundingSphere(); scene.add(im);
+    });
+  } catch (e) { console.warn('自販機のモデルを読めませんでした', e); }
   // 車: 外部の高品質なモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/vehicles.mjs で変換）
   const CARS = 'assets/data/world/cars/';
   const carInfo = await fetch(CARS + 'cars.json').then(r => r.json());

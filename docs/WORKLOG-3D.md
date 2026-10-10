@@ -203,6 +203,7 @@
 - 素材
   - Objaverse（Sketchfab の CC BY 作品の公開データ集、/tmp/objv/meta）を全件検索すると、日本の街の物が多く見つかった（検索の道具は scratchpad の objsearch.py）。
     使った物: 日本の信号機（afx_cgmotion、横型 3 灯・歩行者用・押しボタンの柱）→ tools/world/signal_glb.mjs。
+    自販機（tanaka.ko91、2,144 面）→ props_glb.mjs。置き場所は OSM の自販機 19 台（build_stops.py の vend）。正面を近い車道へ、夜は正面が光る。
     候補（未使用・CC BY）: 日本の道路標識 28 種とカーブミラー（bobymonsuta 02c4941681…）、自販機（filadog 4768555100…・tokyo45otaku a8a6874f62…・tanaka.ko91 f1852e9909…）、
     丸い赤ポスト（Lisov1k aad08d888a…）、エアコンの室外機（tokyo45otaku bb86e8997e…）、高速道路の非常電話（HosoRoad a07c8a9f55…）、日本の電柱（LiliumLetifer、使用中）。
   - （以前の検索）日本の信号機: CC0・CC-BY で使えるものは見つからない（有料のものだけ）。Sketchfab の CC-BY は韓国風。→ 寸法の基準で自作を続ける。Sketchfab の検索には SKETCHFAB_TOKEN が要る（今は無い）。
