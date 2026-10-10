@@ -370,6 +370,78 @@ def bridge_solid(L, Pp):
     return out
 
 
+def regular_zebra(L, Pp):
+    """横断歩道と導流帯（ゼブラ）の縞を規則正しく置き直す。同じ向き（8 度以内）の縞（幅 0.3〜0.65m・長さ 0.8〜8m）が 4 本以上並ぶ集まりで、
+    中心の間隔が 0.75〜1.15m（横断歩道）または 1.38〜3.0m（導流帯）のものを、等間隔・幅 0.45m・両端を直線に当てはめた長方形にする。
+    車に隠れて抜けた縞も補う。集まりの範囲に収まる元の白い形（隣とつながった縞など）は除く。返り値: 新しい L, Pp"""
+    cand = []   # (中心, 向き, 長さ, 出どころ 'l'/'p', 番号)
+    for k, (c, w, P) in enumerate(L):
+        if c != 0 or len(P) < 2: continue
+        a, b = np.array(P[0]), np.array(P[-1]); ln = np.linalg.norm(b - a)
+        if 0.3 <= w <= 0.65 and 0.8 <= ln <= 8: cand.append(((a + b) / 2, (b - a) / ln, ln, 'l', k))
+    for k, (c, R) in enumerate(Pp):
+        if c != 0 or len(R) != 1 or len(R[0]) < 4: continue
+        r = np.array(R[0], np.float32)
+        (cx, cy), (rw, rh), ang = cv2.minAreaRect(r)
+        ln, wd = max(rw, rh), min(rw, rh)
+        if not (0.3 <= wd <= 0.65 and 0.8 <= ln <= 8): continue
+        if cv2.contourArea(r) / max(1e-6, rw * rh) < 0.6: continue
+        t = math.radians(ang) if rw >= rh else math.radians(ang + 90)
+        cand.append((np.array([cx, cy]), np.array([math.cos(t), math.sin(t)]), ln, 'p', k))
+    n = len(cand)
+    if n < 4: return L, Pp
+    C = np.array([q[0] for q in cand]); D = np.array([q[1] for q in cand])
+    par = list(range(n))
+    def f(i):
+        while par[i] != i: par[i] = par[par[i]]; i = par[i]
+        return i
+    G = {}
+    for i in range(n): G.setdefault((int(C[i][0] // 4), int(C[i][1] // 4)), []).append(i)
+    for i in range(n):
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for j in G.get((int(C[i][0] // 4) + di, int(C[i][1] // 4) + dj), []):
+                    if j <= i or abs(float(D[i] @ D[j])) < math.cos(math.radians(8)): continue
+                    v = C[j] - C[i]; nrm = np.array([-D[i][1], D[i][0]]); off = abs(float(v @ nrm))
+                    if np.linalg.norm(v) < 3.2 and 0.6 <= off <= 2.8: par[f(i)] = f(j)
+    groups = {}
+    for i in range(n): groups.setdefault(f(i), []).append(i)
+    dropL, dropP, add = set(), set(), []
+    for g in groups.values():
+        if len(g) < 4: continue
+        d = D[g[0]] * (1 if D[g[0]][0] >= 0 else -1); nrm = np.array([-d[1], d[0]])
+        offs = np.array([float(C[i] @ nrm) for i in g]); o = np.argsort(offs); offs = offs[o]; gi = [g[k] for k in o]
+        sp = float(np.median(np.diff(offs)))
+        if not (0.75 <= sp <= 1.15 or 1.38 <= sp <= 3.0): continue
+        # 各縞の両端（向き d に沿った位置）を、横の位置の 1 次式に当てはめる（導流帯の外枠は直線）
+        a0 = np.array([float(C[i] @ d) - cand[i][2] / 2 for i in gi]); a1 = np.array([float(C[i] @ d) + cand[i][2] / 2 for i in gi])
+        k0 = np.polyfit(offs, a0, 1); k1 = np.polyfit(offs, a1, 1)
+        if np.median(np.abs(np.polyval(k0, offs) - a0)) > 0.6 or np.median(np.abs(np.polyval(k1, offs) - a1)) > 0.6: continue   # 外枠が直線でない（ほかの形）
+        m = int(round((offs[-1] - offs[0]) / sp)); sp = (offs[-1] - offs[0]) / max(1, m)   # 両端の縞の間を等分する
+        new = []
+        for k in range(m + 1):
+            ok = offs[0] + k * sp; s0, s1 = float(np.polyval(k0, ok)), float(np.polyval(k1, ok))
+            if s1 - s0 < 0.5: continue
+            p0, p1 = d * s0 + nrm * ok, d * s1 + nrm * ok; h = nrm * 0.225
+            new.append((0, [[tuple(p0 + h), tuple(p1 + h), tuple(p1 - h), tuple(p0 - h)]]))
+        if len(new) < 4: continue
+        add += new
+        for i in gi:
+            (dropL if cand[i][3] == 'l' else dropP).add(cand[i][4])
+        # 集まりの範囲（新しい縞の外形を 0.3m 広げたもの）に収まる白い形・線も除く（隣とつながった縞・縞の切れ端）
+        hull = cv2.convexHull(np.array([p for _, R in new for p in R[0]], np.float32))
+        inn = lambda P: all(cv2.pointPolygonTest(hull, (float(p[0]), float(p[1])), True) > -0.3 for p in P)
+        lo, hi = hull.reshape(-1, 2).min(0) - 1, hull.reshape(-1, 2).max(0) + 1
+        near = lambda P: lo[0] <= P[0][0] <= hi[0] and lo[1] <= P[0][1] <= hi[1]
+        for k, (c, R) in enumerate(Pp):
+            if c == 0 and near(R[0]) and inn(R[0]): dropP.add(k)
+        for k, (c, w, P) in enumerate(L):
+            if c == 0 and near(P) and inn(P): dropL.add(k)
+    if not add: return L, Pp
+    print('置き直した縞（横断歩道・導流帯）', len(add), '（除いた元の形', len(dropL) + len(dropP), '）')
+    return [x for k, x in enumerate(L) if k not in dropL], [x for k, x in enumerate(Pp) if k not in dropP] + add
+
+
 def fill_dashes(L, Pp):
     """車に隠れて抜けた破線を補う。同じ向き（3 度以内）・横のずれ 0.2m 以内で前後に並ぶ破線（長さ 1.5〜8m）の列で、
     間が「抜けた 1〜2 本ぶん」（ふつうの間の 2 倍 + 1 本、3 倍 + 2 本、それぞれ ±25%）の所に、前後と同じ長さ・幅の線を足す。返り値: 足す長方形"""
@@ -460,6 +532,7 @@ def main():
             tx += TILE
         tz += TILE
         print('z', round(tz), '線', len(L), '形', len(Pp), flush=True)
+    L, Pp = regular_zebra(L, Pp)
     Pp += bridge_solid(L, Pp)
     fd = fill_dashes(L, Pp); Pp += fd; print('補った破線', len(fd))
     if os.environ.get('MARKS_DBG'): json.dump([np.mean(R[0], 0).tolist() for c, R in fd], open(os.environ['MARKS_DBG'], 'w'))
