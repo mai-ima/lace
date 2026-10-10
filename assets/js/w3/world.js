@@ -799,6 +799,57 @@ export function buildWorld(scene, W, gfx) {
   out.setSignal = (k, phase) => { for (let i = 0; i < 3; i++) lamps.setColorAt(k * 3 + i, ORDER[i] === phase ? LIT[phase] : DARK); };
   out.signalsDone = () => { if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true; };
   sigs.forEach((s, k) => out.setSignal(k, 'red')); out.signalsDone();
+  // 外部の日本の信号機のモデル（tools/world/signal_glb.mjs。横型 3 灯のフード付き灯器と、歩行者用の灯器）に差し替える。
+  //   head: 原点 = 真ん中のレンズの中心、+z が正面、レンズの間隔 0.34m。ped: 原点 = 柱の中心の地面、+z が正面（柱から -x へ張り出す）
+  //   点灯は加算で重ねる（消灯のときはレンズの絵が見える）。歩行者用は、その進入路を渡る人の向き（柱から道路の側）を向け、車両の赤で青にする
+  out.useSignalModels = (head, ped) => {
+    // 細かい形はカメラの近く（中 150m・高 400m・超高はすべて）だけに描き、遠くは今までの軽い箱の灯器にする（三角形の数の予算のため）
+    const NEAR = gfx.ultra ? 1e9 : gfx.hi ? 400 : 150;
+    const headD = inst(head.geometry, head.material, NS), back = inst(new THREE.BoxGeometry(1.06, 0.3, 0.03), new THREE.MeshStandardMaterial({ color: 0xc9cbcc, roughness: 0.6, metalness: 0.3 }), NS);   // 背面のふた
+    const peds = inst(ped.geometry, ped.material, NS);
+    lamps.geometry.dispose(); lamps.geometry = new THREE.CircleGeometry(0.135, 20);
+    lamps.material = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const pedLamps = inst(new THREE.PlaneGeometry(0.27, 0.27), lamps.material, NS * 2); pedLamps.castShadow = false;
+    const PR = new THREE.Matrix4().makeRotationY(Math.PI / 2), PY = 2.6 - 2.86;   // 歩行者用の灯器の下端を地面から 2.6m に
+    const MH = [], MB = [], MP = [], MBOX = [];
+    sigs.forEach((s, k) => {
+      base.makeRotationY(s.face).setPosition(s.x, terr.at(s.x, s.z), s.z);
+      const hx = s.arm - 0.55;
+      MH.push(new THREE.Matrix4().copy(base).multiply(loc.makeTranslation(hx, headY, 0.06)));
+      MB.push(new THREE.Matrix4().copy(base).multiply(loc.makeTranslation(hx, headY, 0.06 - 0.28)));
+      MBOX.push(new THREE.Matrix4().copy(base).multiply(loc.makeTranslation(hx, headY, 0)));
+      for (let i = 0; i < 3; i++) lamps.setMatrixAt(k * 3 + i, M4.copy(base).multiply(loc.makeTranslation(hx - 0.34 + i * 0.34, headY, 0.06 + 0.012)));
+      const pb = new THREE.Matrix4().copy(base).multiply(PR).multiply(loc.makeTranslation(0, PY, 0)); MP.push(pb);
+      pedLamps.setMatrixAt(k * 2, M4.copy(pb).multiply(loc.makeTranslation(-0.93, 3.51, 0.125)));       // 上: 赤（止まれ）
+      pedLamps.setMatrixAt(k * 2 + 1, M4.copy(pb).multiply(loc.makeTranslation(-0.93, 3.14, 0.125)));   // 下: 青（歩く人）
+    });
+    [lamps, pedLamps].forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
+    const Z0 = new THREE.Matrix4().makeScale(0, 0, 0);
+    let lx = Infinity, lz = Infinity;
+    const pack = (cx, cz) => {
+      if (Math.hypot(cx - lx, cz - lz) < 20) return; lx = cx; lz = cz;
+      let n = 0;
+      sigs.forEach((s, k) => {
+        const near = Math.hypot(s.x - cx, s.z - cz) < NEAR;
+        heads.setMatrixAt(k, near ? Z0 : MBOX[k]);   // 遠くは箱、近くは隠す
+        if (near) { headD.setMatrixAt(n, MH[k]); back.setMatrixAt(n, MB[k]); peds.setMatrixAt(n, MP[k]); n++; }
+      });
+      [headD, back, peds].forEach(m => { m.count = n; m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
+      heads.instanceMatrix.needsUpdate = true;
+    };
+    pack(0, 0);
+    const prevSig = out.update; out.update = (cx, cz, cam) => { prevSig(cx, cz, cam); pack(cx, cz); };
+    // 加算で重ねるので、主の色の成分だけを 1 より大きく（ほかの成分を足すと色が白に飛ぶ）。1 を超えた分は光のにじみ（ブルーム）になる
+    const OFF = new THREE.Color(0, 0, 0), PLIT = { red: new THREE.Color(2.2, 0.06, 0.03), green: new THREE.Color(0.04, 2.0, 1.5) };
+    const ALIT = { green: new THREE.Color(0.04, 2.2, 1.6), yellow: new THREE.Color(2.4, 1.15, 0.02), red: new THREE.Color(2.6, 0.06, 0.03) };
+    out.setSignal = (k, phase) => {
+      for (let i = 0; i < 3; i++) lamps.setColorAt(k * 3 + i, ORDER[i] === phase ? ALIT[phase] : OFF);
+      const walk = phase === 'red';
+      pedLamps.setColorAt(k * 2, walk ? OFF : PLIT.red); pedLamps.setColorAt(k * 2 + 1, walk ? PLIT.green : OFF);
+    };
+    out.signalsDone = () => { if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true; if (pedLamps.instanceColor) pedLamps.instanceColor.needsUpdate = true; };
+    sigs.forEach((s, k) => out.setSignal(k, 'red')); out.signalsDone();
+  };
   /* --- 川: 水面（さざ波・空の映り込み）と、コンクリートの護岸（岸の高さから川底まで） --- */
   if (waters.length) {
     const q = W.water.q, WP = [], WI = [], RP = [], RI = [];

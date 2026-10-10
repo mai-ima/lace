@@ -108,6 +108,25 @@ def road_look(geom):
     return float(dark + white) if dark >= 0.4 else 0.0   # 明るい屋根・コンクリートだけの所は道路にしない
 
 
+def osm_sidewalks():
+    """OSM（/tmp/world/osm/*.xml）の独立した歩道の線（highway=footway かつ footway=sidewalk）"""
+    import xml.etree.ElementTree as ET
+    fs = glob.glob('/tmp/world/osm/*.xml')
+    if not fs: return None
+    nodes, ws = {}, {}
+    for f in fs:
+        r = ET.parse(f).getroot()
+        for nd in r.iter('node'): nodes[nd.get('id')] = ((float(nd.get('lon')) - LON0) * KX, (LAT0 - float(nd.get('lat'))) * KZ)
+        for w in r.iter('way'):
+            t = {x.get('k'): x.get('v') for x in w.iter('tag')}
+            if t.get('highway') == 'footway' and t.get('footway') == 'sidewalk': ws[w.get('id')] = [x.get('ref') for x in w.iter('nd')]
+    ls = []
+    for refs in ws.values():
+        P = [nodes[r] for r in refs if r in nodes]
+        if len(P) >= 2: ls.append(LineString(P))
+    return unary_union(ls) if ls else None
+
+
 RAILS = None
 
 
@@ -175,6 +194,25 @@ if NET and os.path.exists(NET):
         return MultiPoint(pts).convex_hull
     shapes += [junction_shape(nd) for nd in net['nodes']]
     carU = unary_union(shapes)
+    # 歩道の無い区分の道を太らせた分のうち、OSM の独立した歩道の線（footway=sidewalk）が通る所は歩道にする
+    #   （駅前の一方通行 4 車線など、区分は unclassified でも歩道のある道。タイル舗装の歩道まで車道にしないため）
+    swl = osm_sidewalks()
+    if swl is not None:
+        core = unary_union([LineString(e['pts']).buffer(e['hw'] + 0.5, cap_style=2, join_style=1) for e in net['edges'] if len(e['pts']) >= 2] + [junction_shape(nd) for nd in net['nodes']])
+        E = carU.difference(core).intersection(U)
+        ex = []; eb = E.bounds; g = 10.0; gx = eb[0]
+        while gx < eb[2]:
+            gz = eb[1]
+            while gz < eb[3]:
+                piece = E.intersection(box(gx, gz, gx + g, gz + g))
+                if not piece.is_empty and piece.area > 2 and piece.intersects(swl):
+                    fr = road_look(piece)
+                    if fr is None or fr < 0.6: ex.append(piece)   # 写真がアスファルト（車線）に見える所は車道のまま（OSM の歩道の線の位置ずれ）
+                gz += g
+            gx += g
+        if ex:
+            exU = unary_union(ex); carU = carU.difference(exU)
+            print('OSM の歩道の線で歩道にした所 %.0f m2' % exU.area)
     car = carU.intersection(U)
     walk = U.difference(carU)
     walk = walk.buffer(-0.4).buffer(0.4)   # 幅 0.8m 未満の細い部分は捨てる（車道として扱う）

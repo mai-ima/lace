@@ -1,0 +1,60 @@
+{
+ "source": {
+  "title": "Japanese Traffic Light",
+  "author": "afx_cgmotion",
+  "license": "CC BY 4.0",
+  "url": "https://sketchfab.com/3d-models/3e35c76a6ee24d759e39edc2f90677e1",
+  "via": "Objaverse (allenai/objaverse)",
+  "modified": "部品の取り出し・後ろの面の削除・縮尺・原点・発光の画像の削除・画像の縮小・圧縮"
+ },
+ "parts": {
+  "signal_head": {
+   "tris": 2080,
+   "kb": 118,
+   "min": [
+    -0.549,
+    -0.176,
+    -0.292
+   ],
+   "max": [
+    0.55,
+    0.175,
+    0.182
+   ]
+  },
+  "signal_ped": {
+   "tris": 1586,
+   "kb": 107,
+   "min": [
+    -1.111,
+    2.863,
+    -0.183
+   ],
+   "max": [
+    -0.064,
+    3.816,
+    0.235
+   ]
+  }
+ },
+ "head": {
+  "lamps": [
+   [
+    -0.34,
+    0,
+    0.012
+   ],
+   [
+    0,
+    0,
+    0.012
+   ],
+   [
+    0.34,
+    0,
+    0.012
+   ]
+  ],
+  "r": 0.135
+ }
+}

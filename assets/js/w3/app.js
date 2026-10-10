@@ -145,6 +145,12 @@ export async function start(container, opt) {
     world.waterTris((ax, az, bx, bz, cx, cz) => collide.grid.tri(ax, az, bx, bz, cx, cz));
     collide.grid.clear = true; world.roadTris((ax, az, bx, bz, cx, cz) => collide.grid.tri(ax, az, bx, bz, cx, cz)); collide.grid.clear = false;
   }
+  // 信号機: 外部の日本の信号機のモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/signal_glb.mjs で取り出したもの）に差し替える
+  if (world.useSignalModels) try {
+    const one = sc => { let r = null; sc.updateMatrixWorld(true); sc.traverse(o => { if (o.isMesh && !r) { const g = toFloatGeo(o.geometry); g.applyMatrix4(o.matrixWorld); r = { geometry: g, material: o.material }; } }); return r; };
+    const [sh, sp] = await Promise.all(['signal_head', 'signal_ped'].map(k => loadGLB('assets/data/world/props/' + k + '.glb')));
+    world.useSignalModels(one(sh), one(sp));
+  } catch (e) { console.warn('信号機のモデルを読めませんでした', e); }
   // 街路樹: 幹線（歩道のある道）の両側の歩道に、約 12m ごと。建物・車道・信号の近くは避ける
   try {
     const imp = await loadImpostor('assets/data/world/props/', 'tree_broadleaf');
