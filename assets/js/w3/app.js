@@ -241,13 +241,22 @@ export async function start(container, opt) {
       const r = 0.55; collide.grid.tri(x - r, z - r, x + r, z - r, x + r, z + r); collide.grid.tri(x - r, z - r, x + r, z + r, x - r, z + r);
       return new THREE.Matrix4().makeRotationY(Math.atan2(dx, dz)).setPosition(x, y, z);
     });
-    parts.forEach(pt => {
+    const ims = parts.map(pt => {
       const m = pt.material.clone();
       const glow = m.map && 'emissive' in m; if (glow) { m.emissive = new THREE.Color(1, 1, 1); m.emissiveMap = m.map; m.emissiveIntensity = 0; }
       const im = new THREE.InstancedMesh(pt.geometry, m, N); im.castShadow = im.receiveShadow = true;
       if (glow) im.onBeforeRender = () => { m.emissiveIntensity = NIGHT.value * 0.8; };
-      Ms.forEach((M, i) => im.setMatrixAt(i, M)); im.computeBoundingSphere(); scene.add(im);
+      scene.add(im); return im;
     });
+    // カメラの近くだけ描く（三角形の数の予算のため。超高はすべて）
+    const NEAR = gfx.ultra ? 1e9 : gfx.hi ? 600 : 200, P = W.stops.vend; let lx = Infinity, lz = Infinity;
+    const pack = (cx, cz) => {
+      if (Math.hypot(cx - lx, cz - lz) < 20) return; lx = cx; lz = cz;
+      let n = 0; Ms.forEach((M, i) => { if (Math.hypot(P[i][0] - cx, P[i][1] - cz) < NEAR) { ims.forEach(im => im.setMatrixAt(n, M)); n++; } });
+      ims.forEach(im => { im.count = n; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); });
+    };
+    pack(0, 0);
+    const prevW = world.update; world.update = (cx, cz, cam) => { prevW(cx, cz, cam); pack(cx, cz); };
   } catch (e) { console.warn('自販機のモデルを読めませんでした', e); }
   // 車: 外部の高品質なモデル（Objaverse 収録の Sketchfab CC BY 4.0 作品を tools/world/vehicles.mjs で変換）
   const CARS = 'assets/data/world/cars/';
