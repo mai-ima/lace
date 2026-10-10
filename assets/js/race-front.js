@@ -573,7 +573,8 @@
       var rt = M.route(at, tn);
       if (!rt || !rt.hs.length) return null;
       var nx = rt.hs[0], i = exits.findIndex(function (ex) { return ex.h === nx; });
-      if (i < 0) return { arrow: 'redo', text: L('次の交差点で進める方向へ（遠回り）', 'Take any exit (reroute)'), dir: 'any' };
+      if (i < 0 && nx === M.rev(h)) return { arrow: '↶', text: L('この先で U ターン（交差点の先の安全な所で）', 'Make a U-turn ahead (somewhere safe)'), dir: 'uturn' };
+      if (i < 0) return { arrow: '↺', text: L('次の交差点で進める方向へ（遠回り）', 'Take any exit (reroute)'), dir: 'any' };
       var d = exits[i].dir;
       return { arrow: dirArrow(d), text: L('次の交差点を ' + dirWord(d), 'Next junction: ' + dirWord(d)) + (exits.length > 1 && d !== 'straight' ? L('（' + (d === 'left' ? 'Q' : 'E') + ' でウインカー）', ' (blinker ' + (d === 'left' ? 'Q' : 'E') + ')') : ''), dir: d, km: rt.len / 1000 };
     }

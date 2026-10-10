@@ -250,7 +250,7 @@
     brs.forEach(function (b) {
       var side = b.ang > 0 ? -1 : 1, th = Math.min(Math.abs(b.ang), Math.PI - 0.12), bw = Math.max(5, hwm * 0.95), LMAX = 70;
       var perp = Math.abs(th - Math.PI / 2) < 0.32;
-      if (perp) (side < 0 ? arms.l = true : arms.r = true);
+      if (Math.abs(th - Math.PI / 2) < 0.6) (side < 0 ? arms.l = true : arms.r = true);   // 交差する車を出すかの判定は、直角から 34 度まで（帯の描き方の判定 perp より広く）
       for (var i = Math.max(0, jl - 70); i < Math.min(segs.length, jl + 110); i++) {
         var a1 = (i - jl) * SEGM, a2 = a1 + SEGM, c1, c2;
         if (perp) {   // 直角: 交差点の中心をはさむ帯
@@ -1643,7 +1643,10 @@
         if (!sirenA && R.sirenAudio) sirenA = R.sirenAudio();
       }
       if (carryIn.sk) skCarry = carryIn.sk;   // スキルチェーンは交差点をまたいでも続く
-      if (!sh && carryIn.sigT !== undefined) sig.t = carryIn.sigT;   // 同じ交差点なら信号の位相も続ける
+      if (!sh && carryIn.sigT !== undefined) {   // 同じ交差点なら信号の位相と、交差点を横切っている車も続ける
+        sig.t = carryIn.sigT;
+        if (carryIn.cross) { sig.cross = carryIn.cross.map(function (c) { return Object.assign({}, c); }); sig.crossT = carryIn.crossT || 0; }
+      }
     }
 
     /* --- 状態 --- */
@@ -3238,7 +3241,8 @@
     // 交差点で次の道へ移るとき、エンジン音を切らずに引き継ぐ（音の途切れをなくす）
     sess.snapshot = function () {
       return { traffic: traffic.filter(function (t) { return !t.train && t.total > -1e8; }).map(function (t) { return Object.assign({}, t); }),
-               sk: Object.assign({}, sk), cops: cops.map(function (c) { return Object.assign({}, c); }), wantedT: wantedT, escapeT: escapeT, bustHits: bustHits, sigT: sig.t };
+               sk: Object.assign({}, sk), cops: cops.map(function (c) { return Object.assign({}, c); }), wantedT: wantedT, escapeT: escapeT, bustHits: bustHits, sigT: sig.t,
+               cross: sig.cross.map(function (c) { return Object.assign({}, c); }), crossT: sig.crossT };
     };
     sess.detachAudio = function () { keepAudio = true; return eng; };
     sess.stop = function () { if (!keepAudio) eng.stop(); if (sirenA) { sirenA.stop(); sirenA = null; } };
