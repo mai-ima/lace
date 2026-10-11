@@ -1530,6 +1530,14 @@ export function buildWorld(scene, W, gfx) {
     }
   }
 
+  // 長さ 0・NaN の法線を上向きに直す（つぶれた三角形の法線は 0 になり、光の計算で NaN の画素が出て、ブルームのぼかしで
+  // 画面全体が真っ黒・真っ白になっていた。Q2 の審査で、車道に数十個・縁石に約 4,200 個）
+  { let fixed = 0;
+    out.group.traverse(o => { const n = o.isMesh && o.geometry && o.geometry.attributes.normal; if (!n || n.itemSize !== 3) return;
+      const a = n.array; let ch = false;
+      for (let i = 0; i < a.length; i += 3) { const l = Math.hypot(a[i], a[i + 1], a[i + 2]); if (!(l > 1e-6)) { a[i] = 0; a[i + 1] = 1; a[i + 2] = 0; ch = true; fixed++; } }
+      if (ch) n.needsUpdate = true; });
+    out.normalsFixed = fixed; }
   return out;
 }
 
@@ -1542,22 +1550,22 @@ export function buildSky(scene, renderer, opt) {
   const elev = opt.elev !== undefined ? opt.elev : 38, azim = opt.azim !== undefined ? opt.azim : 160;
   sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(azim));
   u.sunPosition.value.copy(sunDir);
-  const sun = new THREE.DirectionalLight(0xfff1dc, 2.6); sun.position.copy(sunDir).multiplyScalar(400);
+  const sun = new THREE.DirectionalLight(0xfff0d8, 3.3); sun.position.copy(sunDir).multiplyScalar(400);
   sun.castShadow = opt.shadows > 0;
   const SM = opt.shadows > 2 ? Math.min(8192, renderer.capabilities.maxTextureSize) : opt.shadows > 1 ? 4096 : 2048; sun.shadow.mapSize.set(SM, SM);
   const S = opt.shadows > 2 ? 220 : opt.shadows > 1 ? 140 : 100; Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 10, far: 520 });   // 太陽は車から 400m の所。高さ 240m までの物の影が届く範囲だけを撮る
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
   sun.shadow.camera.layers.enable(1);   // 影だけを落とす粗い形（レイヤー 1）
   scene.add(sun); scene.add(sun.target);
-  const hemi = new THREE.HemisphereLight(0xd4dde8, 0x6a6458, 0.55); scene.add(hemi);
-  scene.fog = new THREE.Fog(0xc4d2de, Math.min(400, (opt.far || 2600) * 0.3), opt.far || 2600);
+  const hemi = new THREE.HemisphereLight(0xdde3ea, 0x7a6f5e, 0.4); scene.add(hemi);
+  scene.fog = new THREE.Fog(0xccd4da, Math.min(400, (opt.far || 2600) * 0.3), opt.far || 2600);
   // 空の色から環境マップ（反射と間接光）
   const pm = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene(); const sky2 = new Sky(); sky2.scale.setScalar(1000); Object.keys(u).forEach(k => { if (sky2.material.uniforms[k]) sky2.material.uniforms[k].value = u[k].value; }); envScene.add(sky2);
-  scene.environment = pm.fromScene(envScene, 0.02).texture; scene.environmentIntensity = 0.12;   // Preetham の空は値が大きいので弱める
+  scene.environment = pm.fromScene(envScene, 0.02).texture; scene.environmentIntensity = 0.09;   // Preetham の空は値が大きいので弱める
   // 時間帯: 昼（既定）・夕方・夜。太陽（夜は月）の向きと光、空、霧、環境光、灯りの度合い（NIGHT）をまとめて切り替える
   const TIMES = {
-    day: { elev, azim, sun: [0xfff1dc, 2.6], hemi: [0xd4dde8, 0x6a6458, 0.55], fog: 0xc4d2de, env: 0.12, night: 0, tb: 4, ray: 1.6 },
+    day: { elev, azim, sun: [0xfff0d8, 3.3], hemi: [0xdde3ea, 0x7a6f5e, 0.4], fog: 0xccd4da, env: 0.09, night: 0, tb: 4, ray: 1.6 },   // 2026-10-11: 太陽を強め、空の青い環境光を弱めて影と立体感を出す（全体が青く平板だった。第 4 回の審査の 7）
     dusk: { elev: 3.5, azim: 250, sun: [0xffa66a, 1.5], hemi: [0x8f8aa0, 0x4a4038, 0.55], fog: 0x9c8f96, env: 0.5, night: 0.55, tb: 6, ray: 2.6 },
     night: { elev: 32, azim: 120, sun: [0x8fa6d8, 0.22], hemi: [0x34405e, 0x16161c, 0.42], fog: 0x0a0f18, env: 0, night: 1, tb: 2, ray: 0.4, skyElev: -14 }
   };

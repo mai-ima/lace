@@ -117,6 +117,9 @@ export async function start(container, opt) {
       ao._overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isMesh && o.visible && o.material && o.material.transparent && !o.material.depthWrite) { o.visible = false; ao._visibilityCache.push(o); } }); };
       composer.addPass(ao);
     }
+    // ブルームの前に、NaN・無限大の画素を 0 に、明るさを 64 までに抑える（1 画素の NaN がぼかしで画面全体に広がるのを防ぐ）
+    composer.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main() { vec4 c = texture2D(tDiffuse, vUv); bvec4 bad = isnan(c); if (bad.x || bad.y || bad.z || bad.w || any(isinf(c.rgb))) c = vec4(0.0, 0.0, 0.0, 1.0); gl_FragColor = vec4(min(c.rgb, vec3(64.0)), c.a); }' }));
     if (opt.bloom !== '0') composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), gfx.post === 'msaa' ? 0.3 : 0.22, 0.35, opt.bth ? +opt.bth : 10.5));   // 強さ・広がり・しきい値（線形の明るさ 10.5 以上 = 灯火だけが光る。昼の地平線の空は最大 8.6 で、8 だと空の光が路面までにじんで白くかすんでいた）
     composer.addPass(new OutputPass());
     if (gfx.post === 'smaa') composer.addPass(new SMAAPass());
@@ -655,7 +658,7 @@ export async function start(container, opt) {
   requestAnimationFrame(frame);
   const api = {
     renderer, scene, cam, car, world, gfx, W, collide, traffic,
-    present, get composer() { return composer; },   // 撮影の道具が後処理（SMAA・鮮明化・ブルーム）を通して描くため
+    present, get composer() { return composer; }, sky,   // 撮影の道具が後処理（SMAA・鮮明化・ブルーム）を通して描き、太陽の影の範囲を見ている所へ動かすため
     stop() {
       running = false; if (engineAudio) engineAudio.stop(); window.removeEventListener('keydown', startAudio); window.removeEventListener('pointerdown', startAudio);
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', resize); window.removeEventListener('blur', onBlur);
