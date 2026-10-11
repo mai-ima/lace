@@ -864,11 +864,16 @@ export function buildWorld(scene, W, gfx) {
             float lum = dot(fc, vec3(0.3, 0.59, 0.11)), gmk = clamp((0.4 - lum) * 5.0, 0.0, 1.0) * step(0.0, fc.b - fc.r + 0.03);
             diffuseColor.rgb = fc * (0.92 + 0.16 * hb2);
             gMask = gmk * 0.9;
-            float rr = h21(vec2(floor(u / bw2), floor(rel / 3.6)) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0), onc = step(0.55, rr);
-            // 遠くでは 1 画素に柱間・階が何個も入り、点いた窓・消えた窓が白黒のざらざらになる → 画素の大きさに応じて平均（点灯の割合 45%）へ寄せる
+            float bh2 = floor(fract(vBld.z) * 64.0 + 0.5) * 7.0, flr = floor(rel / 3.6), fy2 = fract(rel / 3.6);
+            float rr = h21(vec2(floor(u / bw2), flr) + bh2);
+            // 夜の事務所: 照明は階ごと・4 柱間ほどの区画ごとに点く（1 柱間ずつ白い四角が市松に並ぶのは不自然だった）。点灯は 4 割の区画
+            float zone = h21(vec2(floor(u / (bw2 * 4.0)), flr) + bh2 + 3.1), onc = step(0.6, zone);
+            // 点いた区画の中: 天井の照明の列（窓の上ほど明るい）、ブラインドの濃淡（柱間ごと）、奥は暗い
+            float blind = 0.45 + 0.55 * step(0.3, rr), ceil2 = 0.35 + 0.65 * smoothstep(0.15, 0.85, fy2);
+            // 遠くでは 1 画素に柱間・階が何個も入るので、画素の大きさに応じて平均（点灯の割合 4 割 × 内側の明るさ）へ寄せる
             float fw3 = max(fwidth(u) / bw2, fwidth(rel) / 3.6), far3 = smoothstep(0.25, 0.7, fw3);
-            gLit = mix(gmk * onc, clamp((0.4 - lum) * 5.0, 0.0, 1.0) * 0.16, far3) * 0.7;   // 遠くの平均は暗め（実際の夜景は暗い壁に点が散る）
-            gLitC = mix(vec3(1.0, 0.8, 0.58), vec3(0.86, 0.92, 1.0), step(0.5, hb2)) * (0.75 + 0.35 * rr);
+            gLit = mix(gmk * onc * blind * ceil2, clamp((0.4 - lum) * 5.0, 0.0, 1.0) * 0.12, far3) * 0.42;
+            gLitC = mix(vec3(1.0, 0.86, 0.68), vec3(0.88, 0.93, 1.0), step(0.45, h21(vec2(zone, 5.0)))) * (0.85 + 0.25 * rr);
           }
           // 階ごとの床の帯（共同住宅のベランダ・事務所の腰壁）と、屋上の笠木
           float band = (kind > 0.5 && kind < 2.5) ? step(fy, 0.08) * step(fh, rel) : 0.0;
