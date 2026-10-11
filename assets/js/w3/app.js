@@ -312,7 +312,7 @@ export async function start(container, opt) {
   let traffic = null;
   try {
     const types = await Promise.all(carInfo.filter(c => W_TYPES[c.key]).map(async c => {
-      const [n, f] = await Promise.all([loadGLB(CARS + c.key + '_lod1.glb'), loadGLB(CARS + c.key + '_lod2.glb')]);
+      const [n, f] = await Promise.all([loadGLB(CARS + c.key + '_lod1.glb'), loadGLB(CARS + c.key + (!gfx.hi && c.lods && c.lods.lod3 ? '_lod3.glb' : '_lod2.glb'))]);   // 中画質以下の遠くの車はいちばん軽い形（画面で数十画素なので見た目は同じ）
       return { key: c.key, weight: W_TYPES[c.key], len: c.size.l, near: fleetParts(n), far: fleetParts(f), colors: c.key === 'kei_van' ? KEI_COLORS : null };
     }));
     types.forEach(T => { T.lay = lampLayout(T.near.size); });
@@ -613,6 +613,7 @@ export async function start(container, opt) {
     trafficStep(dt);
     if (world.props && world.props.update) world.props.update(car.st.x, car.st.z);
     if (world.trees && world.trees.updateNear) world.trees.updateNear(car.st.x, car.st.z);
+    if (world.roofItems) world.roofItems.updateNear(car.st.x, car.st.z);
     if (hitT > 0) hitT -= dt;
     const st = car.st;
     carM.root.position.set(st.x, st.y, st.z);
@@ -652,7 +653,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); if (world.trees && world.trees.updateNear) world.trees.updateNear(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); if (world.trees && world.trees.updateNear) world.trees.updateNear(st.x, st.z); if (world.roofItems) world.roofItems.updateNear(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     /** 検証用: 真上から見た正射投影（中心 x, z、半分の幅 half m、画素 px）。航空写真と並べて比べる */
     shotTop(x, z, half, px) {
       const oc = new THREE.OrthographicCamera(-half, half, half, -half, 1, 2000), y = W.terrain.at(x, z);

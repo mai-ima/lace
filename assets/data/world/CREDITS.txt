@@ -51,3 +51,6 @@ assets/data/world/ の出典（加工して作成）
   https://www.geospatial.jp/ckan/dataset/virtual-shizuoka-mw
 - 歩道の舗装（tex/walk_*.jpg）: Poly Haven「Concrete Pavers 02」（Amal Kumar、CC0）の色・法線・粗さの画像を、色を日本の歩道の灰色に寄せて縮めた。
 - 街路樹の位置（center/trees.json）: 静岡県 VIRTUAL SHIZUOKA のオルソ画像（CC BY 4.0）から樹冠を読み取って作成（tools/world/trees_from_vs.py）。
+- 屋根の形と屋上の設備（center/roofs.json）: 静岡県「VIRTUAL SHIZUOKA」の航空レーザ測量の点群（オリジナルデータ、CC BY 4.0）から 0.25m 格子の表面の高さを作り、
+  建物ごとに陸屋根・切妻・寄棟・片流れを当てはめたもの（tools/world/lp_dsm.py・roofs.py）。点群そのものは含まない。
+- 住宅の表の向きと塀（center/house_front.json）: PLATEAU の建物と道路の範囲から求めた（tools/world/house_front.py）。塀の位置は推定で、実測ではない。
