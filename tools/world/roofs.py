@@ -19,8 +19,7 @@ from shapely.geometry import Polygon, MultiPolygon, box
 from shapely.ops import unary_union
 from shapely import affinity
 sys.path.insert(0, os.path.dirname(__file__))
-from vsimg import VS
-import glob
+from dsmread import DSM
 
 out = sys.argv[1]
 b = open(os.path.join(out, 'bldg.bin'), 'rb').read(); hl = int(np.frombuffer(b[:4], np.uint32)[0]); hdr = json.loads(b[4:4 + hl]); off = 4 + hl
@@ -29,24 +28,6 @@ P = np.frombuffer(b[off:off + nv * 6], np.int16).reshape(-1, 3).astype(np.float6
 I = np.frombuffer(b[off:off + ni * 4], np.uint32).reshape(-1, 3).astype(np.int64); off += ni * 4
 bid = np.frombuffer(b[off:off + nv * 2], np.uint16)
 info = json.load(open(os.path.join(out, 'bldg.json')))['b']; nb = len(info)
-
-
-class DSM:
-    def __init__(s, d='/tmp/world/vs_lp/dsm'):
-        s.t = {}
-        for f in glob.glob(d + '/*.npz'):
-            z = np.load(f); s.t[(int(round(float(z['x0']) / 400)), int(round(float(z['y0']) / 300)))] = (z['top'], float(z['x0']), float(z['y0']))
-        s.vs = VS()
-
-    def sample(s, xs, zs):
-        E, N = s.vs.en(xs, zs); out = np.full(len(xs), np.nan)
-        ki = np.floor(E / 400).astype(int); kj = np.ceil(N / 300).astype(int)
-        for k in set(zip(ki.tolist(), kj.tolist())):
-            if k not in s.t: continue
-            a, x0, y0 = s.t[k]; m = (ki == k[0]) & (kj == k[1])
-            i = np.clip(((E[m] - x0) / 0.25).astype(int), 0, a.shape[1] - 1); j = np.clip(((y0 - N[m]) / 0.25).astype(int), 0, a.shape[0] - 1)
-            v = a[j, i].astype(float) / 100; v[v == 0] = np.nan; out[m] = v
-        return out
 
 
 dsm = DSM()

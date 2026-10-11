@@ -21,6 +21,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { CSM } from 'three/addons/csm/CSM.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 /** 品質の段階（GPU 名で自動判定。iPhone 17 は高、Intel 内蔵は中） */
 export function detectGfx(renderer, force) {
@@ -116,14 +117,33 @@ export async function start(container, opt) {
       ao._overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isMesh && o.visible && o.material && o.material.transparent && !o.material.depthWrite) { o.visible = false; ao._visibilityCache.push(o); } }); };
       composer.addPass(ao);
     }
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), gfx.post === 'msaa' ? 0.3 : 0.22, 0.35, 8.0));   // 強さ・広がり・しきい値（線形の明るさ 8 以上 = 灯火だけが光る。空は 8 未満）
+    if (opt.bloom !== '0') composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), gfx.post === 'msaa' ? 0.3 : 0.22, 0.35, opt.bth ? +opt.bth : 10.5));   // 強さ・広がり・しきい値（線形の明るさ 10.5 以上 = 灯火だけが光る。昼の地平線の空は最大 8.6 で、8 だと空の光が路面までにじんで白くかすんでいた）
     composer.addPass(new OutputPass());
     if (gfx.post === 'smaa') composer.addPass(new SMAAPass());
+    // 鮮明化（AMD の CAS と同じ考え方: 近くの明暗の差が小さい所ほど強く、輪郭の際は弱く。白い縁が出ない）。
+    // 中画質は 0.85 倍の解像度で描いて引き伸ばすので、路面の線・窓・看板の輪郭がにじむのを戻す
+    if (gfx.post === 'smaa' || opt.sharpen) {
+      const cas = new ShaderPass({
+        uniforms: { tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2(1 / size.x, 1 / size.y) }, uAmt: { value: opt.sharpen !== undefined ? +opt.sharpen : 0.55 } },
+        vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uTexel; uniform float uAmt; varying vec2 vUv;
+          void main() {
+            vec3 a = texture2D(tDiffuse, vUv + vec2(0.0, -uTexel.y)).rgb, b = texture2D(tDiffuse, vUv + vec2(-uTexel.x, 0.0)).rgb, c = texture2D(tDiffuse, vUv).rgb,
+                 d = texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb, e = texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb;
+            vec3 mn = min(min(min(a, b), min(d, e)), c), mx = max(max(max(a, b), max(d, e)), c);
+            vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, 1e-4), 0.0, 1.0));
+            vec3 w = -amp / mix(8.0, 5.0, uAmt);
+            vec3 col = (c + (a + b + d + e) * w) / (1.0 + 4.0 * w);
+            gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+          }`
+      });
+      composer.addPass(cas); composer.cas = cas;
+    }
   }
   renderer.info.autoReset = false;   // 後処理の各段の描画をまとめて数える（性能表示と予算のテスト用）
   let csm = null;   // カスケード影（高画質。下で作る）
-  function present() { if (world.update) world.update(cam.position.x, cam.position.z, cam); renderer.info.reset(); if (csm) { cam.updateMatrixWorld(); csm.update(); } if (composer) composer.render(); else renderer.render(scene, cam); }
-  function resize() { const w = container.clientWidth || 960, h = container.clientHeight || 600; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); } }
+  function present() { if (world.update) world.update(cam.position.x, cam.position.z, cam); if (world.marksRes) renderer.getDrawingBufferSize(world.marksRes.value); /* 路面の線の最小幅（画素）の計算に使う */ renderer.info.reset(); if (csm) { cam.updateMatrixWorld(); csm.update(); } if (composer) composer.render(); else renderer.render(scene, cam); }
+  function resize() { const w = container.clientWidth || 960, h = container.clientHeight || 600; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); if (composer.cas) { const d = renderer.getDrawingBufferSize(new THREE.Vector2()); composer.cas.uniforms.uTexel.value.set(1 / d.x, 1 / d.y); } } }
   resize(); setupPost(); resize(); window.addEventListener('resize', resize);
   const hud = document.createElement('div'); hud.className = 'w3-hud'; container.appendChild(hud);
   hud.textContent = '読み込み中…（浜松駅周辺の地形・道路・建物）';
@@ -614,6 +634,7 @@ export async function start(container, opt) {
     if (world.props && world.props.update) world.props.update(car.st.x, car.st.z);
     if (world.trees && world.trees.updateNear) world.trees.updateNear(car.st.x, car.st.z);
     if (world.roofItems) world.roofItems.updateNear(car.st.x, car.st.z);
+    if (world.overColsMesh) world.overColsMesh.updateNear(car.st.x, car.st.z);
     if (hitT > 0) hitT -= dt;
     const st = car.st;
     carM.root.position.set(st.x, st.y, st.z);
@@ -634,6 +655,7 @@ export async function start(container, opt) {
   requestAnimationFrame(frame);
   const api = {
     renderer, scene, cam, car, world, gfx, W, collide, traffic,
+    present, get composer() { return composer; },   // 撮影の道具が後処理（SMAA・鮮明化・ブルーム）を通して描くため
     stop() {
       running = false; if (engineAudio) engineAudio.stop(); window.removeEventListener('keydown', startAudio); window.removeEventListener('pointerdown', startAudio);
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', resize); window.removeEventListener('blur', onBlur);
@@ -653,7 +675,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); if (world.trees && world.trees.updateNear) world.trees.updateNear(st.x, st.z); if (world.roofItems) world.roofItems.updateNear(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); if (world.trees && world.trees.updateNear) world.trees.updateNear(st.x, st.z); if (world.roofItems) world.roofItems.updateNear(st.x, st.z); if (world.overColsMesh) world.overColsMesh.updateNear(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     /** 検証用: 真上から見た正射投影（中心 x, z、半分の幅 half m、画素 px）。航空写真と並べて比べる */
     shotTop(x, z, half, px) {
       const oc = new THREE.OrthographicCamera(-half, half, half, -half, 1, 2000), y = W.terrain.at(x, z);

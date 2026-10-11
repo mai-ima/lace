@@ -336,12 +336,13 @@ export function buildWorld(scene, W, gfx) {
   const triEach = (gs, fn) => gs.forEach(g => { const P = g.attributes.position.array, I = g.index.array; for (let t = 0; t < I.length; t += 3) fn(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); });
   out.roadTris = fn => triEach(roadGeos.concat([out.areaGeo, out.walkAreaGeo].filter(Boolean)), fn);   // 走れる所（車道と歩道）
   out.carTris = fn => triEach(roadGeos.concat([out.areaGeo].filter(Boolean)), fn);   // 車道だけ
-  addChunked(worldUV(mergeGeometries(roadGeos), 6), roadMat, 1200);
+  const RCH = gfx.hi ? 1200 : 600;   // 道路の面のまとまりの大きさ。中画質は小さく分けて、画面の外のまとまりを描かない（三角形を減らす）
+  addChunked(worldUV(mergeGeometries(roadGeos), 6), roadMat, RCH);
   if (out.areaGeo) {
     // 車道（PLATEAU の道路の範囲から歩道を除いた部分）: 車道の帯と同じアスファルト。帯より奥に描く
     const am = roadMat.clone(); am.onBeforeCompile = roadMat.onBeforeCompile; am.customProgramCacheKey = () => 'roadArea';
     am.polygonOffset = true; am.polygonOffsetFactor = 2; am.polygonOffsetUnits = 2;
-    addChunked(worldUV(out.areaGeo.clone(), 6), am, 1200);
+    addChunked(worldUV(out.areaGeo.clone(), 6), am, RCH);
   }
   if (out.walkAreaGeo) {
     // 歩道・広場: インターロッキングブロック舗装の写真素材（Poly Haven「Concrete Pavers 02」CC0。2m 四方、色を日本の歩道の灰色に寄せた）。
@@ -356,7 +357,7 @@ export function buildWorld(scene, W, gfx) {
           diffuseColor.rgb *= 0.9 + 0.18 * big;`);
     };
     worldUV(out.walkAreaGeo, 2.0);
-    addChunked(out.walkAreaGeo, wm, 1200);
+    addChunked(out.walkAreaGeo, wm, RCH);
     // 縁石: 歩道の縁で車道に接する所に、高さ 15cm の側面
     const C = W.roadArea.curb || [], q = W.roadArea.q, cp = [], ci = [];
     const wG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 0.25);   // 歩道の格子（縁石の天端をどちら側に付けるか）
@@ -560,17 +561,30 @@ export function buildWorld(scene, W, gfx) {
   const front = new Map(); if (W.houseFront && W.houseFront.f) W.houseFront.f.forEach(a => front.set(a[0], a[1] / 10));
   // 道路の上の屋根（アーケード・歩道の上の屋根。tools/world/bldg_over.py）: PLATEAU では地面からの箱なので、屋根の厚み 0.6m だけ残して浮かせ、
   // 歩道の上に柱（直径 0.3m）を立てる。下は車・人が通れる（当たり判定は柱だけ）
+  // 道路の上の、航空レーザで何も無い建物（取り壊された・古いデータ。tools/world/bldg_over.py の hide）は描かない
+  if (W.bldgOver && W.bldgOver.hide && W.bldgOver.hide.length) {
+    const hs = new Set(W.bldgOver.hide), keep = [];
+    for (let t = 0; t < B.idx.length; t += 3) if (!hs.has(B.bid[B.idx[t]])) keep.push(B.idx[t], B.idx[t + 1], B.idx[t + 2]);
+    B.idx = new Uint32Array(keep); bg.setIndex(new THREE.BufferAttribute(B.idx, 1));
+  }
   if (W.bldgOver && W.bldgOver.over) {
     const over = new Map(W.bldgOver.over.map(o => [o.id, o]));
     for (let v = 0; v < B.bid.length; v++) { const o = over.get(B.bid[v]); if (o && B.pos[v * 3 + 1] < o.top - 0.6) B.pos[v * 3 + 1] = o.top - 0.6; }
     const cols = [], q = W.bldgOver.q;
     over.forEach(o => { yLo[o.id] = o.top - 0.6; for (let i = 0; i < o.cols.length; i += 2) cols.push([o.cols[i] * q, o.cols[i + 1] * q, o.top - 0.6]); });
     if (cols.length) {
-      const cg = new THREE.CylinderGeometry(0.15, 0.15, 1, 10, 1, true); cg.translate(0, 0.5, 0);
-      const cm = new THREE.InstancedMesh(cg, new THREE.MeshStandardMaterial({ color: 0x9a9da2, roughness: 0.5, metalness: 0.55 }), cols.length);
-      const M4 = new THREE.Matrix4();
-      cols.forEach(([x, z, top], i) => { const g = terr.atRoad(x, z) + 0.15; M4.makeScale(1, Math.max(0.5, top - g), 1).setPosition(x, g, z); cm.setMatrixAt(i, M4); });
-      cm.castShadow = true; cm.receiveShadow = true; cm.computeBoundingSphere(); out.group.add(cm);
+      const cg = new THREE.CylinderGeometry(0.15, 0.15, 1, gfx.hi ? 10 : 8, 1, true); cg.translate(0, 0.5, 0);
+      // 柱は全域で 1 千本あるので、近い順に並べ直して描く（中画質は 350m 以内、高画質は 900m 以内。遠くの柱は 1 画素に満たない）
+      const RC = gfx.ultra ? 1e9 : gfx.hi ? 900 : 350, cm = new THREE.InstancedMesh(cg, new THREE.MeshStandardMaterial({ color: 0x9a9da2, roughness: 0.5, metalness: 0.55 }), cols.length);
+      const M4 = new THREE.Matrix4(), CM = cols.map(([x, z, top]) => { const g = terr.atRoad(x, z) + 0.15; return [x, z, new THREE.Matrix4().makeScale(1, Math.max(0.5, top - g), 1).setPosition(x, g, z)]; });
+      let lcx = 1e9, lcz = 1e9;
+      cm.updateNear = (cx, cz) => {
+        if (Math.hypot(cx - lcx, cz - lcz) < 40) return; lcx = cx; lcz = cz; let n = 0;
+        for (const [x, z, m] of CM) if ((x - cx) ** 2 + (z - cz) ** 2 < RC * RC) cm.setMatrixAt(n++, m);
+        cm.count = n; cm.instanceMatrix.needsUpdate = true;
+      };
+      CM.forEach(([, , m], i) => cm.setMatrixAt(i, m));
+      cm.castShadow = true; cm.receiveShadow = true; cm.frustumCulled = false; out.group.add(cm); out.overColsMesh = cm;
       out.overCols = cols;
     }
   }
@@ -1217,7 +1231,38 @@ export function buildWorld(scene, W, gfx) {
   {
     const mk = markings(net, (x, z) => out.onRoadPt(x, z));
     const white = [0.92, 0.92, 0.9], yellow = [0.95, 0.66, 0.1];
-    const hAt = (x, z) => { const by = out.bridgeY(x, z); return by !== null ? by + 0.045 : terr.atRoad(x, z) + 0.075; };
+    const hAt0 = (x, z) => { const by = out.bridgeY(x, z); return by !== null ? by + 0.045 : terr.atRoad(x, z) + 0.075; };
+    // 実際に描いている路面（車道の帯と、道路の範囲の車道）の三角形を 4m の格子に入れ、線の頂点の真下の路面の高さを求める。
+    // 帯は道の両端の高さを直線で結び、道路の範囲は大きな三角形なので、地形の高さ（atRoad）とは数 cm〜十数 cm 違う所があり、線が沈んだり浮いたりしていた。
+    // 重なる面（帯と道路の範囲）は高い方、橋の下の道で橋を拾わないよう元の高さに近い面を選び、2cm 浮かせる
+    const surfY = (() => {
+      const C = 4, G = new Map(), T = [];
+      roadGeos.concat(out.areaGeo ? [out.areaGeo] : []).forEach(g => {
+        const P = g.attributes.position.array, I = g.index ? g.index.array : null, n = I ? I.length : P.length / 3;
+        for (let t = 0; t < n; t += 3) {
+          const a = (I ? I[t] : t) * 3, b = (I ? I[t + 1] : t + 1) * 3, c = (I ? I[t + 2] : t + 2) * 3, k = T.length;
+          T.push(P[a], P[a + 1], P[a + 2], P[b], P[b + 1], P[b + 2], P[c], P[c + 1], P[c + 2]);
+          const i0 = Math.floor(Math.min(P[a], P[b], P[c]) / C), i1 = Math.floor(Math.max(P[a], P[b], P[c]) / C), j0 = Math.floor(Math.min(P[a + 2], P[b + 2], P[c + 2]) / C), j1 = Math.floor(Math.max(P[a + 2], P[b + 2], P[c + 2]) / C);
+          if ((i1 - i0 + 1) * (j1 - j0 + 1) > 400) continue;
+          for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const key = i * 100003 + j; let L = G.get(key); if (!L) G.set(key, L = []); L.push(k); }
+        }
+      });
+      return (x, z, ref) => {
+        const L = G.get(Math.floor(x / C) * 100003 + Math.floor(z / C)); if (!L) return null;
+        let best = null, bd = 1e9; const ys = [];
+        for (const k of L) {
+          const ax = T[k], ay = T[k + 1], az = T[k + 2], bx = T[k + 3], by = T[k + 4], bz = T[k + 5], cx = T[k + 6], cy = T[k + 7], cz = T[k + 8];
+          const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz); if (Math.abs(d) < 1e-9) continue;
+          const u = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d, v = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d, w = 1 - u - v;
+          if (u < -1e-4 || v < -1e-4 || w < -1e-4) continue;
+          const y = u * ay + v * by + w * cy; ys.push(y); if (Math.abs(y - ref) < bd) { bd = Math.abs(y - ref); best = y; }
+        }
+        if (best === null || bd > 1.0) return null;
+        for (const y of ys) if (y > best && y - best < 0.3) best = y;
+        return best;
+      };
+    })();
+    const hAt = (x, z) => { const h0 = hAt0(x, z), y = surfY(x, z, h0 - 0.06); return y === null ? h0 : y + 0.02; };
     // 交差点の中（腕の半幅の 9 割の円の中）には、外側線・中央線・車線境界線を引かない（線の重なりを防ぐ）
     const JG = new Map(), jk = (x, z) => Math.floor(x / 40) + ',' + Math.floor(z / 40);
     (net.groups || []).forEach(Cg => {   // まとめた交差点（上下線の分かれた大通りどうしなど）: 中心から最も遠い点 + 腕の半幅
@@ -1268,7 +1313,26 @@ export function buildWorld(scene, W, gfx) {
         cur = chunkOf(cx, cz); const b = put([a0, a1, b1, b0], col); cur.I.push(b, b + 2, b + 1, b, b + 3, b + 2);
       }
     });
-    const markMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide });
+    const markMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide, transparent: true, depthWrite: false });
+    // 遠くの細い線（幅 15cm の区画線は 60m 先で 1 画素）は、画面で 1.4 画素より細くなる所だけ横に広げて、その分薄くする。
+    // 1 画素に満たない線が点線のように欠けたり、ちらついたりせず、遠くへ向かってなめらかに消える（aDir・aHW は marks.js）
+    const MRES = out.marksRes = { value: new THREE.Vector2(1280, 720) };
+    markMat.onBeforeCompile = sh => {
+      sh.uniforms.uRes = MRES;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aDir; attribute float aHW; uniform vec2 uRes; varying float vMA;')
+        .replace('#include <project_vertex>', `#include <project_vertex>
+          vMA = 1.0;
+          if (aHW > 0.0) {
+            vec4 wp = modelMatrix * vec4(transformed, 1.0);
+            vec4 c0 = projectionMatrix * viewMatrix * wp, c1 = projectionMatrix * viewMatrix * (wp + vec4(aDir.x, 0.0, aDir.y, 0.0) * 0.05);
+            if (c0.w > 0.05 && c1.w > 0.05) {
+              float pxm = length((c1.xy / c1.w - c0.xy / c0.w) * uRes * 0.5) / (0.05 * max(length(aDir), 1e-3)), hpx = aHW * pxm, tgt = 0.7;
+              if (hpx < tgt) { wp.xz += aDir * min((tgt - hpx) / max(pxm, 1e-4), 1.5); vMA = hpx / tgt; gl_Position = projectionMatrix * viewMatrix * wp; }
+            }
+          }`);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vMA;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vMA;');
+    };
     let nQuads = 0;
     CH.forEach(c => {
       if (!c.I.length) return;

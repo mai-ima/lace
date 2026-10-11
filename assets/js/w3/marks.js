@@ -17,12 +17,12 @@ export async function loadPhotoMarks(url) {
 }
 
 /**
- * data: loadPhotoMarks の結果、o: { group, hAt(x, z), mat（頂点色を使う材質）, white, yellow（色 [r, g, b]）, R（描く距離 m）, keep(x, z)（置いてよい所か） }
+ * data: loadPhotoMarks の結果、o: { group, hAt(x, z)（路面より少し上の高さ）, mat（頂点色を使う材質）, white, yellow（色 [r, g, b]）, R（描く距離 m）, keep(x, z)（置いてよい所か） }
  * 返り値: { update(cx, cz), tris（三角形の数）, chunks }
  */
 export function buildPhotoMarks(data, o) {
   const { hdr, body } = data, T = hdr.tile, CS = 200, CH = new Map();
-  const chunkOf = (x, z) => { const k = Math.floor(x / CS) + ',' + Math.floor(z / CS); let c = CH.get(k); if (!c) CH.set(k, c = { P: [], C: [], I: [], x0: Math.floor(x / CS) * CS, z0: Math.floor(z / CS) * CS }); return c; };
+  const chunkOf = (x, z) => { const k = Math.floor(x / CS) + ',' + Math.floor(z / CS); let c = CH.get(k); if (!c) CH.set(k, c = { P: [], C: [], I: [], D: [], HW: [], x0: Math.floor(x / CS) * CS, z0: Math.floor(z / CS) * CS }); return c; };
   const V2 = THREE.Vector2;
   // 長い辺は 3m ごとに点を足す（路面の高さの変化に沿わせる）
   const dens = ring => { const out = []; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], n = Math.max(1, Math.ceil(a.distanceTo(b) / 3)); for (let k = 0; k < n; k++) out.push(new V2(a.x + (b.x - a.x) * k / n, a.y + (b.y - a.y) * k / n)); } return out; };
@@ -44,6 +44,7 @@ export function buildPhotoMarks(data, o) {
         Q.forEach((q, k) => {   // 折れ目では前後の向きの平均で横に広げる
           const a = Q[Math.max(0, k - 1)], b = Q[Math.min(Q.length - 1, k + 1)], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l * w / 2, nz = dx / l * w / 2;
           c.P.push(q[0] + nx, o.hAt(q[0] + nx, q[1] + nz) + dy, q[1] + nz, q[0] - nx, o.hAt(q[0] - nx, q[1] - nz) + dy, q[1] - nz); c.C.push(...col, ...col);
+          const ux = -dz / l, uz = dx / l; c.D.push(ux, uz, -ux, -uz); c.HW.push(w / 2, w / 2);   // 遠くで細くなりすぎないよう、横に広げる向きと半分の幅
         });
         for (let k = 0; k + 1 < Q.length; k++) { const a = b0 + k * 2; c.I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
         if (ci < 2) for (let k = 1; k < P.length; k++) segs.push([P[k - 1][0], P[k - 1][1], P[k][0], P[k][1]]);   // 車線の位置を測るための縦の線
@@ -65,6 +66,18 @@ export function buildPhotoMarks(data, o) {
         let tris; try { tris = THREE.ShapeUtils.triangulateShape(outer, holes); } catch (e) { continue; }
         const all = outer.concat(...holes), c = chunkOf(mx, mz), b0 = c.P.length / 3;
         all.forEach(v => { c.P.push(v.x, o.hAt(v.x, v.y) + dy, v.y); c.C.push(...col); });
+        // 頂点ごとの外向き（形の外へ。穴は穴の中へ）の向き（角は二等分の向き）と、形の細い向きの半分の幅（主軸の横の広がり。0.12m まで）
+        let hw = 0.12; { let sxx = 0, szz = 0, sxz = 0; outer.forEach(v => { const a = v.x - mx, b = v.y - mz; sxx += a * a; szz += b * b; sxz += a * b; });
+          const th = 0.5 * Math.atan2(2 * sxz, sxx - szz), vx = -Math.sin(th), vz = Math.cos(th); let w0 = 1e9, w1 = -1e9; outer.forEach(v => { const w = (v.x - mx) * vx + (v.y - mz) * vz; w0 = Math.min(w0, w); w1 = Math.max(w1, w); }); hw = Math.min(0.12, (w1 - w0) / 2); }
+        [outer].concat(holes).forEach((r, ri) => {
+          let a2 = 0; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; a2 += a.x * b.y - b.x * a.y; }
+          const sg = (a2 >= 0 ? 1 : -1) * (ri ? -1 : 1), n = r.length;
+          const en = i => { const a = r[i], b = r[(i + 1) % n], l = Math.hypot(b.x - a.x, b.y - a.y) || 1; return [sg * (b.y - a.y) / l, -sg * (b.x - a.x) / l]; };
+          for (let i = 0; i < n; i++) {
+            const p0 = en((i - 1 + n) % n), p1 = en(i); let mx2 = p0[0] + p1[0], mz2 = p0[1] + p1[1]; const ml = Math.hypot(mx2, mz2) || 1; mx2 /= ml; mz2 /= ml;
+            const k = Math.min(2, 1 / Math.max(0.5, mx2 * p1[0] + mz2 * p1[1])); c.D.push(mx2 * k, mz2 * k); c.HW.push(hw);
+          }
+        });
         tris.forEach(t => c.I.push(b0 + t[0], b0 + t[2], b0 + t[1]));   // 上から見て反時計回り（法線が上）
         nItems++;
       }
@@ -75,6 +88,7 @@ export function buildPhotoMarks(data, o) {
     if (!c.I.length) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(c.P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(c.C, 3));
+    g.setAttribute('aDir', new THREE.Float32BufferAttribute(c.D, 2)); g.setAttribute('aHW', new THREE.Float32BufferAttribute(c.HW, 1));
     const nrm = new Float32Array(c.P.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
     g.setIndex(c.I); g.computeBoundingSphere();
     const m = new THREE.Mesh(g, o.mat); m.receiveShadow = true; o.group.add(m);
