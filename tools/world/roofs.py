@@ -146,6 +146,9 @@ from scipy import ndimage
 import cv2
 eq = []
 flat_ids = set(r[0] for r in rows if r[6] == 0)
+pitched = {}
+for r in rows:
+    if r[6] > 0: pitched.setdefault(r[0], []).append(r)
 cand2 = [k for k in range(nb) if fr[k] < 0.5 and yHi[k] - yLo[k] >= 5.5 and (k in flat_ids or yHi[k] - yLo[k] > 16 or k not in set(r[0] for r in rows))]
 print('屋上の候補', len(cand2), flush=True)
 for ci, k in enumerate(cand2):
@@ -182,10 +185,16 @@ for ci, k in enumerate(cand2):
         if area < 0.5 * max(rw * rh * 0.0625, 1e-6): continue   # 細長い・まばらな塊（手すり・木の縁）
         hh = float(np.percentile(dz[ys, xs], 80))
         px = c0[0] + (S0 + rx * 0.25) * ca - (T0 + ry * 0.25) * sa; pz = c0[1] + (S0 + rx * 0.25) * sa + (T0 + ry * 0.25) * ca
-        # 写真で緑なら木
-        rgb = dsm.vs.sample(np.array([px]), np.array([pz]))[0]
-        if np.all(np.isfinite(rgb)) and (2 * rgb[1] - rgb[0] - rgb[2]) / max(rgb.sum(), 1) > 0.06: continue
         aw = ang + math.radians(ra); L, Wd = max(rw, 1) * 0.25, max(rh, 1) * 0.25
+        # 誤検出を除く（Q1e の審査）: 大きすぎる塊（60m2 超。勾配屋根・体育館の屋根）、高さ 4m 超で厚さ 0.75m 以下の板、
+        # 表面の高さのばらつきが大きい塊（木）、塊の中の 9 点のうち 3 点以上が写真で緑（木）、勾配屋根の長方形の上の塊
+        if area > 60 or (hh > 4 and min(L, Wd) <= 0.75): continue
+        if np.std(dz[ys, xs]) > max(0.6, 0.35 * hh): continue
+        qi = np.linspace(0, len(xs) - 1, 9).astype(int); gx = c0[0] + (S0 + xs[qi] * 0.25) * ca - (T0 + ys[qi] * 0.25) * sa; gz = c0[1] + (S0 + xs[qi] * 0.25) * sa + (T0 + ys[qi] * 0.25) * ca
+        rgb = dsm.vs.sample(gx, gz); okc = np.all(np.isfinite(rgb), 1)
+        if okc.any() and np.sum(((2 * rgb[:, 1] - rgb[:, 0] - rgb[:, 2]) / np.maximum(rgb.sum(1), 1) > 0.05) & okc) >= 3: continue
+        if any(abs((px - r[1] / 100) * math.cos(math.radians(r[3] / 10)) + (pz - r[2] / 100) * math.sin(math.radians(r[3] / 10))) < r[4] / 200 + 0.5 and
+               abs(-(px - r[1] / 100) * math.sin(math.radians(r[3] / 10)) + (pz - r[2] / 100) * math.cos(math.radians(r[3] / 10))) < r[5] / 200 + 0.5 for r in pitched.get(k, [])): continue
         eq.append([int(k), round(px * 100), round(pz * 100), round(math.degrees(aw) * 10) % 3600, round(L * 100), round(Wd * 100), round(hh * 100), round(roof * 100)])
     if ci % 1000 == 0: print(ci, len(eq), flush=True)
 print('屋上の設備', len(eq))

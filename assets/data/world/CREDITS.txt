@@ -54,3 +54,4 @@ assets/data/world/ の出典（加工して作成）
 - 屋根の形と屋上の設備（center/roofs.json）: 静岡県「VIRTUAL SHIZUOKA」の航空レーザ測量の点群（オリジナルデータ、CC BY 4.0）から 0.25m 格子の表面の高さを作り、
   建物ごとに陸屋根・切妻・寄棟・片流れを当てはめたもの（tools/world/lp_dsm.py・roofs.py）。点群そのものは含まない。
 - 住宅の表の向きと塀（center/house_front.json）: PLATEAU の建物と道路の範囲から求めた（tools/world/house_front.py）。塀の位置は推定で、実測ではない。
+- 太陽光パネルの位置（center/solar.json）: 静岡県 VIRTUAL SHIZUOKA のオルソ画像（CC BY 4.0）から読み取って作成（tools/world/solar.py）。

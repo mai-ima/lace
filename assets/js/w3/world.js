@@ -432,7 +432,7 @@ export function buildWorld(scene, W, gfx) {
   out.group.add(LM.group); out.landmarks = LM.group;
   // 屋根（tools/world/roofs.py: 航空レーザの表面の高さから建物ごとに求めた切妻・寄棟・片流れ）。PLATEAU の住宅の 8 割は平らな箱なので、
   // 箱の上端の頂点を屋根の面の高さ（壁の線では軒の高さ）へ下げ、屋根の面・軒裏・妻の三角を足す。軒の出 0.5m、けらばの出 0.3m
-  const genV = new Set(), fascia = new Set();   // 足した頂点のうち妻の三角・鼻隠し（窓・笠木を描かない）
+  const genV = new Set(), fascia = new Set(), panelV = new Set();   // 足した頂点のうち妻の三角・鼻隠し（窓・笠木を描かない）・太陽光パネル
   if (W.roofs && W.roofs.r) {
     const q = W.roofs.q, byB = new Map();
     W.roofs.r.forEach(a => {
@@ -465,7 +465,7 @@ export function buildWorld(scene, W, gfx) {
         if (ex < dBest) { dBest = ex; yN = hgt(R, Math.max(-R.hl, Math.min(R.hl, s)), Math.max(-R.hw, Math.min(R.hw, t))); }
       }
       if (y < -1e8) y = yN;
-      P0[v * 3 + 1] = Math.max(yLo[k] + 2.0, Math.min(y, yHi0[k] + 1.0)); top[v] = 1;
+      P0[v * 3 + 1] = Math.max(yLo[k] + 2.0, Math.min(y, yHi0[k] + 5.0)); top[v] = 1;   // 測った屋根の面を正とする（+1m で頭打ちにすると片流れの高い側で壁と屋根の間に隙間ができた）
     }
     // 平らだった上面の三角形を除き、屋根を足す
     const keep = []; for (let t = 0; t < B.idx.length; t += 3) { const a = B.idx[t], b = B.idx[t + 1], c = B.idx[t + 2]; if (top[a] && top[b] && top[c] && byB.has(B.bid[a])) continue; keep.push(a, b, c); }
@@ -515,10 +515,32 @@ export function buildWorld(scene, W, gfx) {
           eLow = Math.min(hgt(R, -S, -T), hgt(R, S, T), hgt(R, -S, T), hgt(R, S, -T));
           em = Math.max(em, Math.max(hgt(R, -R.hl, -R.hw), hgt(R, R.hl, R.hw)));
         }
-        // 軒裏（下から見える軒の出の裏）: 低い方の軒の高さに水平の面
-        quad(k, P3(-S, -T, eLow), P3(S, -T, eLow), P3(S, T, eLow), P3(-S, T, eLow), dn);
+        // 軒裏（下から見える軒の出の裏）: 壁の外の軒の出の部分だけ、屋根の面に沿って 10cm 下に（厚み）。
+        // 以前は低い方の軒の高さに水平の面を長方形全体に張っていて、片流れ・切妻の妻側で壁の途中に棚が出ていた（Q1e の審査）。
+        // 棟・壁の線で区切った升のうち、壁の外の升だけ。角の升は内側の角から外の角への対角線で分ける（寄棟の隅棟に沿う）
+        { const sx = [-S, -R.hl, R.hl, S], tx = [-T, -R.hw, R.hw, T];
+          if (R.kind === 1 && Math.abs(R.o) < R.hw) tx.push(R.o); if (R.kind === 2) sx.push(0);
+          sx.sort((a, b) => a - b); tx.sort((a, b) => a - b);
+          for (let i = 0; i + 1 < sx.length; i++) for (let j = 0; j + 1 < tx.length; j++) {
+            const s0 = sx[i], s1 = sx[i + 1], t0 = tx[j], t1 = tx[j + 1], sc = (s0 + s1) / 2, tc = (t0 + t1) / 2;
+            if (s1 - s0 < 1e-3 || t1 - t0 < 1e-3 || (Math.abs(sc) < R.hl && Math.abs(tc) < R.hw)) continue;
+            const Q = (a, b) => P3(a, b, hgt(R, a, b) - 0.1), A = Q(s0, t0), Bq = Q(s1, t0), Cq = Q(s1, t1), D = Q(s0, t1);
+            const nd = (a, b) => Math.abs(a) / R.hl + Math.abs(b) / R.hw, dd = [nd(s0, t0), nd(s1, t0), nd(s1, t1), nd(s0, t1)], inner = dd.indexOf(Math.min(...dd));   // 建物の中心に近い角
+            if (inner === 0 || inner === 2) { tri(k, A, Bq, Cq, dn); tri(k, A, Cq, D, dn); } else { tri(k, A, Bq, D, dn); tri(k, Bq, Cq, D, dn); }
+          } }
       });
       eaveMax.set(k, em);
+    });
+    // 太陽光パネル（tools/world/solar.py: 写真から拾った紺色の格子）: 屋根の面から 6cm 浮かせた板。陸屋根は 0.3m の架台の上に
+    if (W.solar && W.solar.p) W.solar.p.forEach(a => {
+      const k = a[0]; if (k >= nb || LM.hide.has(k)) return;
+      const q = W.solar.q, cx = a[1] * q, cz = a[2] * q, an = a[3] / 10 * Math.PI / 180, L = a[4] * q / 2, Wd = a[5] * q / 2, ca = Math.cos(an), sa = Math.sin(an);
+      const rs = byB.get(k) || [], at = (x, z) => {
+        for (const R of rs) { const [s1, t1] = loc(R, x, z); if (Math.abs(s1) <= R.hl + 0.3 && Math.abs(t1) <= R.hw + 0.3) return hgt(R, s1, t1) + 0.06; }
+        return yHi0[k] + 0.3;
+      };
+      const C = [[-L, -Wd], [L, -Wd], [L, Wd], [-L, Wd]].map(([s1, t1]) => { const x = cx + s1 * ca - t1 * sa, z = cz + s1 * sa + t1 * ca; return [x, at(x, z), z]; });
+      const n0 = nv; quad(k, C[0], C[1], C[2], C[3], [0, 1, 0]); for (let v = n0; v < nv; v++) panelV.add(v);
     });
     const np = new Float32Array(P0.length + xp.length); np.set(P0); np.set(xp, P0.length);
     const nbid = new Uint16Array(B.bid.length + xb.length); nbid.set(B.bid); nbid.set(xb, B.bid.length);
@@ -558,7 +580,7 @@ export function buildWorld(scene, W, gfx) {
     bg.setAttribute('position', new THREE.BufferAttribute(B.pos, 3)); bg.setIndex(new THREE.BufferAttribute(B.idx, 1));
   }
   // 住宅の表の向き（玄関を描く面）: 建物番号 → 外向きの角度
-  const front = new Map(); if (W.houseFront && W.houseFront.f) W.houseFront.f.forEach(a => front.set(a[0], a[1] / 10));
+  const front = new Map(), doorAt = new Map(); if (W.houseFront && W.houseFront.f) W.houseFront.f.forEach(a => { front.set(a[0], a[1] / 10); if (a.length > 4) doorAt.set(a[0], [a[3] * W.houseFront.q, a[4] * W.houseFront.q]); });
   // 道路の上の屋根（アーケード・歩道の上の屋根。tools/world/bldg_over.py）: PLATEAU では地面からの箱なので、屋根の厚み 0.6m だけ残して浮かせ、
   // 歩道の上に柱（直径 0.3m）を立てる。下は車・人が通れる（当たり判定は柱だけ）
   // 道路の上の、航空レーザで何も無い建物（取り壊された・古いデータ。tools/world/bldg_over.py の hide）は描かない
@@ -610,14 +632,26 @@ export function buildWorld(scene, W, gfx) {
     const w = wl[Math.floor(hash(k, 1) * wl.length)], r = rf[Math.floor(hash(k, 2) * rf.length)], j = 0.94 + hash(k, 3) * 0.1;
     col.set([w[0] * j, w[1] * j, w[2] * j], v * 3); roof.set([r[0] * j, r[1] * j, r[2] * j], v * 3);
     const rc = W.bldgRoof && W.bldgRoof.roof[k];   // 航空写真から求めた実際の屋根の色（sRGB → 線形）
-    if (rc) roof.set(rc.map(c => Math.pow(c / 255, 2.2) * 1.15), v * 3);
-    bi.set([yLo[k], yHi[k], kind + hash(k, 4) * 0.5 + (inf.u === '店舗等併用住宅' || inf.u === '店舗等併用共同住宅' ? 0.5 : 0)], v * 3);   // 小数部 0.5 以上: 1 階が店
+    if (rc) {   // 写真の色は日光込みの明るさなので、反射率へ（画面で写真と同じ明るさになる 0.66 倍）。緑かぶり（写真の平均 129,139,130）を 6 割取る
+      const g = rc[1] - 0.6 * Math.max(0, rc[1] - (rc[0] + rc[2]) / 2);
+      roof.set([rc[0], g, rc[2]].map(c => Math.pow(c / 255, 2.2) * 0.66), v * 3);
+    }
+    bi.set([yLo[k], yHi[k], kind + hash(k, 4) * 0.5 + (inf.u === '店舗等併用住宅' || inf.u === '店舗等併用共同住宅' || inf.u === '業務施設' ? 0.5 : 0)], v * 3);   // 小数部 0.5 以上: 住宅・共同住宅は 1 階が店、店舗・事務所の種類では事務所（1 階はロビー）
     cen.set([Math.round(bcx[k] / bcn[k]), Math.round(bcz[k] / bcn[k])], v * 2);
   }
-  genV.forEach(v => { cen[v * 2] += fascia.has(v) ? 0.25 : 0.5; });   // 妻の三角（0.5）と鼻隠し（0.25）の印（シェーダーで窓・笠木を描かない。鼻隠しは屋根の色）
+  genV.forEach(v => { cen[v * 2] += fascia.has(v) ? 0.25 : 0.5; });
+  panelV.forEach(v => { cen[v * 2] += 0.12; });   // 太陽光パネルの印（0.12）   // 妻の三角（0.5）と鼻隠し（0.25）の印（シェーダーで窓・笠木を描かない。鼻隠しは屋根の色）
   fenceV.forEach((ty, v) => { cen[v * 2] += 0.7 + ty * 0.1; });   // 塀（0.7 ブロック 0.8 生垣 0.9 フェンス）
   // 表の向き: z の小数部に (角度 ÷ 360 × 64 の整数 + 1) ÷ 66 を入れる（0 は表なし）
   for (let v = 0; v < B.bid.length; v++) { const a = front.get(B.bid[v]); if (a !== undefined && !fenceV.has(v)) cen[v * 2 + 1] += (Math.round(a / 360 * 64) % 64 + 1) / 66; }
+  // 玄関の位置（house_front.json）: 表の面に沿った座標（シェーダーの u と同じ、建物の中心からの距離）にして頂点ごとに渡す。無い所は 1e4
+  const doorU = new Float32Array(B.bid.length).fill(1e4);
+  for (let v = 0; v < B.bid.length; v++) {
+    const k = B.bid[v], dp = doorAt.get(k); if (!dp || fenceV.has(v)) continue;
+    const a = (Math.round(front.get(k) / 360 * 64) % 64) / 64 * Math.PI * 2;   // シェーダーと同じく 64 方向に丸めた向き
+    doorU[v] = (dp[0] - cen[v * 2]) * -Math.sin(a) + (dp[1] - cen[v * 2 + 1]) * Math.cos(a);
+  }
+  bg.setAttribute('aDoor', new THREE.BufferAttribute(doorU, 1));
   bg.setAttribute('color', new THREE.BufferAttribute(col, 3));
   bg.setAttribute('aRoof', new THREE.BufferAttribute(roof, 3));
   bg.setAttribute('aBld', new THREE.BufferAttribute(bi, 3));
@@ -643,9 +677,9 @@ export function buildWorld(scene, W, gfx) {
   // 窓（シェーダー）: 階の高さは種類ごと（戸建て 2.9m・共同住宅 2.9m・事務所 3.6m）、1 階は店の大きなガラス、屋上の手すり部分は窓なし
   bmat.onBeforeCompile = sh => {
     sh.uniforms.tWall = { value: wallTex }; sh.uniforms.tFac = { value: facTex };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen; vRel = vec3(transformed.x - aCen.x, transformed.y - aBld.x, transformed.z - aCen.y);');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel;\nuniform highp sampler2DArray tWall; uniform highp sampler2DArray tFac; float gMask = 0.0; float gLit = 0.0; vec3 gLitC = vec3(0.0); vec3 gFn = vec3(0.0, 1.0, 0.0);\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRoof; attribute vec3 aBld; attribute vec2 aCen; attribute float aDoor; varying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel; varying float vDoor;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoof = aRoof; vBld = aBld; vCen = aCen; vDoor = aDoor; vRel = vec3(transformed.x - aCen.x, transformed.y - aBld.x, transformed.z - aCen.y);');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vRoof; varying vec3 vBld; varying vec2 vCen; varying vec3 vRel; varying float vDoor;\nuniform highp sampler2DArray tWall; uniform highp sampler2DArray tFac; float gMask = 0.0; float gLit = 0.0; vec3 gLitC = vec3(0.0); vec3 gFn = vec3(0.0, 1.0, 0.0);\nfloat h21(vec2 p) { p = mod(p, 263.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }')
       .replace('#include <color_fragment>', `#include <color_fragment>
         // 面の向きは建物の中心からの相対座標（値が小さく精度が高い）の微分で求める。ワールド座標だと数百 m の値の誤差で窓の縁がギザギザになる
         vec3 wdx = dFdx(vRel), wdy = dFdy(vRel); vec3 fn = normalize(cross(wdx, wdy)); gFn = fn;
@@ -654,7 +688,14 @@ export function buildWorld(scene, W, gfx) {
         if (fn.y < -0.3) { diffuseColor.rgb = vec3(0.52, 0.5, 0.47) * (0.9 + 0.2 * fract(vBld.z * 5.3)); }   // 軒裏
         else if (abs(fn.y) > 0.3) {
           diffuseColor.rgb = vRoof;
-          if (fn.y < 0.97) {   // 勾配のある屋根: 和瓦・スレート（コロニアル）・金属の縦葺き。屋根の色（航空写真）とつやで選ぶ
+          if (gfr > 0.08 && gfr < 0.17) {   // 太陽光パネル: 紺色のセル（156mm）とモジュール（1.0 × 1.65m）のアルミ枠、ガラスの照り返し
+            vec2 pq2 = vRel.xz; float mu2 = fract(pq2.x / 1.0), mv2 = fract(pq2.y / 1.65), cu = fract(pq2.x / 0.156), cv = fract(pq2.y / 0.156);
+            float frmP = 1.0 - step(0.015, mu2) * step(mu2, 0.985) * step(0.01, mv2) * step(mv2, 0.99), cell3 = 1.0 - step(0.04, cu) * step(cu, 0.96) * step(0.04, cv) * step(cv, 0.96);
+            vec3 pc = mix(vec3(0.015, 0.02, 0.05), vec3(0.04, 0.05, 0.09), cell3 * 0.5);
+            pc = mix(pc, vec3(0.45, 0.46, 0.47), frmP);
+            diffuseColor.rgb = mix(pc, vec3(0.03, 0.04, 0.08), smoothstep(0.2, 0.7, fwidth(pq2.x) / 0.3));
+            gMask = 0.3 * (1.0 - frmP);   // ガラスの照り返し（強すぎると空の色で水色に見える）
+          } else if (fn.y < 0.97) {   // 勾配のある屋根: 和瓦・スレート（コロニアル）・金属の縦葺き。屋根の色（航空写真）とつやで選ぶ
             vec2 dd = normalize(fn.xz); float ra = dot(vRel.xz, dd) / max(fn.y, 0.5), rb = dot(vRel.xz, vec2(-dd.y, dd.x));
             float lum = dot(vRoof, vec3(0.3, 0.59, 0.11)), sat = max(vRoof.r, max(vRoof.g, vRoof.b)) - min(vRoof.r, min(vRoof.g, vRoof.b));
             float hr = fract(fract(vBld.z) * 3.71 + 0.53), sh = 1.0, avg = 0.9;
@@ -668,13 +709,15 @@ export function buildWorld(scene, W, gfx) {
               sh = mix(1.0, 0.62, smoothstep(0.88, 1.0, c)) * (1.0 - 0.3 * step(j, 0.015)) * (0.95 + 0.08 * h21(vec2(floor(rb / 0.91 + 0.5 * mod(row, 2.0)), row)));
               avg = 0.93;
             } else {   // 金属の縦葺き: 455mm ごとのはぜ
-              float j = fract(rb / 0.455);
-              sh = 1.0 + 0.22 * (1.0 - smoothstep(0.0, 0.03, abs(j - 0.02))) - 0.14 * smoothstep(0.94, 1.0, j);
+              float j = fract(rb / 0.455);   // はぜ（高さ 25mm の立ち上がり）: 明るい稜線と、片側の陰（遠くでも見える幅に）
+              sh = 1.0 + 0.3 * (1.0 - smoothstep(0.0, 0.07, abs(j - 0.04))) - 0.22 * smoothstep(0.86, 1.0, j);
               avg = 1.0;
             }
             float fr2 = smoothstep(0.25, 0.8, fwidth(ra) / 0.2);
             diffuseColor.rgb *= mix(sh, avg, fr2);
-            diffuseColor.rgb *= 0.92 + 0.12 * h21(floor(vRel.xz / 1.7) + 3.0);   // 汚れ・色あせのむら
+            { vec2 pq = vRel.xz / 2.3, iq = floor(pq), fq = fract(pq); fq = fq * fq * (3.0 - 2.0 * fq);   // 汚れ・色あせのむら（なめらかに。四角い市松に見えないよう）
+              float nq = mix(mix(h21(iq), h21(iq + vec2(1.0, 0.0)), fq.x), mix(h21(iq + vec2(0.0, 1.0)), h21(iq + vec2(1.0, 1.0)), fq.x), fq.y);
+              diffuseColor.rgb *= 0.92 + 0.12 * nq; }
           }
         }
         else {
@@ -708,6 +751,8 @@ export function buildWorld(scene, W, gfx) {
           else if (kind < 3.5) { wy0 = 0.62; wy1 = 0.8; has = step(0.5, cell); slide = 0.0; }
           else { wy0 = 0.28; wy1 = 0.84; wu0 = 0.06; wu1 = 0.94; }
           has *= step(rel, top - 0.9) * step(0.0, rel) * (1.0 - gen);
+          { float fc0 = floor(fract(vCen.y + 0.0005) * 66.0 + 0.5);   // 玄関の扉の所（左右 1.3m）の 1 階には窓を描かない（扉と窓が重なっていた）
+            if (kind < 0.5 && fc0 > 0.5 && vDoor < 1000.0 && rel < 2.9) { float fa0 = (fc0 - 1.0) / 64.0 * 6.2832; if (dot(normalize(fn.xz), vec2(cos(fa0), sin(fa0))) > 0.8 && abs(u - vDoor) < 1.3) has = 0.0; } }
           // 共同住宅の南面はベランダ: 床版の小口・手すり壁・奥まった掃き出し窓（上の階の床の陰で暗い）
           float balc = (kind > 0.5 && kind < 1.5 && fn.z > 0.55 && rel > 2.0) ? 1.0 : 0.0;
           if (balc > 0.5) { fu = fract(u / 6.0); wu0 = 0.08; wu1 = 0.92; wy0 = 0.42; wy1 = 0.94; slide = 1.0; has = step(rel, top - 0.9); }
@@ -742,7 +787,7 @@ export function buildWorld(scene, W, gfx) {
             float sh = step(0.15, fract(u / 5.0)) * step(fract(u / 5.0), 0.85);   // 搬入口のシャッター
             detail = mix(detail, vec3(0.62, 0.63, 0.63) * (0.92 + 0.08 * step(0.5, fract(rel / 0.12))), sh * step(0.02, rel) * step(rel, 3.8));
           }
-          float shopF = step(0.5, fract(vBld.z));   // 店舗等併用の住宅・共同住宅（1 階が店）
+          float shopF = step(0.5, fract(vBld.z)), office = (kind > 1.5 && kind < 2.5) ? shopF : 0.0;   // 店舗等併用の住宅・共同住宅（1 階が店）／事務所（1 階はロビー）
           float shop = (((kind > 1.5 && kind < 2.5) || shopF > 0.5) && rel < 3.7 && top > 5.5 && gen < 0.5) ? 1.0 : 0.0;
           vec3 signC = vec3(0.0); float signM = 0.0, unitOn = 0.0;
           if (shop > 0.5) {
@@ -762,6 +807,7 @@ export function buildWorld(scene, W, gfx) {
             vec3 txC = dot(signC, vec3(0.3, 0.59, 0.11)) > 0.45 ? vec3(0.08, 0.08, 0.1) : vec3(0.95, 0.95, 0.93);
             vec3 sg = mix(signC, txC, ch);
             float typ = uh < 0.2 ? 0.0 : uh < 0.32 ? 1.0 : 2.0;   // 0 シャッター 1 入口の壁 2 ガラス
+            if (office > 0.5) { typ = uh < 0.45 ? 2.0 : 1.0; inSign *= 0.0; }   // 事務所: ロビーのガラスと入口の壁だけ。看板の帯・シャッター・日よけは無い
             float lower = step(0.0, rel) * step(rel, hS0 - 0.1) * step(0.06, su) * step(su, 0.94), sg2 = 0.0;
             vec3 d = wallC;
             if (typ < 0.5) {   // 閉じたシャッター（横の波板）と上のシャッターの箱
@@ -782,7 +828,7 @@ export function buildWorld(scene, W, gfx) {
             inS = mix(inS, vec3(0.8, 0.8, 0.76), smoothstep(2.3, 2.6, rel));
             d = mix(d, inS, sg2);
             // 日よけ（テント）: ガラスの店先の 3 割。看板の下に縞の帯と、下の陰
-            float awn = step(uh3, 0.3) * step(1.5, typ) * step(0.06, su) * step(su, 0.94);
+            float awn = step(uh3, 0.3) * step(1.5, typ) * step(0.06, su) * step(su, 0.94) * (1.0 - office);
             d = mix(d, mix(signC, vec3(0.92, 0.92, 0.9), step(0.5, fract(u / 0.5)) * step(0.5, uh2)), awn * step(hS0 - 0.4, rel) * step(rel, hS0));
             d = mix(d, d * 0.62, awn * step(hS0 - 1.0, rel) * step(rel, hS0 - 0.4));
             d = mix(d, sg, inSign);
@@ -835,13 +881,15 @@ export function buildWorld(scene, W, gfx) {
           if (kind < 0.5 && fcode > 0.5 && gen < 0.5 && shop < 0.5) {
             float fa = (fcode - 1.0) / 64.0 * 6.2832; vec2 fdir = vec2(cos(fa), sin(fa));
             if (dot(normalize(fn.xz), fdir) > 0.8) {
-              float du = (fract(hb * 3.3) - 0.5) * 3.0, dx = abs(u - du);
+              float du = vDoor < 1000.0 ? vDoor : (fract(hb * 3.3) - 0.5) * 3.0, dx = abs(u - du);
               float door = step(dx, 0.45) * step(0.05, rel) * step(rel, 2.15), side = step(0.45, dx) * step(dx, 0.75) * step(0.3, rel) * step(rel, 2.0);
               vec3 dc = fract(hb * 17.0) < 0.5 ? vec3(0.32, 0.22, 0.14) : vec3(0.2, 0.2, 0.21);
               diffuseColor.rgb = mix(diffuseColor.rgb, dc * (0.85 + 0.15 * step(0.5, fract(rel / 0.3))), door);
               diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.4, 0.42, 0.42), side);
               diffuseColor.rgb *= 1.0 - 0.35 * step(dx, 1.0) * step(2.15, rel) * step(rel, 2.6);   // 玄関の庇の陰
               gMask = max(gMask * (1.0 - door), side * 0.6); gLit = mix(gLit, 0.0, door + side);
+              float lamp = step(abs(dx - 0.68), 0.07) * step(abs(rel - 2.3), 0.09);   // 玄関灯（夜は点く）
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.85, 0.82, 0.74), lamp); gLit = max(gLit, lamp * 1.4); gLitC = mix(gLitC, vec3(1.0, 0.78, 0.5), lamp);
             }
           }
         }
@@ -852,8 +900,8 @@ export function buildWorld(scene, W, gfx) {
           float wu = dot(vWP.xz, wd2), wy = vWP.y;
           if (ft < 0.5) {
             float row = floor(wy / 0.2), j = fract(wy / 0.2), i = fract(wu / 0.4 + 0.5 * mod(row, 2.0));
-            diffuseColor.rgb = vec3(0.6, 0.6, 0.57) * (1.0 - 0.25 * step(0.92, j)) * (1.0 - 0.25 * step(0.97, i)) * (0.9 + 0.12 * h21(vec2(floor(wu / 0.4 + 0.5 * mod(row, 2.0)), row)));
-            if (fn.y > 0.5) diffuseColor.rgb = vec3(0.55, 0.55, 0.52);
+            diffuseColor.rgb = vec3(0.42, 0.42, 0.4) * (1.0 - 0.25 * step(0.92, j)) * (1.0 - 0.25 * step(0.97, i)) * (0.9 + 0.12 * h21(vec2(floor(wu / 0.4 + 0.5 * mod(row, 2.0)), row)));   // ブロックは反射率 0.35〜0.4 の灰色
+            if (fn.y > 0.5) diffuseColor.rgb = vec3(0.3, 0.3, 0.29);   // 笠木
           } else if (ft < 1.5) {
             float nz2 = h21(floor(vec2(wu, wy) / 0.09)) * 0.6 + h21(floor(vec2(wu, wy) / 0.23) + 7.0) * 0.4;
             diffuseColor.rgb = vec3(0.1, 0.19, 0.07) * (0.6 + 0.8 * nz2);
@@ -887,7 +935,7 @@ export function buildWorld(scene, W, gfx) {
   }
   out.buildingMeshes = []; const bItems = [];
   chunks.forEach((ix, key) => {
-    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
+    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen', 'aDoor'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
     g.setIndex(new THREE.BufferAttribute(new Uint32Array(ix), 1));
     const sp = new THREE.Sphere(), V = new THREE.Vector3(), box = new THREE.Box3();
     for (let i = 0; i < ix.length; i++) box.expandByPoint(V.fromArray(B.pos, ix[i] * 3));
@@ -896,7 +944,7 @@ export function buildWorld(scene, W, gfx) {
     const [ki, kj] = key.split(',').map(Number); bItems.push({ m, i: ki, j: kj });
   });
   lodMerge(bItems, kids => {   // 頂点は共有のまま、三角形の番号だけをつなぐ
-    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
+    const g = new THREE.BufferGeometry(); ['position', 'color', 'aRoof', 'aBld', 'aCen', 'aDoor'].forEach(n => g.setAttribute(n, bg.getAttribute(n)));
     const n = kids.reduce((a, k) => a + k.geometry.index.count, 0), ix = new Uint32Array(n); let o = 0;
     kids.forEach(k => { ix.set(k.geometry.index.array, o); o += k.geometry.index.count; });
     g.setIndex(new THREE.BufferAttribute(ix, 1));

@@ -37,14 +37,14 @@ tot = np.bincount(tb[roof], area[roof], minlength=nb); onA = np.bincount(tb[roof
 h = hi - lo
 cand = np.where((tot >= 6) & (onA / np.maximum(tot, 1e-9) > 0.5) & (h >= 2.5) & (h <= 20))[0]
 # のりばの屋根（バスターミナルの島の上の細長い屋根）: 島は道路の範囲に入らないので、形で選ぶ。
-# 用途が不明・高さ 2.5〜6.5m・幅（面積 ÷ 周の半分）4.5m 以下で長さが幅の 3.5 倍以上・面積 15m2 以上・車道から 3m 以内
+# 用途が不明・高さ 2.5〜6.5m・幅（面積 ÷ 周の半分）1.8〜4.5m で長さが幅の 3.5 倍以上・面積 15m2 以上・車道から 3m 以内
 info = json.load(open(os.path.join(out, 'bldg.json')))['b']
 extra = []
 for k in np.where((tot >= 15) & (h >= 2.5) & (h <= 6.5))[0]:
     if k in set(cand.tolist()) or info[k].get('u') not in (None, '不明'): continue
     fp = unary_union(list(shapely.polygons(V[roof & (tb == k)][:, :, [0, 2]]))).buffer(0.05).buffer(-0.05)
     W = 2 * fp.area / max(fp.length, 1e-6); L = fp.length / 2   # 細い帯（弧・L 字も）なら W は幅に近い
-    if W <= 4.5 and L >= 3.5 * W and any(carT[i].distance(fp) < 3 for i in carTree.query(fp.buffer(3))): extra.append(k)
+    if 1.8 <= W <= 4.5 and L >= 3.5 * W and any(carT[i].distance(fp) < 3 for i in carTree.query(fp.buffer(3))): extra.append(k)
 print('のりばの屋根（形で選んだ物）', len(extra))
 cand = np.array(sorted(set(cand.tolist()) | set(extra)), dtype=int); extraS = set(int(k) for k in extra)
 print('候補', len(cand))
