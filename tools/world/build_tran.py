@@ -87,6 +87,26 @@ def triangulate(geom):
         gx += step
   return {'v': verts, 'i': index}
 
+def look_stats(geom):
+    """多角形の中の写真の割合（暗い無彩色・白・植物の緑）。点が少なければ None"""
+    try:
+        from vsimg import VS
+    except Exception:
+        return None
+    global _vs
+    if '_vs' not in globals(): _vs = VS()
+    import numpy as np
+    from shapely import contains_xy
+    mnx, mnz, mxx, mxz = geom.bounds
+    X, Zg = np.meshgrid(np.arange(mnx, mxx, 0.5), np.arange(mnz, mxz, 0.5))
+    ins = contains_xy(geom, X.ravel(), Zg.ravel())
+    if ins.sum() < 4: return None
+    px = _vs.sample(X.ravel()[ins], Zg.ravel()[ins]) / 255.0; px = px[~np.isnan(px[:, 0])]
+    if len(px) < 4: return None
+    L = px.mean(1); sat = px.max(1) - px.min(1)
+    green = ((2 * px[:, 1] - px[:, 0] - px[:, 2]) / (px.sum(1) + 1e-3) > 0.1).mean()
+    return float(((L > 0.1) & (L < 0.45) & (sat < 0.1)).mean()), float(((L > 0.58) & (sat < 0.12)).mean()), float(green)
+
 def road_look(geom, strict=False):
     """多角形の中が道路に見える割合（VIRTUAL SHIZUOKA のオルソ 20cm を 0.5m ごとに見る。暗い無彩色か白い塗料）"""
     try:
@@ -262,6 +282,40 @@ if NET and os.path.exists(NET):
     # 3 段目: 道路の中の島（中央分離帯・交通島）は、地理院の道路構成線（分離帯・島の縁）で囲まれた所だけにする。
     #   上下線の間の導流帯（白い「く」の字などを塗っただけの平らな所）を島にしない。囲まれた島で車道になっている所は島にする
     isl, rdc = gsi_islands()
+    # 地理院の道路構成線は古い所がある（改修で短くなった分離帯・塗装だけの導流帯の縁）。浜松市の現況平面図（道路台帳図、wagref.py）で
+    #   縁の線がほとんど描かれていない（0.8m 以内が 45% 未満）島は、4m 升に分けて、写真で道路（アスファルト・白線が 7 割以上）に見える升を除く
+    #   （草・植え込みの見える升は残す。分離帯が一部の区間だけ実在する所があるため）
+    try:
+        from wagref import WagRef
+        WR = WagRef()
+    except Exception:
+        WR = None
+    def paint_road(g):
+        """現況平面図に縁の線がほとんど無く（45% 未満）、写真でアスファルトと白い塗料が 7 割以上・草が 1 割未満"""
+        if WR is None or not WR.ok: return False
+        m = WR.outline_match(g)
+        if m is None or m >= 0.45: return False
+        st = look_stats(g)
+        return st is not None and st[0] + st[1] >= 0.7 and st[2] < 0.1
+    if isl is not None and WR is not None and WR.ok:
+        kept, dropped = [], []
+        for p in (isl.geoms if hasattr(isl, 'geoms') else [isl]):
+            m = WR.outline_match(p)
+            if m is not None and m < 0.45:
+                eb = p.bounds; g4 = 4.0; gx = math.floor(eb[0] / g4) * g4
+                while gx < eb[2]:
+                    gz = math.floor(eb[1] / g4) * g4
+                    while gz < eb[3]:
+                        pc = p.intersection(box(gx, gz, gx + g4, gz + g4))
+                        if not pc.is_empty and pc.area > 0.5:
+                            st = look_stats(pc)   # アスファルトと白い塗料（横断歩道・導流帯の縞を含む）が 7 割以上で、草が 1 割未満
+                            (dropped if st is not None and st[0] + st[1] >= 0.7 and st[2] < 0.1 else kept).append(pc)
+                        gz += g4
+                    gx += g4
+                continue
+            kept.append(p)
+        isl = unary_union(kept).buffer(0.05).buffer(-0.05) if kept else None
+        print('現況平面図と写真で除いた古い島の部分 %.0f m2' % sum(p.area for p in dropped), sorted({(round(p.centroid.x, -1), round(p.centroid.y, -1)) for p in dropped})[:20])
     walk_meas = walk if isl is None else unary_union([walk, isl.intersection(U)])   # 車線の幅を測るときは、導流帯も車道に含めない（走る所ではない）
     if isl is not None or rdc is not None:
         if isl is None: isl = Polygon()
@@ -278,6 +332,7 @@ if NET and os.path.exists(NET):
                     if rp.geom_type != 'Polygon' or rp.area < 2: continue
                     fr = road_look(rp)
                     onrail = RAILS is not None and rp.intersection(RAILS).area > 0.2 * rp.area
+                    if not onrail and (fr is None or fr < 0.6) and paint_road(rp): continue   # 横断歩道・導流帯の縞の上（白が多い）
                     if fr is None or fr < 0.6 or onrail: keep.append(rp)
         # 道路の外の縁につながった歩道でも、縁から 5m より内側（中央分離帯・島）は道路構成線の島に重なる所だけにする
         kw = unary_union(keep); deep = kw.difference(U.boundary.buffer(5.0))
@@ -318,6 +373,17 @@ if NET and os.path.exists(NET):
         walk = unary_union(wparts).simplify(0.1)
         print('写真で車道に戻した車道沿いの所 %.0f m2' % cu.area)
     car = U.difference(walk).simplify(0.1)
+    # 5 段目: 浜松市の現況平面図（道路台帳図、1/500）のある範囲は、車道・歩道・道路の外の境目を図の線に合わせる（wagsnap.py）
+    try:
+        from wagsnap import snap
+        if os.environ.get('SNAP_DUMP'):   # 5 段目だけを試すための保存
+            import pickle; pickle.dump((car, walk, net['edges']), open(os.environ['SNAP_DUMP'], 'wb'))
+        sn = snap(car, walk, net['edges'])
+    except Exception as e:
+        print('現況平面図を使えなかった', e); sn = None
+    if sn:
+        car, walk, _ = sn
+        walk = unary_union([gg for gg in (walk.geoms if hasattr(walk, 'geoms') else [walk]) if gg.geom_type == 'Polygon' and gg.area >= 1.0])
     # 縁石の線分
     curbs = []
     for g in (walk.geoms if hasattr(walk, 'geoms') else [walk]):

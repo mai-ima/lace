@@ -11,6 +11,7 @@ import { makeGrid } from './grid.js';
 import { NIGHT, syncNight } from './lights.js';
 import { buildStreet } from './street.js';
 import { buildPhotoMarks, fitLanes } from './marks.js';
+import { buildLandmarks } from './landmarks.js';
 
 const LAT0 = 34.7037, LON0 = 137.7351, KX = Math.cos(LAT0 * Math.PI / 180) * 111320, KZ = 110574;
 
@@ -420,6 +421,11 @@ export function buildWorld(scene, W, gfx) {
   // 建物ごとの下端と上端（頂点から）
   const yLo = new Float32Array(nb).fill(1e9), yHi = new Float32Array(nb).fill(-1e9);
   for (let v = 0; v < B.bid.length; v++) { const k = B.bid[v], y = B.pos[v * 3 + 1]; if (y < yLo[k]) yLo[k] = y; if (y > yHi[k]) yHi[k] = y; }
+  // 名所（独自に作った形。landmarks.js）: 元の PLATEAU の建物は、名所の部分の頂点を切り下げて隠す
+  { const LM = buildLandmarks(B, yLo, yHi);
+    if (LM.hide.size) for (let v = 0; v < B.bid.length; v++) { const c = LM.hide.get(B.bid[v]); if (c !== undefined && B.pos[v * 3 + 1] > c) B.pos[v * 3 + 1] = c; }
+    LM.hide.forEach((c, k) => { yHi[k] = Math.min(yHi[k], c); });
+    out.group.add(LM.group); out.landmarks = LM.group; }
   // 道路の上の屋根（アーケード・歩道の上の屋根。tools/world/bldg_over.py）: PLATEAU では地面からの箱なので、屋根の厚み 0.6m だけ残して浮かせ、
   // 歩道の上に柱（直径 0.3m）を立てる。下は車・人が通れる（当たり判定は柱だけ）
   if (W.bldgOver && W.bldgOver.over) {
@@ -562,16 +568,16 @@ export function buildWorld(scene, W, gfx) {
           diffuseColor.rgb = mix(detail, avg, far2);
           gMask = mix(gl, cover * 0.8, far2);
           // 夜の窓明かり: 部屋ごとに点いているか（住宅は 5 割、事務所は 4 割、工場は 2 割）と色（電球色・昼白色）
-          float onP = kind < 1.5 ? 0.5 : kind < 2.5 ? 0.4 : kind < 3.5 ? 0.2 : 0.25;
+          float onP = kind < 1.5 ? 0.5 : kind < 2.5 ? 0.3 : kind < 3.5 ? 0.2 : 0.25;
           float on = step(1.0 - onP, fract(cell * 17.3 + cell2 * 5.1));
-          gLitC = mix(vec3(1.0, 0.72, 0.42), vec3(0.85, 0.9, 1.0), step(0.55, fract(cell2 * 9.7))) * (0.6 + 0.6 * cell);
+          gLitC = mix(vec3(1.0, 0.72, 0.42), vec3(0.85, 0.9, 1.0), step(0.7, fract(cell2 * 9.7))) * (0.45 + 0.5 * cell);   // 電球色が多め、明るさにむら
           gLitC *= 0.55 + 0.45 * smoothstep(wy0, wy1, fy);   // 天井の照明で上ほど明るい
           if (shop > 0.5) {   // 夜も開いている店は半分。天井の照明で上ほど明るく、棚の段で横縞
             on = step(0.65, cell);
             float shelf = 0.75 + 0.25 * step(0.5, fract(rel / 0.45)) * step(rel, 1.8);
             gLitC = mix(vec3(1.0, 0.86, 0.66), vec3(0.92, 0.95, 1.0), step(0.5, cell2)) * (0.15 + 0.3 * smoothstep(0.2, 2.9, rel)) * shelf;
           }
-          gLit = mix(gl * on, cover * onP * 0.8, far2);
+          gLit = mix(gl * on, cover * onP * 0.35, far2) * 0.85;
           // ビル（商業・事務所・学校など、高さ 10m 以上）の 2 階より上は、実際の建物の外壁の写真を階の高さ・柱の間隔に合わせて貼る
           if ((kind > 1.5 && kind < 2.5 || kind > 3.5) && top > 10.0 && rel > fh && rel < top - 0.6) {
             float hp = fract(hb * 5.31 + 0.7);
@@ -581,8 +587,11 @@ export function buildWorld(scene, W, gfx) {
             float lum = dot(fc, vec3(0.3, 0.59, 0.11)), gmk = clamp((0.4 - lum) * 5.0, 0.0, 1.0) * step(0.0, fc.b - fc.r + 0.03);
             diffuseColor.rgb = fc * (0.92 + 0.16 * hb2);
             gMask = gmk * 0.9;
-            float onc = step(0.55, h21(vec2(floor(u / bw2), floor(rel / 3.6)) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0));
-            gLit = gmk * onc * 0.8; gLitC = mix(vec3(1.0, 0.86, 0.66), vec3(0.86, 0.93, 1.0), step(0.5, hb2));
+            float rr = h21(vec2(floor(u / bw2), floor(rel / 3.6)) + floor(fract(vBld.z) * 64.0 + 0.5) * 7.0), onc = step(0.55, rr);
+            // 遠くでは 1 画素に柱間・階が何個も入り、点いた窓・消えた窓が白黒のざらざらになる → 画素の大きさに応じて平均（点灯の割合 45%）へ寄せる
+            float fw3 = max(fwidth(u) / bw2, fwidth(rel) / 3.6), far3 = smoothstep(0.25, 0.7, fw3);
+            gLit = mix(gmk * onc, clamp((0.4 - lum) * 5.0, 0.0, 1.0) * 0.16, far3) * 0.7;   // 遠くの平均は暗め（実際の夜景は暗い壁に点が散る）
+            gLitC = mix(vec3(1.0, 0.8, 0.58), vec3(0.86, 0.92, 1.0), step(0.5, hb2)) * (0.75 + 0.35 * rr);
           }
           // 階ごとの床の帯（共同住宅のベランダ・事務所の腰壁）と、屋上の笠木
           float band = (kind > 0.5 && kind < 2.5) ? step(fy, 0.08) * step(fh, rel) : 0.0;
@@ -600,7 +609,7 @@ export function buildWorld(scene, W, gfx) {
           float Fr = 0.1 + 0.9 * pow(1.0 - clamp(dot(-Vd, gFn), 0.0, 1.0), 5.0);
           totalEmissiveRadiance += sk * Fr * gMask * uRefl * max(0.05, 1.0 - uNight * 1.25);
         }
-        totalEmissiveRadiance += gLitC * gLit * uNight * uNight * 1.3;   // 夕方はまだ外が明るいので控えめ`);
+        totalEmissiveRadiance += gLitC * gLit * uNight * uNight * 1.0;   // 夕方はまだ外が明るいので控えめ`);
     sh.uniforms.uRefl = { value: 1.0 }; sh.uniforms.uNight = NIGHT;
     sh.fragmentShader = sh.fragmentShader.replace('uniform highp sampler2DArray tWall;', 'uniform highp sampler2DArray tWall; uniform float uRefl; uniform float uNight;');
   };

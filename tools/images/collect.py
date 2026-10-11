@@ -47,7 +47,7 @@ for line in open(LOG):
     for x in (c if isinstance(c, list) else []):
         if isinstance(x, dict) and x.get('type') == 'tool_use':
             fp = str((x.get('input') or {}).get('file_path', ''))
-            if '/wag/' in fp or 'wag' in os.path.basename(fp).lower(): wagids.add(x.get('id'))
+            if any('wag' in part.lower() for part in fp.split('/')[-3:]): wagids.add(x.get('id'))
 for line in open(LOG):
     if '"image"' not in line or '"base64"' not in line: continue
     d = json.loads(line)
@@ -69,7 +69,7 @@ for f in sorted(glob.glob(os.path.join(UP, '*')), key=os.path.getmtime):
     if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')): added += save(open(f, 'rb').read(), 'attached', os.path.basename(f), os.path.getmtime(f))
 # 3. 作業の画像と審査の画像（作った時刻の順）
 files = [f for f in glob.glob(os.path.join(SCR, '**', '*'), recursive=True) if f.lower().endswith(('.png', '.jpg', '.jpeg')) and '/npm/' not in f
-         and '/wag/' not in f and 'wag' not in os.path.basename(f).lower()]   # 浜松市の現況平面図（公開のリポジトリに入れない）が写った画像は除く
+         and not any('wag' in part.lower() for part in os.path.relpath(f, SCR).split(os.sep))]   # 浜松市の現況平面図（公開のリポジトリに入れない）が写った画像は除く
 for f in sorted(files, key=os.path.getmtime):
     rel = os.path.relpath(f, SCR); top = rel.split(os.sep)[0]
     folder = 'audit/' + top if top.startswith('audit') else 'work'
