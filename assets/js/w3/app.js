@@ -243,7 +243,7 @@ export async function start(container, opt) {
     { const P = world.props;
       makeGlowPoints(scene, P.lightHeads || [], [16, 15, 13], 0.42);
       makeGlowPoints(scene, P.secLamps || [], [13, 13.5, 14], 0.22);
-      makeLightPools(scene, (P.lightHeads || []).map(h => ({ x: h.x, y: W.terrain.atRoad(h.x, h.z), z: h.z, r: 12 })), [0.42, 0.38, 0.32]);
+      makeLightPools(scene, (P.lightHeads || []).map(h => ({ x: h.x, y: W.terrain.atRoad(h.x, h.z), z: h.z, r: 11 })), [0.22, 0.2, 0.17]);   // LED の道路照明の光だまり（半径 11m。32m ごとの両側の灯具の光が重なるので、1 つは控えめに）
       makeLightPools(scene, (P.secLamps || []).map(h => ({ x: h.x, y: W.terrain.at(h.x, h.z), z: h.z, r: 6.5 })), [0.22, 0.22, 0.23]); }
     world.props.poles.concat(world.props.lights).forEach(p => { const r = 0.25; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });
   }
@@ -290,7 +290,7 @@ export async function start(container, opt) {
     { key: 'kei_van', name: '軽バン', color: 0xf4f4f2, spec: { mass: 900, wb: 2.35, track: 1.3, cgH: 0.72, Iz: 1100, power: 36e3, maxRpm: 6000, gears: [3.6, 2.2, 1.45, 1.0], final: 5.1, wheelR: 0.28, tqR: 63 / 0.28, cd: 0.42, area: 2.6, drive: 'fr', mu: 0.95 } }
   ].filter(c => carInfo.some(i => i.key === c.key));
   let carM = null, garageIdx = Math.max(0, GARAGE.findIndex(c => c.key === (opt.carKey || 'compact_swift')));
-  const headL = new THREE.SpotLight(0xfff2de, 380, 140, 0.5, 0.65, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22); headL.visible = false;   // 夜のヘッドライト（ロービーム: 前方 40m ほどの路面が見える明るさ。影なし）
+  const headL = new THREE.SpotLight(0xfff2de, 950, 140, 0.5, 0.65, 2); headL.position.set(0, 0.75, 1.6); headL.target.position.set(0, -0.6, 22); headL.visible = false;   // 夜のヘッドライト（ロービーム: 前方 40m ほどの路面が見える明るさ。影なし。380 では暗いアスファルトがほとんど明るくならなかった）
   const myGlow = makeCarGlows(scene, 1); let myLay = null;
   // 自車の接地影（車体の下のぼかした暗い楕円。影の地図では細かい隙間まで暗くならず、車が浮いて見えるため）
   const myBlob = (() => {

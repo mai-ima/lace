@@ -63,11 +63,12 @@ export function buildProps(scene, net, at, free, opt) {
       });
     }
     // 街灯（道路照明）: 歩道のある道（rank ≤ 6）。両側に互い違いに約 32m ごと。柱は歩道の車道側（縁石から 0.6m）
-    if (pr.rank <= 6 && pr.walk > 0) {
+    // 2026-10-11: OSM の歩道のタグ（pr.walk）が無い幹線にも置く（夜の幹線に街灯がほとんど無く、路面が真っ暗だった）。歩道が見つからない所は道の縁から 0.8m
+    if (pr.rank <= 6 && (pr.walk > 0 || opt.onWalk)) {
       walkLine(e.line, 10, () => 32, (x, z, dx, dz, k) => {
         const side = k % 2 ? 1 : -1;
         let off = pr.hw + 0.6;
-        if (opt.onWalk) { let o = Math.max(1, pr.hw - 1.5); while (o < pr.hw + 8 && !opt.onWalk(x - dz * o * side, z + dx * o * side)) o += 0.25; if (o >= pr.hw + 8) return; off = o + 0.6; }
+        if (opt.onWalk) { let o = Math.max(1, pr.hw - 1.5); while (o < pr.hw + 8 && !opt.onWalk(x - dz * o * side, z + dx * o * side)) o += 0.25; off = o >= pr.hw + 8 ? pr.hw + 0.8 : o + 0.6; }
         const px = x - dz * off * side, pz = z + dx * off * side;
         if (!free(px, pz)) return;
         lightSpots.push({ x: px, z: pz, y: at(px, pz), yaw: Math.atan2(dx * side, dz * side), reach: off });   // ローカルの +x（アームの向き）が車道を向く

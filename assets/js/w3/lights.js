@@ -114,7 +114,7 @@ export function makeLightPools(scene, list, color) {
     vertexShader: `attribute vec4 aAt; uniform float uNight; varying vec2 vP;
       void main() { vP = position.xz; vec3 w = vec3(aAt.x + position.x * aAt.w, aAt.y + 0.19, aAt.z + position.z * aAt.w); gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0); if (uNight < 0.01) gl_Position = vec4(0.0, 0.0, -2.0, 1.0); }`,
     fragmentShader: `uniform vec3 uCol; uniform float uNight; varying vec2 vP;
-      void main() { float r = length(vP); float a = pow(max(0.0, 1.0 - r), 1.6); gl_FragColor = vec4(uCol * a * uNight, 1.0); }`
+      void main() { float r = length(vP); float a = pow(max(0.0, 1.0 - r), 2.2); /* 中心ほど明るく、縁へなめらかに */ gl_FragColor = vec4(uCol * a * uNight, 1.0); }`
   });
   const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 4; scene.add(m);
   NIGHT_ONLY.push(m); m.visible = NIGHT.value > 0.01;
