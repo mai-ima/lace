@@ -62,5 +62,15 @@ export function plantTrees(scene, imp, spots, opt) {
   mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
   mesh.castShadow = opt.shadows !== false; mesh.receiveShadow = true;
   scene.add(mesh);
+  // 描く距離（opt.far m）より遠い木は描かない: カメラが 40m 動くごとに、近い木を前へ詰め直して描く本数（count）を減らす
+  if (opt.far) {
+    const all = spots.map((p, i) => ({ p, yaw: yaw[i] })), ya = geo.getAttribute('aYaw'); let lx = 1e9, lz = 1e9;
+    mesh.updateNear = (cx, cz) => {
+      if (Math.hypot(cx - lx, cz - lz) < 40) return; lx = cx; lz = cz;
+      const R2 = opt.far * opt.far; let n = 0;
+      for (const t of all) { const dx = t.p.x - cx, dz = t.p.z - cz; if (dx * dx + dz * dz > R2) continue; const k = t.p.h / meta.height; M.makeScale(k, k, k).setPosition(t.p.x, t.p.y, t.p.z); mesh.setMatrixAt(n, M); ya.array[n] = t.yaw; n++; }
+      mesh.count = n; mesh.instanceMatrix.needsUpdate = true; ya.needsUpdate = true; mesh.boundingSphere = null; mesh.frustumCulled = false;
+    };
+  }
   return mesh;
 }

@@ -49,3 +49,5 @@ assets/data/world/ の出典（加工して作成）
   静岡県「VIRTUAL SHIZUOKA 静岡県 中・西部 点群データ」の航空レーザ測量のオルソ画像と、車載写真レーザ測量（MMS）の点群（CC BY 4.0）を加工して作成
   （画像から区画線・停止線・横断歩道・導流帯・矢印・文字の形を読み取ったもの。画像そのものは含まない）
   https://www.geospatial.jp/ckan/dataset/virtual-shizuoka-mw
+- 歩道の舗装（tex/walk_*.jpg）: Poly Haven「Concrete Pavers 02」（Amal Kumar、CC0）の色・法線・粗さの画像を、色を日本の歩道の灰色に寄せて縮めた。
+- 街路樹の位置（center/trees.json）: 静岡県 VIRTUAL SHIZUOKA のオルソ画像（CC BY 4.0）から樹冠を読み取って作成（tools/world/trees_from_vs.py）。

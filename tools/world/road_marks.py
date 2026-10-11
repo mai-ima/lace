@@ -535,6 +535,9 @@ def main():
     L, Pp = regular_zebra(L, Pp)
     Pp += bridge_solid(L, Pp)
     fd = fill_dashes(L, Pp); Pp += fd; print('補った破線', len(fd))
+    # 破片の掃除（木漏れ日・影の縁・車の反射でできた不規則な形を捨て、ぎざぎざの区画線は中心線の線に直す。tools/world/marks_clean.py）
+    from marks_clean import clean
+    n0 = len(Pp); L, Pp = clean(L, Pp); print('掃除: 形', n0, '→', len(Pp), '・線', len(L))
     if os.environ.get('MARKS_DBG'): json.dump([np.mean(R[0], 0).tolist() for c, R in fd], open(os.environ['MARKS_DBG'], 'w'))
     # まとまり（100m）ごとに Int16 の列へ
     byT = {}

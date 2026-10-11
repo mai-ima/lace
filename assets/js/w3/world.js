@@ -153,26 +153,32 @@ export function buildWorld(scene, W, gfx) {
     out.ortho.colorSpace = THREE.SRGBColorSpace; out.ortho.anisotropy = 8;
   });
   const groundMat = new THREE.MeshStandardMaterial({ map: out.ortho, roughness: 0.95, metalness: 0 });
-  // 近くで航空写真のぼけを隠す: 写真の色から「緑（草）」か「それ以外（土・舗装）」かを見て、細かい質感（2.5m 周期）を明るさだけ重ねる。
-  // 遠くでは重ねない（繰り返し模様が見えないように）
-  const grassT = photoTex('grass', 1, true), dirtT = photoTex('asphalt', 1, true);
-  if (grassT && dirtT) {
+  // 近くの地面（第 4 回の審査: ぼやけた航空写真の木・影・車がまだら模様に見える）: 写真は「草か、固い地面（コンクリート・土）か」の判定と、
+  // 明るさの大まかなむらにだけ使い、色と模様は素材（Poly Haven CC0 の草・コンクリート・アスファルト）で描く。遠くは写真のまま
+  const grassT = photoTex('grass', 1, true), dirtT = photoTex('asphalt', 1, true), concT = photoTex('concrete', 1, true);
+  if (grassT && dirtT && concT) {
     groundMat.onBeforeCompile = sh => {
-      sh.uniforms.tGrass = { value: grassT }; sh.uniforms.tDirt = { value: dirtT };
+      sh.uniforms.tGrass = { value: grassT }; sh.uniforms.tDirt = { value: dirtT }; sh.uniforms.tConc = { value: concT };
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP; uniform sampler2D tGrass; uniform sampler2D tDirt;')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vGP; uniform sampler2D tGrass; uniform sampler2D tDirt; uniform sampler2D tConc;\nfloat gh(vec2 p) { p = mod(p, 251.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nfloat gn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(gh(i), gh(i + vec2(1, 0)), f.x), mix(gh(i + vec2(0, 1)), gh(i + vec2(1, 1)), f.x), f.y); }')
         .replace('#include <map_fragment>', `#include <map_fragment>
-          float dist = length(vGP - cameraPosition), near = 1.0 - smoothstep(25.0, 140.0, dist);
+          float dist = length(vGP - cameraPosition), near = 1.0 - smoothstep(40.0, 220.0, dist);
           if (near > 0.0) {
-            // 近くでは航空写真をぼかした色（約 5m 単位。写り込んだ車や細かい影が消える）を使い、細かい模様は素材の質感で描く
-            vec3 lo = texture2D(map, vMapUv, 3.5).rgb * vec3(1.04, 1.0, 0.9);   // 写真全体の青緑の色かぶりを少し戻す
-            diffuseColor.rgb = mix(diffuseColor.rgb, lo, near * 0.8);
-            vec3 o = diffuseColor.rgb; float green = clamp((o.g - max(o.r, o.b)) * 8.0 + 0.2, 0.0, 1.0);
-            vec3 g1 = texture2D(tGrass, vGP.xz / 1.6).rgb * 0.5 + texture2D(tGrass, vGP.xz / 7.0).rgb * 0.5, d1 = texture2D(tDirt, vGP.xz / 2.2).rgb * 0.6 + texture2D(tGrass, vGP.xz / 9.0).rgb * 0.4;
-            float lg = dot(g1, vec3(0.333)) / 0.118, ld = dot(d1, vec3(0.333)) / 0.106;   // 質感の明るさ（線形の色で平均を 1 に）
-            float detail = mix(ld, lg, green);
-            detail = 1.0 + (detail - 1.0) * 2.2;   // 質感の濃淡を強める（写真の素材は濃淡が小さい。ぼかした色の上なので強めに）
-            diffuseColor.rgb = mix(o, o * clamp(detail, 0.5, 1.6), near * 0.9);
+            vec3 ob = texture2D(map, vMapUv, 5.0).rgb;   // 約 10m 単位にぼかした写真（車・人・細かい影は消える）
+            float ol = dot(ob, vec3(0.3, 0.59, 0.11)) + 1e-3;
+            float green = smoothstep(0.015, 0.06, ob.g - max(ob.r, ob.b) * 0.97);
+            // 草: 2 つの大きさの草の素材を混ぜ、ところどころ土を見せる
+            vec3 g1 = texture2D(tGrass, vGP.xz / 1.7).rgb * 0.55 + texture2D(tGrass, vGP.xz / 6.3).rgb * 0.45;
+            g1 *= vec3(0.95, 1.02, 0.85) * (0.85 + 0.3 * gn(vGP.xz / 9.0));
+            // 固い地面: コンクリートの土間を基本に、写真の暗い所はアスファルト（駐車場・敷地の舗装）
+            vec3 c1 = texture2D(tConc, vGP.xz / 3.0).rgb * 0.7 + texture2D(tConc, vGP.xz / 11.0).rgb * 0.3;
+            vec3 a1 = texture2D(tDirt, vGP.xz / 2.5).rgb;
+            float darkL = smoothstep(0.18, 0.09, ol);
+            vec3 hard = mix(c1 * 1.05, a1 * 0.9, darkL) * (0.9 + 0.2 * gn(vGP.xz / 13.0));
+            // 写真の明るさのむら（建物の影など）は弱く残す（色は使わない）
+            float shadeK = clamp(ol / 0.16, 0.65, 1.2);
+            vec3 mat = mix(hard, g1, green) * mix(1.0, shadeK, 0.5);
+            diffuseColor.rgb = mix(diffuseColor.rgb, mat, near);
           }`);
     };
   }
@@ -338,39 +344,36 @@ export function buildWorld(scene, W, gfx) {
     addChunked(worldUV(out.areaGeo.clone(), 6), am, 1200);
   }
   if (out.walkAreaGeo) {
-    // 歩道・広場: 明るい灰色のブロック舗装（30cm 角を 1 枚ずつ明るさを変える）。高さ 15cm
-    const wm = new THREE.MeshStandardMaterial({ color: 0xb9b6b0, roughness: 0.9, metalness: 0 });
+    // 歩道・広場: インターロッキングブロック舗装の写真素材（Poly Haven「Concrete Pavers 02」CC0。2m 四方、色を日本の歩道の灰色に寄せた）。
+    // 高さ 15cm。航空写真の色は混ぜない（木・影・車がまだらの模様になるため）。繰り返しが目立たないよう、15〜40m の大きさの明るさのむらだけ足す
+    const tl = new THREE.TextureLoader(), wtex = (n, srgb) => { const t = tl.load(W.base + '../tex/' + n); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+    const wm = new THREE.MeshStandardMaterial({ map: wtex('walk_diff.jpg', true), normalMap: wtex('walk_nor.jpg'), roughnessMap: wtex('walk_rough.jpg'), roughness: 1, metalness: 0, normalScale: new THREE.Vector2(0.8, 0.8) });
     wm.onBeforeCompile = sh => {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vWXZ;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vWXZ;\nfloat wh(vec2 p) { p = mod(p, 251.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }')
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vWXZ;\nfloat wh(vec2 p) { p = mod(p, 251.0); return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nfloat vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(wh(i), wh(i + vec2(1, 0)), f.x), mix(wh(i + vec2(0, 1)), wh(i + vec2(1, 1)), f.x), f.y); }')
         .replace('#include <map_fragment>', `#include <map_fragment>
-          vec2 t = vWXZ / vec2(0.3, 0.15); t.x += floor(t.y) * 0.5;   // 互い違いのブロック
-          vec2 f = fract(t), fw = fwidth(t);
-          float joint = (1.0 - smoothstep(0.0, max(fw.x, 0.02) * 1.5, f.x) * smoothstep(0.0, max(fw.y, 0.02) * 1.5, f.y));
-          float far = smoothstep(0.3, 0.8, max(fw.x, fw.y));
-          float tone = 0.9 + 0.16 * wh(floor(t));
-          // 舗装の色は航空写真から（ぼかして車・人・影の影響を減らす）。明るさは一定の範囲に収め、街路樹の緑は灰色に寄せる
-          vec2 ouv = vec2((vWXZ.x - uOX.x) / uOX.z, 1.0 - (vWXZ.y - uOX.y) / uOX.w);
-          vec3 oc = texture2D(tOrtho, ouv, 2.5).rgb, ocS = texture2D(tOrtho, ouv, 4.5).rgb;
-          oc = max(oc, ocS * 0.85);
-          float ol = dot(oc, vec3(0.299, 0.587, 0.114));
-          if (oc.g > oc.r && oc.g > oc.b) oc = mix(oc, vec3(ol), 0.85);
-          vec3 pav = oc / max(ol, 0.02) * clamp(ol * 1.25, 0.2, 0.5);
-          diffuseColor.rgb = mix(diffuseColor.rgb, pav, uOrthoOn * 0.8);
-          diffuseColor.rgb *= mix(tone * (1.0 - joint * 0.35), 0.96, far);`);
-      sh.uniforms.tOrtho = { value: out.ortho }; sh.uniforms.uOX = { value: new THREE.Vector4(terr.x0, terr.z0, spanX, spanZ) }; sh.uniforms.uOrthoOn = { value: 1 };
-      sh.fragmentShader = sh.fragmentShader.replace('varying vec2 vWXZ;\nfloat wh', 'varying vec2 vWXZ; uniform sampler2D tOrtho; uniform vec4 uOX; uniform float uOrthoOn;\nfloat wh');
+          float big = vn(vWXZ / 23.0) * 0.6 + vn(vWXZ / 7.0) * 0.4;
+          diffuseColor.rgb *= 0.9 + 0.18 * big;`);
     };
+    worldUV(out.walkAreaGeo, 2.0);
     addChunked(out.walkAreaGeo, wm, 1200);
     // 縁石: 歩道の縁で車道に接する所に、高さ 15cm の側面
     const C = W.roadArea.curb || [], q = W.roadArea.q, cp = [], ci = [];
+    const wG = makeGrid(terr.x0, terr.z0, (terr.nx - 1) * terr.cell, 0.25);   // 歩道の格子（縁石の天端をどちら側に付けるか）
+    { const P = out.walkAreaGeo.attributes.position.array, I = out.walkAreaGeo.index.array; for (let t = 0; t < I.length; t += 3) wG.tri(P[I[t] * 3], P[I[t] * 3 + 2], P[I[t + 1] * 3], P[I[t + 1] * 3 + 2], P[I[t + 2] * 3], P[I[t + 2] * 3 + 2]); }
     for (let k = 0; k < C.length; k += 4) {
       const ax = C[k] * q, az = C[k + 1] * q, bx = C[k + 2] * q, bz = C[k + 3] * q, ya = terr.atRoad(ax, az), yb = terr.atRoad(bx, bz), b = cp.length / 3;
       cp.push(ax, ya + WALK_H, az, bx, yb + WALK_H, bz, ax, ya + 0.02, az, bx, yb + 0.02, bz); ci.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
+      // 上面（縁石の天端 0.15m 幅を歩道の上 5mm に。歩道の側へ）: 法線の向きが分からないので、歩道の格子で内側を選ぶ
+      if (!gfx.hi) continue;   // 中画質は天端を省く（三角形の予算）
+      const L = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / L * 0.15, nz = (bx - ax) / L * 0.15, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      const sg = wG.at(mx + nx * 2, mz + nz * 2) ? 1 : -1, b2 = cp.length / 3;
+      cp.push(ax, ya + WALK_H + 0.005, az, bx, yb + WALK_H + 0.005, bz, ax + nx * sg, ya + WALK_H + 0.005, az + nz * sg, bx + nx * sg, yb + WALK_H + 0.005, bz + nz * sg);
+      ci.push(b2, b2 + 1, b2 + 2, b2 + 1, b2 + 3, b2 + 2);
     }
     if (cp.length) {
       const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(cp, 3)); cg.setIndex(ci); cg.computeVertexNormals();
-      addChunked(cg, new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.85, side: THREE.DoubleSide }), 1200);
+      addChunked(cg, new THREE.MeshStandardMaterial({ color: 0xc4c2bc, roughness: 0.8, side: THREE.DoubleSide }), 1200);   // 御影石・コンクリートの縁石
     }
   }
   if (walkGeos.length) {

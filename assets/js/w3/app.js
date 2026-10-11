@@ -195,7 +195,7 @@ export async function start(container, opt) {
         spots.push({ x, y: world.walkG.at(x, z) ? W.terrain.atRoad(x, z) + 0.14 : W.terrain.at(x, z), z, h: Math.max(5, Math.min(14, 4 + r * 1.7)) * (0.9 + k * 0.2), yaw: k * 6.283 });
       });
     }
-    world.trees = plantTrees(scene, imp, spots, { shadows: gfx.shadows > 0 });
+    world.trees = plantTrees(scene, imp, spots, { shadows: gfx.shadows > 0, far: gfx.ultra ? 0 : gfx.hi ? 1200 : 650 });   // 中は 650m より遠い木を描かない（三角形の予算）
     spots.forEach(p => { const r = 0.35; collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z - r, p.x + r, p.z + r); collide.grid.tri(p.x - r, p.z - r, p.x + r, p.z + r, p.x - r, p.z + r); });   // 幹の当たり判定
     world.treeSpots = spots;
   } catch (e) { console.warn('街路樹を読めませんでした', e); }
@@ -612,6 +612,7 @@ export async function start(container, opt) {
     }
     trafficStep(dt);
     if (world.props && world.props.update) world.props.update(car.st.x, car.st.z);
+    if (world.trees && world.trees.updateNear) world.trees.updateNear(car.st.x, car.st.z);
     if (hitT > 0) hitT -= dt;
     const st = car.st;
     carM.root.position.set(st.x, st.y, st.z);
@@ -651,7 +652,7 @@ export async function start(container, opt) {
     /** 検証用: ループを止めて、指定秒数ぶん物理を進めてから 1 枚描く */
     freeze() { running = false; },
     tick(sec, c) { const n = Math.round(sec / STEP); for (let i = 0; i < n; i++) { if (c) Object.assign(ctl, c); car.step(STEP, ctl, ground); collide(car.st); simT += STEP; if (i % 4 === 3) trafficStep(STEP * 4); } },
-    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
+    draw() { const st = car.st; drawGauge(); drawMini(); if (world.props && world.props.update) world.props.update(st.x, st.z); if (world.trees && world.trees.updateNear) world.trees.updateNear(st.x, st.z);  carM.root.position.set(st.x, st.y, st.z); carM.root.rotation.set(0, 0, 0); carM.root.rotateY(st.yaw); carM.root.rotateX(-st.pitch); carM.root.rotateZ(st.roll); firstCam = true; carVisual(1 / 60); updateCam(1 / 60); updateSignals(simT); present(); return renderer.domElement.toDataURL('image/jpeg', 0.9); },
     /** 検証用: 真上から見た正射投影（中心 x, z、半分の幅 half m、画素 px）。航空写真と並べて比べる */
     shotTop(x, z, half, px) {
       const oc = new THREE.OrthographicCamera(-half, half, half, -half, 1, 2000), y = W.terrain.at(x, z);
